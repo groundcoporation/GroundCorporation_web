@@ -1,20 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  Dimensions, 
-  StatusBar, 
-  FlatList, 
-  Linking 
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; 
-import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+  StatusBar,
+  FlatList,
+  Linking,
+  ImageBackground,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { supabase } from "../../lib/supabase";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 export default function HomeScreen({ navigation }: any) {
   const [userData, setUserData] = useState<any>(null);
@@ -28,99 +29,121 @@ export default function HomeScreen({ navigation }: any) {
 
   const fetchData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
-        // 1. 사용자 프로필 및 지점 정보 로드
         const { data: userProfile } = await supabase
-          .from('users')
-          .select('*, branches(name)')
-          .eq('id', user.id)
+          .from("users")
+          .select("*, branches(name)")
+          .eq("id", user.id)
           .single();
         setUserData(userProfile);
 
-        // 2. 자녀 목록 로드
         const { data: childrenList } = await supabase
-          .from('children')
-          .select('*')
-          .eq('parent_id', user.id)
-          .order('created_at', { ascending: true });
+          .from("children")
+          .select("*")
+          .eq("parent_id", user.id)
+          .order("created_at", { ascending: true });
         setChildren(childrenList || []);
       }
     } catch (e) {
-      console.log('데이터 로드 에러:', e);
+      console.log("데이터 로드 에러:", e);
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * 💡 수업 카드 렌더링 함수
-   * 성인일 경우 본인 이름을, 학부모일 경우 자녀 이름을 받아 처리합니다.
-   */
   const renderLessonCard = (targetName: string, isChild: boolean) => (
-    <View style={styles.cardInner}>
-      {/* 관리자 이미지 자리 플레이스홀더 */}
-      <View style={[styles.cardBg, { backgroundColor: '#444' }]} /> 
-      <View style={styles.cardOverlay} />
-      <View style={styles.cardContent}>
-        <View>
-          <Text style={styles.cardDateText}>05월 01일 (수) 14:00</Text>
-          <Text style={styles.cardChildText}>
-            {targetName} {isChild ? '학생' : '회원님'} ({userData?.branches?.name || '시흥본점'})
-          </Text>
+    <View style={styles.cardShadow}>
+      <ImageBackground
+        source={{
+          uri: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800",
+        }}
+        style={styles.cardInner}
+        imageStyle={{ borderRadius: 16 }}
+      >
+        <View style={styles.cardOverlay} />
+        <View style={styles.cardContent}>
+          <View>
+            <View style={styles.tag}>
+              <Text style={styles.tagText}>UPCOMING</Text>
+            </View>
+            <Text style={styles.cardDateText}>05.01 WED 14:00</Text>
+            <Text style={styles.cardChildText}>
+              {targetName} {isChild ? "학생" : "회원님"}
+            </Text>
+            <Text style={styles.branchText}>
+              {userData?.branches?.name || "시흥본점"}
+            </Text>
+          </View>
+          {isChild && (
+            <TouchableOpacity style={styles.pickupBtnActive}>
+              <Text style={styles.pickupBtnTextActive}>픽업 신청</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        {/* 💡 픽업 버튼은 자녀(학생)일 때만 노출 */}
-        {isChild && (
-          <TouchableOpacity style={styles.pickupBtn}>
-            <Text style={styles.pickupBtnText}>🚌 픽업 신청</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      </ImageBackground>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
-      
-      {/* AppBar (플러터 AppBar 구조 복구) */}
+
+      {/* AppBar */}
       <View style={styles.appBar}>
-        <View style={styles.logoPlaceholder}>
-          <Text style={styles.logoText}>IPASS</Text>
+        <View style={styles.logoRow}>
+          <Text style={styles.logoBrandText}>
+            IPASS<Text style={styles.logoBrandAccent}>CARE</Text>
+          </Text>
         </View>
         <View style={styles.appBarActions}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Ionicons name="notifications" size={24} color="indigo" />
+          <TouchableOpacity style={styles.iconCircle}>
+            <Ionicons name="notifications-outline" size={22} color="#111827" />
+            <View style={styles.badge} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('MyPage')}>
-            <Ionicons name="person" size={24} color="indigo" />
+          <TouchableOpacity
+            style={[styles.iconCircle, { marginLeft: 12 }]}
+            onPress={() => navigation.navigate("MyPage")}
+          >
+            <Ionicons name="person-outline" size={22} color="#111827" />
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.mainPadding}>
-          
-          {/* 1. 수업 정보 PageView 섹션 */}
+          {/* Welcome Section */}
+          <View style={styles.welcomeSection}>
+            <Text style={styles.welcomeName}>
+              {userData?.name || "사용자"}님
+            </Text>
+            <Text style={styles.welcomeMsg}>오늘의 일정을 확인하세요.</Text>
+          </View>
+
+          {/* 1. Schedule Cards */}
           <View style={styles.pageViewSection}>
             <FlatList
-              // 💡 자녀가 있으면 자녀 목록을, 없으면 사용자 본인 데이터를 리스트로 구성
-              data={children.length > 0 ? children : [userData]} 
+              data={children.length > 0 ? children : [userData]}
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={(e) => {
-                const index = Math.round(e.nativeEvent.contentOffset.x / (width - 32));
+                const index = Math.round(
+                  e.nativeEvent.contentOffset.x / (width - 48),
+                );
                 setActiveChildIndex(index);
               }}
               renderItem={({ item }) => (
                 <View style={styles.cardWrapper}>
                   {item ? (
-                    // 성인 회원이면 본인 이름, 학부모면 자녀 이름을 targetName으로 전달
                     renderLessonCard(item.name, children.length > 0)
                   ) : (
                     <View style={[styles.cardInner, styles.emptyCard]}>
-                      <Text style={styles.emptyText}>예약된 수업 정보가 없습니다.</Text>
+                      <Text style={styles.emptyText}>
+                        등록된 일정이 없습니다.
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -130,80 +153,137 @@ export default function HomeScreen({ navigation }: any) {
             {children.length > 1 && (
               <View style={styles.dotRow}>
                 {children.map((_, i) => (
-                  <View key={i} style={[styles.dot, activeChildIndex === i && styles.activeDot]} />
+                  <View
+                    key={i}
+                    style={[
+                      styles.dot,
+                      activeChildIndex === i && styles.activeDot,
+                    ]}
+                  />
                 ))}
               </View>
             )}
           </View>
 
-          {/* 2. 광고 배너 섹션 */}
-          <View style={styles.adBanner}>
-            <Text style={styles.adContent}>
-              현재 서비스 준비 중인 광고 영역입니다.{"\n"}추후 다양한 혜택과 소식으로 찾아뵙겠습니다.
-            </Text>
-          </View>
-          <View style={styles.dotRow}>
-            <View style={[styles.dot, styles.activeDot]} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
+          {/* 2. Quick Menu (수정됨) */}
+          <View style={styles.quickMenuGrid}>
+            {[
+              {
+                icon: "calendar-plus",
+                label: "예약하기",
+                color: "#4F46E5",
+                screen: "Reservation",
+              },
+              {
+                icon: "ticket-confirmation-outline",
+                label: "이용권",
+                color: "#111827",
+                screen: "Pass",
+              },
+              {
+                icon: "image-outline",
+                label: "갤러리",
+                color: "#111827",
+                screen: "Gallery",
+              },
+              {
+                icon: "shopping-outline",
+                label: "홈쇼핑",
+                color: "#111827",
+                screen: "Shop",
+              },
+            ].map((menu, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={styles.menuItem}
+                onPress={() => navigation.navigate(menu.screen)}
+              >
+                <MaterialCommunityIcons
+                  name={menu.icon as any}
+                  size={26}
+                  color={menu.color}
+                />
+                <Text
+                  style={[
+                    styles.menuLabel,
+                    { color: menu.color === "#4F46E5" ? "#4F46E5" : "#4B5563" },
+                  ]}
+                >
+                  {menu.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
-          {/* 3. 공지사항 섹션 */}
+          {/* 3. 광고 배너 섹션 (추가됨) */}
+          <TouchableOpacity style={styles.adBanner}>
+            <View style={styles.adTextContainer}>
+              <Text style={styles.adTag}>EVENT</Text>
+              <Text style={styles.adTitle}>
+                우리 아이 첫 축구 교실{"\n"}지금 예약하면 20% 할인
+              </Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={24}
+              color="#fff"
+              opacity={0.7}
+            />
+          </TouchableOpacity>
+
+          {/* 4. 공지 사항 */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>📢 공지사항</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Notice')}>
-              <Text style={styles.moreText}>더보기 {'>'}</Text>
+            <Text style={styles.sectionTitle}>공지 사항</Text>
+            <TouchableOpacity onPress={() => navigation.navigate("Notice")}>
+              <Text style={styles.moreText}>MORE</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.noticeBox}>
             <TouchableOpacity style={styles.noticeRow}>
-              <Text style={styles.noticeTitle} numberOfLines={1}>그라운드 코퍼레이션 신규 지점 오픈 안내</Text>
-              <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
+              <Text style={styles.noticeTitle} numberOfLines={1}>
+                IPASSCARE 시스템 점검 안내
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
             </TouchableOpacity>
             <View style={styles.divider} />
             <TouchableOpacity style={styles.noticeRow}>
-              <Text style={styles.noticeTitle} numberOfLines={1}>여름 학기 수강 신청 기간 안내</Text>
-              <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
+              <Text style={styles.noticeTitle} numberOfLines={1}>
+                신규 지점 오픈 및 이용권 혜택 안내
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
             </TouchableOpacity>
           </View>
 
-          {/* 4. 갤러리 섹션 */}
-          <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-            <Text style={styles.sectionTitle}>📸 갤러리</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Gallery')}>
-              <Text style={styles.moreText}>더보기 +</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryScroll}>
-            {[1, 2, 3].map((i) => (
-              <View key={i} style={styles.galleryCard}>
-                <View style={{ flex: 1, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }}>
-                  <Ionicons name="image-outline" size={32} color="#D1D5DB" />
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-
-          {/* 5. 푸터 (플러터 정보 100% 복구) */}
+          {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerCompany}>(주)그라운드코퍼레이션</Text>
-            <Text style={styles.footerText}>대표자 성명: 김강태</Text>
-            <Text style={styles.footerText}>사업자등록번호: 441-86-03857</Text>
-            <Text style={styles.footerText}>주소: 경기도 시흥시 서울대학로278번길 61, 7층 713호(배곧동, 서영베니스스퀘어)</Text>
-            <Text style={styles.footerText}>통신판매업신고번호: 신고 예정</Text>
-            <Text style={styles.footerText}>고객센터: groundcoporation@gmail.com</Text>
+            <View style={styles.footerInfoRow}>
+              <Text style={styles.footerText}>대표 김강태</Text>
+              <Text style={styles.footerDivider}>|</Text>
+              <Text style={styles.footerText}>사업자 441-86-03857</Text>
+            </View>
+            <Text style={styles.footerText}>
+              경기도 시흥시 서울대학로278번길 61, 7층
+            </Text>
+
             <View style={styles.footerLinks}>
-              <TouchableOpacity onPress={() => Linking.openURL('https://docs.google.com/document/d/1w8fZDkcwXM6GATj6cAqmPHRny08w8KikLdFSuogXpmw/edit?usp=sharing')}>
-                <Text style={styles.footerLinkBold}>이용약관</Text>
+              <TouchableOpacity
+                onPress={() => Linking.openURL("https://docs.google.com")}
+              >
+                <Text style={styles.footerLink}>이용약관</Text>
               </TouchableOpacity>
-              <Text style={styles.footerText}>  |  </Text>
-              <TouchableOpacity onPress={() => Linking.openURL('https://docs.google.com/document/d/1plQT2VJIrK8nxG1m3huj3LuUsCKea-dl37HEEBOhnJw/edit?usp=sharing')}>
-                <Text style={styles.footerLinkBold}>개인정보 처리방침</Text>
+              <TouchableOpacity
+                onPress={() => Linking.openURL("https://docs.google.com")}
+              >
+                <Text style={[styles.footerLink, { marginLeft: 16 }]}>
+                  개인정보 처리방침
+                </Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.copyRight}>© 2026 Ground Corporation. All rights reserved.</Text>
+            <Text style={styles.copyRight}>
+              © 2026 IPASSCARE. All rights reserved.
+            </Text>
           </View>
-
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -211,44 +291,215 @@ export default function HomeScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#fff' },
+  safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
   container: { flex: 1 },
-  appBar: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, alignItems: 'center', backgroundColor: '#fff' },
-  logoPlaceholder: { width: 40, height: 40, borderRadius: 5, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
-  logoText: { fontSize: 10, fontWeight: 'bold', color: '#9CA3AF' },
-  appBarActions: { flexDirection: 'row' },
-  iconBtn: { marginLeft: 12 },
-  mainPadding: { padding: 16 },
-  pageViewSection: { marginBottom: 12 },
-  cardWrapper: { width: width - 32, height: 180 },
-  cardInner: { flex: 1, borderRadius: 12, overflow: 'hidden', justifyContent: 'flex-end' },
-  cardBg: { ...StyleSheet.absoluteFillObject },
-  cardOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
-  cardContent: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  cardDateText: { fontSize: 20, fontWeight: '900', color: '#fff' },
-  cardChildText: { fontSize: 14, color: '#fff', marginTop: 4 },
-  pickupBtn: { borderWidth: 1.5, borderColor: '#fff', borderRadius: 5, paddingHorizontal: 12, paddingVertical: 6 },
-  pickupBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  emptyCard: { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  emptyText: { fontSize: 16, color: '#9CA3AF' },
-  adBanner: { height: 120, backgroundColor: '#2563EB', borderRadius: 12, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  adContent: { fontSize: 18, color: '#fff', fontWeight: 'bold', textAlign: 'center', lineHeight: 24 },
-  dotRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 8, marginBottom: 16 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#E5E7EB', marginHorizontal: 4 },
-  activeDot: { backgroundColor: '#3B82F6' },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold' },
-  moreText: { color: '#4B5563', fontSize: 14 },
-  noticeBox: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8 },
-  noticeRow: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  noticeTitle: { fontSize: 16, flex: 1, marginRight: 10 },
-  divider: { height: 1, backgroundColor: '#E5E7EB', marginHorizontal: 16 },
-  galleryScroll: { flexDirection: 'row' },
-  galleryCard: { width: 180, height: 200, marginRight: 10, borderRadius: 8, overflow: 'hidden' },
-  footer: { marginTop: 40, paddingVertical: 24, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
-  footerCompany: { fontSize: 14, fontWeight: 'bold', color: '#9CA3AF', marginBottom: 12 },
-  footerText: { fontSize: 12, color: '#9CA3AF', marginBottom: 4, lineHeight: 18 },
-  footerLinks: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  footerLinkBold: { fontSize: 12, fontWeight: 'bold', color: '#4B5563', textDecorationLine: 'underline' },
-  copyRight: { fontSize: 11, color: '#D1D5DB', marginTop: 16 }
+  appBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    backgroundColor: "#FFFFFF",
+  },
+  logoRow: { flexDirection: "row", alignItems: "center" },
+  logoBrandText: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -1,
+  },
+  logoBrandAccent: { color: "#4F46E5" },
+  appBarActions: { flexDirection: "row", alignItems: "center" },
+  iconCircle: { position: "relative" },
+  badge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: "#4F46E5",
+  },
+  mainPadding: { padding: 24 },
+  welcomeSection: { marginBottom: 32 },
+  welcomeName: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.5,
+  },
+  welcomeMsg: {
+    fontSize: 15,
+    color: "#9CA3AF",
+    marginTop: 4,
+    fontWeight: "500",
+  },
+  pageViewSection: { marginBottom: 32 },
+  cardWrapper: { width: width - 48, marginRight: 24 },
+  cardShadow: { borderRadius: 16, backgroundColor: "#fff" },
+  cardInner: { height: 210, justifyContent: "flex-end" },
+  cardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    borderRadius: 16,
+  },
+  cardContent: {
+    padding: 24,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
+  tag: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    alignSelf: "flex-start",
+    marginBottom: 12,
+  },
+  tagText: { fontSize: 10, fontWeight: "700", color: "#fff", letterSpacing: 1 },
+  cardDateText: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.5,
+  },
+  cardChildText: {
+    fontSize: 16,
+    color: "#fff",
+    marginTop: 4,
+    fontWeight: "600",
+    opacity: 0.9,
+  },
+  branchText: { fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 6 },
+  pickupBtnActive: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  pickupBtnTextActive: { color: "#111827", fontWeight: "700", fontSize: 13 },
+  quickMenuGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 32,
+  },
+  menuItem: { alignItems: "center", flex: 1 },
+  menuLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 8,
+    letterSpacing: -0.2,
+  },
+  adBanner: {
+    backgroundColor: "#111827",
+    borderRadius: 16,
+    padding: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 48,
+  },
+  adTextContainer: { flex: 1 },
+  adTag: {
+    color: "#4F46E5",
+    fontSize: 10,
+    fontWeight: "800",
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  adTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 22,
+  },
+  emptyCard: {
+    backgroundColor: "#F9FAFB",
+    height: 210,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 16,
+  },
+  emptyText: { fontSize: 14, color: "#9CA3AF", fontWeight: "500" },
+  dotRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: "#E5E7EB",
+    marginHorizontal: 3,
+  },
+  activeDot: { width: 16, backgroundColor: "#111827" },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.5,
+  },
+  moreText: {
+    color: "#D1D5DB",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  noticeBox: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    paddingVertical: 4,
+  },
+  noticeRow: {
+    padding: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  noticeTitle: {
+    fontSize: 15,
+    flex: 1,
+    color: "#374151",
+    fontWeight: "600",
+    marginRight: 12,
+  },
+  divider: { height: 1, backgroundColor: "#F3F4F6", marginHorizontal: 20 },
+  footer: {
+    marginTop: 40,
+    paddingVertical: 40,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  footerCompany: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  footerInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  footerDivider: { fontSize: 11, color: "#E5E7EB", marginHorizontal: 8 },
+  footerText: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  footerLinks: { flexDirection: "row", marginTop: 20 },
+  footerLink: { fontSize: 12, fontWeight: "700", color: "#6B7280" },
+  copyRight: {
+    fontSize: 11,
+    color: "#D1D5DB",
+    marginTop: 24,
+    fontWeight: "500",
+  },
 });
