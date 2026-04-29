@@ -94,7 +94,7 @@ export default function IPassCarePage() {
               <br />
               FOR YOUR{" "}
               <span className="text-blue-600 underline underline-offset-8">
-                GROUND
+                CHILDREN
               </span>
             </h1>
             <p className="text-gray-400 text-lg md:text-xl font-medium leading-relaxed mb-10 max-w-lg relative z-10">

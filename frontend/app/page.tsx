@@ -32,7 +32,7 @@ export default function HomePage() {
   const businessUnits = [
     {
       id: "shootingstar",
-      title: "슛팅스타",
+      title: "강인한 슛팅스타",
       description: "데이터 기반 프리미엄 유소년 축구 교육 시스템",
       image:
         "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1600",
@@ -112,7 +112,7 @@ export default function HomePage() {
             <button
               className={`flex items-center gap-1 transition-colors ${activeMenu === "about" ? "text-blue-600" : ""}`}
             >
-              소개{" "}
+              기업정보{" "}
               <ChevronDown
                 size={14}
                 className={`transition-transform duration-300 ${activeMenu === "about" ? "rotate-180" : ""}`}
@@ -133,6 +133,27 @@ export default function HomePage() {
                   >
                     기업 개요
                   </Link>
+                  <Link
+                    href="#"
+                    onClick={() => setActiveMenu(null)}
+                    className="block p-4 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all font-bold"
+                  >
+                    조직도
+                  </Link>
+                  <Link
+                    href="#"
+                    onClick={() => setActiveMenu(null)}
+                    className="block p-4 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all font-bold"
+                  >
+                    인사말
+                  </Link>
+                  <Link
+                    href="#"
+                    onClick={() => setActiveMenu(null)}
+                    className="block p-4 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all font-bold"
+                  >
+                    연혁
+                  </Link>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -146,7 +167,7 @@ export default function HomePage() {
             <button
               className={`flex items-center gap-1 transition-colors ${activeMenu === "business" ? "text-blue-600" : ""}`}
             >
-              사업{" "}
+              사업분야{" "}
               <ChevronDown
                 size={14}
                 className={`transition-transform duration-300 ${activeMenu === "business" ? "rotate-180" : ""}`}
