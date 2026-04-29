@@ -19,7 +19,7 @@ export default function SignUpScreen({ navigation }: any) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [branchId, setBranchId] = useState('unassigned'); // 초기값은 DB에 있는 unassigned
+  const [branchId, setBranchId] = useState('unassigned');
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -34,11 +34,20 @@ export default function SignUpScreen({ navigation }: any) {
     }
   }, [password, confirmPassword]);
 
+  // 📱 휴대폰 번호 포맷팅 (010-0000-0000)
   const formatPhoneNumber = (text: string) => {
     const cleaned = text.replace(/\D/g, '');
     if (cleaned.length <= 3) return cleaned;
     if (cleaned.length <= 7) return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
     return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7, 11)}`;
+  };
+
+  // 📅 생년월일 포맷팅 (1994-01-01)
+  const formatBirthDate = (text: string) => {
+    const cleaned = text.replace(/\D/g, '');
+    if (cleaned.length <= 4) return cleaned;
+    if (cleaned.length <= 6) return `${cleaned.slice(0, 4)}-${cleaned.slice(4)}`;
+    return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 6)}-${cleaned.slice(6, 8)}`;
   };
 
   // 아이디 중복 체크 함수
@@ -49,7 +58,7 @@ export default function SignUpScreen({ navigation }: any) {
         .select('username')
         .eq('username', uname)
         .maybeSingle();
-      if (error && error.code !== 'PGRST116') return false; // 에러가 중복 데이터 없음이 아닐 경우
+      if (error && error.code !== 'PGRST116') return false;
       return !!data;
     } catch (e) {
       return false;
@@ -58,13 +67,18 @@ export default function SignUpScreen({ navigation }: any) {
 
   const handleSignUp = async () => {
     // 1. 필수 입력 확인
-    if (!username || !password || !confirmPassword || !name || !email || !phone) {
+    if (!username || !password || !confirmPassword || !name || !email || !phone || !birthDate) {
       Alert.alert('알림', '모든 항목을 입력해주세요.');
       return;
     }
 
-    // 2. 비밀번호 정책 (영문 필수 + 숫자/특수문자 포함 7자 이상)
-    // rla8636~ 같은 패턴이 무조건 통과되도록 범위를 넓혔습니다.
+    // 생년월일 8자리 체크 (하이픈 포함 10자)
+    if (birthDate.length < 10) {
+      Alert.alert('알림', '생년월일 8자리를 정확히 입력해주세요.');
+      return;
+    }
+
+    // 2. 비밀번호 정책
     const passwordRegex = /^(?=.*[A-Za-z])(?=.*[\d!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{7,}$/;
     if (!passwordRegex.test(password)) {
       Alert.alert('비밀번호 오류', '비밀번호는 영문을 포함하고 숫자 또는 특수문자를 조합하여 7자 이상이어야 합니다.');
@@ -87,7 +101,7 @@ export default function SignUpScreen({ navigation }: any) {
         return;
       }
 
-      // 4. Supabase Auth 가입 (로그인용 계정 생성)
+      // 4. Supabase Auth 가입
       const { data: authData, error: authError } = await supabase.auth.signUp({ 
         email: email, 
         password: password 
@@ -103,21 +117,17 @@ export default function SignUpScreen({ navigation }: any) {
             email: email,
             name: name,
             phone: phone.replace(/-/g, ''), // 하이픈 제거 후 저장
-            birth_date: birthDate,
-            branch_id: branchId, // 사진의 'unassigned'와 정확히 매칭됨
+            birth_date: birthDate.replace(/-/g, ''), // 👈 생년월일 하이픈 제거 후 저장 (8자리 숫자)
+            branch_id: branchId,
             role: 'user'
         }]);
 
-        if (dbError) {
-          console.error("DB Insert Error:", dbError.message);
-          throw dbError;
-        }
+        if (dbError) throw dbError;
 
         Alert.alert('성공', '회원가입이 완료되었습니다!', [{ text: '확인', onPress: () => navigation.navigate('Login') }]);
       }
     } catch (error: any) {
-      // fkey 에러나 정책 위반 시 상세 내용을 알림으로 띄움
-      Alert.alert('가입 에러', error.message || '데이터베이스 저장 중 오류가 발생했습니다.');
+      Alert.alert('가입 에러', error.message || '오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -177,19 +187,34 @@ export default function SignUpScreen({ navigation }: any) {
         <View style={styles.section}>
           <Text style={styles.label}>사용자 정보</Text>
           <TextInput style={styles.input} placeholder="이름" value={name} onChangeText={setName} />
-          <TextInput style={styles.input} placeholder="휴대폰 번호" value={phone} onChangeText={(text) => setPhone(formatPhoneNumber(text))} keyboardType="phone-pad" maxLength={13} />
-          <TextInput style={styles.input} placeholder="생년월일 (YYMMDD)" value={birthDate} onChangeText={setBirthDate} keyboardType="number-pad" maxLength={6} />
+          <TextInput 
+            style={styles.input} 
+            placeholder="휴대폰 번호" 
+            value={phone} 
+            onChangeText={(text) => setPhone(formatPhoneNumber(text))} 
+            keyboardType="phone-pad" 
+            maxLength={13} 
+          />
+          {/* 📅 생년월일 입력 섹션 */}
+          <TextInput 
+            style={styles.input} 
+            placeholder="생년월일 (예: 19940101)" 
+            value={birthDate} 
+            onChangeText={(text) => setBirthDate(formatBirthDate(text))} 
+            keyboardType="number-pad" 
+            maxLength={10} 
+          />
         </View>
 
         <View style={styles.section}>
           <Text style={styles.label}>소속 지점 선택</Text>
-          <View style={styles.branchContainer}>
+          <div style={styles.branchContainer}>
             {[{ id: 'branch_1', name: '시흥본점' }, { id: 'branch_2', name: '영종도점' }, { id: 'unassigned', name: '미정' }].map((branch) => (
               <TouchableOpacity key={branch.id} style={[styles.branchButton, branchId === branch.id && styles.branchButtonActive]} onPress={() => setBranchId(branch.id)}>
                 <Text style={[styles.branchText, branchId === branch.id && styles.branchTextActive]}>{branch.name}</Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </div>
         </View>
 
         <TouchableOpacity style={styles.signUpButton} onPress={handleSignUp} disabled={isLoading}>
