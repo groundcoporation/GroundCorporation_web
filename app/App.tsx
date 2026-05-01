@@ -13,11 +13,19 @@ import HomeScreen from "./src/screens/home/HomeScreen";
 // 💳 [이용권 및 결제 관련]
 import PassPurchaseScreen from "./src/screens/pass/PassPurchaseScreen"; 
 import KSPayService from "./src/services/payment/KSPayService"; // 👈 결제 화면 추가
+import MyPackageScreen from "./src/screens/pass/MyPackageScreen"; // 👈 경로를 pass로 변경!
 
 // 📅 [예약 관련 시스템]
 import ReservationScreen from "./src/screens/reservation/ReservationScreen"; 
 import ReservationSuccessScreen from "./src/screens/reservation/ReservationSuccessScreen";
 import ReservationFailScreen from "./src/screens/reservation/ReservationFailScreen";
+
+// 👤 [마이페이지 관련]
+import MyPageScreen from "./src/screens/mypage/MyPageScreen"; // 👈 마이페이지 화면 추가
+import ProfileEditScreen from "./src/screens/mypage/ProfileEditScreen"; // 👈 내 정보 수정 화면 추가
+import ChildManagementScreen from "./src/screens/mypage/ChildManagementScreen"; // 👈 자녀 관리 화면 추가
+
+
 
 const Stack = createNativeStackNavigator();
 
@@ -64,6 +72,8 @@ export default function App() {
         
         {/* 2. 이용권 및 결제 프로세스 */}
         <Stack.Screen name="Pass" component={PassPurchaseScreen} />
+        <Stack.Screen name="MyPackage" component={MyPackageScreen} />
+        
         {/* <Stack.Screen 
           name="KSPay" 
           component={KSPayService} 
@@ -77,6 +87,11 @@ export default function App() {
         <Stack.Screen name="Reservation" component={ReservationScreen} /> 
         <Stack.Screen name="ReservationSuccess" component={ReservationSuccessScreen} />
         <Stack.Screen name="ReservationFail" component={ReservationFailScreen} /> 
+
+        {/* 4. 마이페이지 프로세스 */}
+        <Stack.Screen name="MyPage" component={MyPageScreen} />
+        <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
+        <Stack.Screen name="ChildManagement" component={ChildManagementScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

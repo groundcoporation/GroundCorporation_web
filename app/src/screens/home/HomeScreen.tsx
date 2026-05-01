@@ -54,7 +54,6 @@ export default function HomeScreen({ navigation }: any) {
     }
   };
 
-  // 💡 수정됨: 카드를 더 슬림하게 만들고 위치 정보를 제거했습니다.
   const renderLessonCard = (targetName: string, isChild: boolean) => (
     <View style={styles.cardShadow}>
       <ImageBackground
@@ -74,7 +73,6 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={styles.cardChildText}>
               {targetName} {isChild ? "학생" : "회원님"}
             </Text>
-            {/* 위치 정보 제거, 지점 이름만 심플하게 노출 */}
             <Text style={styles.branchText}>
               {userData?.branches?.name || "시흥본점"}
             </Text>
@@ -140,7 +138,7 @@ export default function HomeScreen({ navigation }: any) {
               renderItem={({ item }) => (
                 <View style={styles.cardWrapper}>
                   {item ? (
-                    renderLessonCard(item.name, children.length > 0)
+                    renderLessonCard(item.name || item.child_name, children.length > 0)
                   ) : (
                     <View style={[styles.cardInner, styles.emptyCard]}>
                       <Text style={styles.emptyText}>
@@ -167,38 +165,62 @@ export default function HomeScreen({ navigation }: any) {
             )}
           </View>
 
-          {/* 2. 💡 수정됨: Quick Menu 4열 2행 구조 (총 6개 메뉴) */}
+          {/* 2. Quick Menu - 4열 2행 구조 (개별 경로 명시형으로 수정) */}
           <View style={styles.quickMenuGrid}>
-            {[
-              { icon: "calendar-plus", label: "수업 예약", color: "#4F46E5", screen: "Reservation" },
-              { icon: "ticket-confirmation-outline", label: "이용권 구매", color: "#111827", screen: "Pass" },
-              { icon: "shopping-outline", label: "쇼핑몰", color: "#111827", screen: "Shop" },
-              { icon: "image-outline", label: "갤러리", color: "#111827", screen: "Gallery" },
-              { icon: "bus-school", label: "등하원", color: "#111827", screen: "Pickup" },
-              { icon: "check-decagram", label: "출석체크", color: "#111827", screen: "Attendance" },
-            ].map((menu, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={styles.menuItem}
-                onPress={() => navigation.navigate(menu.screen)}
-              >
-                <View style={styles.menuIconBg}>
-                  <MaterialCommunityIcons
-                    name={menu.icon as any}
-                    size={28}
-                    color={menu.color}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.menuLabel,
-                    { color: menu.color === "#4F46E5" ? "#4F46E5" : "#4B5563" },
-                  ]}
-                >
-                  {menu.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            
+            {/* 행 1 */}
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Reservation")}>
+              <View style={styles.menuIconBg}>
+                <MaterialCommunityIcons name="calendar-plus" size={28} color="#4F46E5" />
+              </View>
+              <Text style={[styles.menuLabel, { color: "#4F46E5" }]}>수업 예약</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Pass")}>
+              <View style={styles.menuIconBg}>
+                <MaterialCommunityIcons name="ticket-confirmation-outline" size={28} color="#111827" />
+              </View>
+              <Text style={styles.menuLabel}>이용권 구매</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("MyPackage")}>
+              <View style={styles.menuIconBg}>
+                <MaterialCommunityIcons name="ticket-account" size={28} color="#111827" />
+              </View>
+              <Text style={styles.menuLabel}>이용권 확인</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => Linking.openURL("http://vog-sports.com/")}>
+              <View style={styles.menuIconBg}>
+                <MaterialCommunityIcons name="shopping-outline" size={28} color="#111827" />
+              </View>
+              <Text style={styles.menuLabel}>쇼핑몰</Text>
+            </TouchableOpacity>
+
+            {/* 행 2 */}
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Gallery")}>
+              <View style={styles.menuIconBg}>
+                <MaterialCommunityIcons name="image-outline" size={28} color="#111827" />
+              </View>
+              <Text style={styles.menuLabel}>갤러리</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Pickup")}>
+              <View style={styles.menuIconBg}>
+                <MaterialCommunityIcons name="bus-school" size={28} color="#111827" />
+              </View>
+              <Text style={styles.menuLabel}>등하원</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Attendance")}>
+              <View style={styles.menuIconBg}>
+                <MaterialCommunityIcons name="check-decagram" size={28} color="#111827" />
+              </View>
+              <Text style={styles.menuLabel}>출석확인</Text>
+            </TouchableOpacity>
+
+            {/* 마지막 칸 비워둠 (4열 맞춤용) */}
+            <View style={styles.menuItem} />
           </View>
 
           {/* 3. 광고 배너 섹션 */}
@@ -325,10 +347,7 @@ const styles = StyleSheet.create({
   pageViewSection: { marginBottom: 32 },
   cardWrapper: { width: width - 48, marginRight: 24 },
   cardShadow: { borderRadius: 16, backgroundColor: "#fff" },
-  
-  // 💡 수정됨: 기존 210에서 150으로 줄여서 카드를 슬림하게 변경
   cardInner: { height: 150, justifyContent: "flex-end" }, 
-  
   cardOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
@@ -346,11 +365,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 4,
     alignSelf: "flex-start",
-    marginBottom: 8, // 간격 살짝 축소
+    marginBottom: 8,
   },
   tagText: { fontSize: 10, fontWeight: "700", color: "#fff", letterSpacing: 1 },
   cardDateText: {
-    fontSize: 22, // 슬림해진 카드에 맞춰 폰트 크기 미세조정
+    fontSize: 22,
     fontWeight: "800",
     color: "#fff",
     letterSpacing: -0.5,
@@ -370,24 +389,22 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   pickupBtnTextActive: { color: "#111827", fontWeight: "700", fontSize: 13 },
-  
-  // 💡 수정됨: 4열 2행 구조를 위해 flexWrap 적용 및 width 조절
   quickMenuGrid: {
     flexDirection: "row",
-    flexWrap: "wrap", // 줄바꿈을 허용하여 2줄로 만듦
+    flexWrap: "wrap",
     justifyContent: "flex-start",
-    marginBottom: 12, // 배너와의 간격 조절
+    marginBottom: 12,
   },
   menuItem: { 
     alignItems: "center", 
-    width: "25%", // 화면을 4등분
-    marginBottom: 24 // 위아래 2줄 간격
+    width: "25%",
+    marginBottom: 24
   },
   menuIconBg: {
     width: 50,
     height: 50,
     borderRadius: 16,
-    backgroundColor: "#F9FAFB", // 살짝 배경을 주어 클릭 영역 명확히
+    backgroundColor: "#F9FAFB",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -397,7 +414,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     letterSpacing: -0.2,
   },
-  
   adBanner: {
     backgroundColor: "#111827",
     borderRadius: 16,
@@ -423,7 +439,7 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     backgroundColor: "#F9FAFB",
-    height: 150, // 슬림 카드에 맞춤
+    height: 150,
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 16,

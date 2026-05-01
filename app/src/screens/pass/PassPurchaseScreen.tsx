@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 
-// 💳 결제 모달 서비스 임포트
+// 💳 KSPay 모달 서비스 임포트
 import KSPayService from '../../services/payment/KSPayService';
 
 interface PackageOption { id: string; label: string; price: number; }
@@ -34,7 +34,6 @@ export default function PassPurchaseScreen({ navigation }: any) {
   const [selectedChild, setSelectedChild] = useState<any>(null);
   const [showOptionModal, setShowOptionModal] = useState(false);
   
-  // 💡 결제 모달 상태 관리
   const [showKSPay, setShowKSPay] = useState(false);
   const [addShuttle, setAddShuttle] = useState(false);
   const [addJelly, setAddJelly] = useState(false);
@@ -76,14 +75,13 @@ export default function PassPurchaseScreen({ navigation }: any) {
   const basePrice = currentSelection?.is_consult ? 0 : (currentSelection?.package_options && currentSelection.package_options.length > 0 ? currentSelection.package_options[selectedCountIndex].price : (currentSelection?.price || 0));
   const finalPrice = basePrice + (addShuttle ? 14000 : 0) + (addJelly ? 39600 : 0);
 
-  // 💰 [결제 실행]
   const handleOpenPayment = () => {
     if (!selectedChild && !currentUser) {
-      Alert.alert("알림", "사용자 정보를 불러올 수 없습니다.");
+      Alert.alert("알림", "사용자 정보를 불러올 수 없습니다. 다시 시도해주세요.");
       return;
     }
     setShowOptionModal(false);
-    setShowKSPay(true); // 👈 내비게이션 대신 모달을 켭니다!
+    setShowKSPay(true); 
   };
 
   return (
@@ -101,6 +99,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* 탭 메뉴 */}
         <View style={styles.tabContainer}>
           {[{ id: 'regular', name: '정규반' }, { id: 'care', name: '집중케어' }, { id: 'lesson', name: '레슨/상담' }, { id: 'rental', name: '기타' }].map((tab) => (
             <TouchableOpacity key={tab.id} style={[styles.tab, activeCategory === tab.id && styles.activeTab]} onPress={() => setActiveCategory(tab.id)}>
@@ -110,6 +109,12 @@ export default function PassPurchaseScreen({ navigation }: any) {
         </View>
 
         <View style={styles.mainPadding}>
+          {/* 이벤트 배너 (추후 DB 연동 가능) */}
+          <View style={styles.eventBanner}>
+            <View style={styles.eventBadge}><Text style={styles.eventBadgeText}>EVENT</Text></View>
+            <Text style={styles.eventText}>선착순 50명 가입비 면제 혜택!</Text>
+          </View>
+
           {loading ? (
             <ActivityIndicator size="large" color="#6366F1" style={{marginTop: 50}} />
           ) : (
@@ -121,6 +126,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
                     <View style={[styles.radioCircle, isSelected && styles.activeRadio]}>{isSelected && <View style={styles.radioInner} />}</View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.packageName}>{item.name}</Text>
+                      {item.description && <Text style={styles.packageSubDesc}>{item.description}</Text>}
                     </View>
                   </TouchableOpacity>
                   {isSelected && !item.is_consult && (
@@ -139,6 +145,14 @@ export default function PassPurchaseScreen({ navigation }: any) {
               );
             })
           )}
+
+          {/* 💡 복구된 하단 공지사항 / 유의사항 영역 */}
+          <View style={styles.bottomInfo}>
+            <Text style={styles.infoTitle}>📌 꼭 확인해주세요!</Text>
+            <Text style={styles.infoItem}>• 가입비 최초 1회 10만원 (유니폼+젤리 지급)</Text>
+            <Text style={styles.infoItem}>• 모든 수업료는 부가세 별도 금액입니다.</Text>
+            <Text style={styles.infoItem}>• 카드사 할인 및 할부는 결제창에서 확인 가능합니다.</Text>
+          </View>
         </View>
       </ScrollView>
 
@@ -221,6 +235,10 @@ const styles = StyleSheet.create({
   activeTabText: { color: '#111827', fontWeight: '800' },
   scrollContent: { paddingBottom: 140 },
   mainPadding: { padding: 20 },
+  eventBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E1B4B', padding: 16, borderRadius: 20, marginBottom: 20 },
+  eventBadge: { backgroundColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginRight: 10 },
+  eventBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
+  eventText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
   packageCard: { backgroundColor: '#FFF', borderRadius: 24, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9' },
   selectedCard: { borderColor: '#6366F1', borderWidth: 2 },
   cardHeader: { flexDirection: 'row', alignItems: 'center' },
@@ -228,6 +246,7 @@ const styles = StyleSheet.create({
   activeRadio: { borderColor: '#6366F1' },
   radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#6366F1' },
   packageName: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
+  packageSubDesc: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
   optionContainer: { marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F8FAFC', marginRight: 8, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' },
@@ -235,6 +254,12 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, color: '#64748B', fontWeight: '600' },
   activeChipText: { color: '#FFF' },
   priceValue: { fontSize: 22, fontWeight: '900', color: '#111827', textAlign: 'right' },
+  
+  // 💡 복구된 공지사항 스타일
+  bottomInfo: { marginTop: 20, padding: 20, backgroundColor: '#FFF', borderRadius: 20, borderWidth: 1, borderColor: '#F1F5F9' },
+  infoTitle: { fontSize: 14, fontWeight: '800', color: '#111827', marginBottom: 10 },
+  infoItem: { fontSize: 12, color: '#64748B', marginBottom: 6, lineHeight: 18 },
+
   floatingFooter: { position: 'absolute', bottom: 30, left: 20, right: 20, backgroundColor: '#111827', borderRadius: 24, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   footerPriceBox: { flex: 1 },
   footerLabel: { color: '#94A3B8', fontSize: 10 },
