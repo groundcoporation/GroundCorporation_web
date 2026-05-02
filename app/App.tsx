@@ -12,8 +12,8 @@ import HomeScreen from "./src/screens/home/HomeScreen";
 
 // 💳 [이용권 및 결제 관련]
 import PassPurchaseScreen from "./src/screens/pass/PassPurchaseScreen"; 
-import KSPayService from "./src/services/payment/KSPayService"; // 👈 결제 화면 추가
-import MyPackageScreen from "./src/screens/pass/MyPackageScreen"; // 👈 경로를 pass로 변경!
+import KSPayService from "./src/services/payment/KSPayService"; 
+import MyPackageScreen from "./src/screens/pass/MyPackageScreen"; 
 
 // 📅 [예약 관련 시스템]
 import ReservationScreen from "./src/screens/reservation/ReservationScreen"; 
@@ -21,11 +21,20 @@ import ReservationSuccessScreen from "./src/screens/reservation/ReservationSucce
 import ReservationFailScreen from "./src/screens/reservation/ReservationFailScreen";
 
 // 👤 [마이페이지 관련]
-import MyPageScreen from "./src/screens/mypage/MyPageScreen"; // 👈 마이페이지 화면 추가
-import ProfileEditScreen from "./src/screens/mypage/ProfileEditScreen"; // 👈 내 정보 수정 화면 추가
-import ChildManagementScreen from "./src/screens/mypage/ChildManagementScreen"; // 👈 자녀 관리 화면 추가
+import MyPageScreen from "./src/screens/mypage/MyPageScreen"; 
+import ProfileEditScreen from "./src/screens/mypage/ProfileEditScreen"; 
+import ChildManagementScreen from "./src/screens/mypage/ChildManagementScreen"; 
 
+// 📢 [공지사항 관련]
+import NoticeListScreen from "./src/screens/notice/NoticeListScreen";
+import NoticeDetailScreen from "./src/screens/notice/NoticeDetailScreen";
+import NoticeEditScreen from "./src/screens/notice/NoticeEditScreen";
 
+// 🚌 [출석 및 등하원(픽업) 관련] 
+import AttendanceScreen from "./src/screens/attendance/AttendanceScreen";
+import PickupMainScreen from "./src/screens/pickup/PickupMainScreen"; // 👈 추가된 픽업 메인
+import PickupApplyScreen from "./src/screens/pickup/PickupApplyScreen"; // 👈 추가된 픽업 신청/수정
+import RealtimeMapScreen from "./src/screens/pickup/RealtimeMapScreen"; // 👈 추가된 실시간 지도
 
 const Stack = createNativeStackNavigator();
 
@@ -78,8 +87,8 @@ export default function App() {
           name="KSPay" 
           component={KSPayService} 
           options={{ 
-            animation: "slide_from_bottom", // 결제창은 아래에서 위로 올라오는 느낌이 자연스럽습니다.
-            presentation: "modal" // iOS에서 모달 스타일로 연출
+            animation: "slide_from_bottom", 
+            presentation: "modal" 
           }} 
         /> */}
         
@@ -92,6 +101,20 @@ export default function App() {
         <Stack.Screen name="MyPage" component={MyPageScreen} />
         <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
         <Stack.Screen name="ChildManagement" component={ChildManagementScreen} />
+
+        {/* 5. 공지사항 프로세스 */}
+        <Stack.Screen name="NoticeList" component={NoticeListScreen} />
+        <Stack.Screen name="NoticeDetail" component={NoticeDetailScreen} />
+        <Stack.Screen name="NoticeEdit" component={NoticeEditScreen} />
+
+        {/* 6. 출석 프로세스 */}
+        <Stack.Screen name="Attendance" component={AttendanceScreen} />
+
+        {/* 7. 픽업(유료셔틀) 프로세스 👈 새로 추가된 부분! */}
+        <Stack.Screen name="PickupMain" component={PickupMainScreen} />
+        <Stack.Screen name="PickupApply" component={PickupApplyScreen} />
+        <Stack.Screen name="RealtimeMap" component={RealtimeMapScreen} />
+
       </Stack.Navigator>
     </NavigationContainer>
   );

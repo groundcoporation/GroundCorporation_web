@@ -22,6 +22,9 @@ export default function HomeScreen({ navigation }: any) {
   const [children, setChildren] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeChildIndex, setActiveChildIndex] = useState(0);
+  
+  // 💡 새로 추가된 상태: 가장 가까운 예약 데이터
+  const [upcomingReservation, setUpcomingReservation] = useState<any>(null);
 
   useEffect(() => {
     fetchData();
@@ -33,6 +36,7 @@ export default function HomeScreen({ navigation }: any) {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
+        // 1. 유저 정보 로드
         const { data: userProfile } = await supabase
           .from("users")
           .select("*, branches(name)")
@@ -40,12 +44,28 @@ export default function HomeScreen({ navigation }: any) {
           .single();
         setUserData(userProfile);
 
+        // 2. 자녀 정보 로드
         const { data: childrenList } = await supabase
           .from("children")
           .select("*")
           .eq("parent_id", user.id)
           .order("created_at", { ascending: true });
         setChildren(childrenList || []);
+
+        // 💡 3. 새로 추가: 다가오는 예약 로드 (오늘 이후의 가장 빠른 예약 1건)
+        const today = new Date().toISOString();
+        const { data: reservation } = await supabase
+          .from("reservations")
+          .select("*")
+          .eq("user_id", user.id) // 본인 또는 자녀의 예약
+          .gte("reservation_date", today) // 오늘 시간 이후
+          .order("reservation_date", { ascending: true }) // 가장 빠른 날짜순
+          .limit(1)
+          .single();
+          
+        if (reservation) {
+          setUpcomingReservation(reservation);
+        }
       }
     } catch (e) {
       console.log("데이터 로드 에러:", e);
@@ -54,38 +74,74 @@ export default function HomeScreen({ navigation }: any) {
     }
   };
 
-  const renderLessonCard = (targetName: string, isChild: boolean) => (
-    <View style={styles.cardShadow}>
-      <ImageBackground
-        source={{
-          uri: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800",
-        }}
-        style={styles.cardInner}
-        imageStyle={{ borderRadius: 16 }}
-      >
-        <View style={styles.cardOverlay} />
-        <View style={styles.cardContent}>
-          <View>
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>UPCOMING</Text>
+  // 💡 새로 추가: 예약 날짜 포맷 함수 (예: 05.01 WED 14:00)
+  const formatReservationDate = (dateString: string) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+    const dayOfWeek = days[date.getDay()];
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${month}.${day} ${dayOfWeek} ${hours}:${minutes}`;
+  };
+
+  const renderLessonCard = (targetName: string, isChild: boolean) => {
+    const hasReservation = !!upcomingReservation;
+
+    return (
+      <View style={styles.cardShadow}>
+        {hasReservation ? (
+          <ImageBackground
+            source={{
+              uri: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800",
+            }}
+            style={styles.cardInner}
+            imageStyle={{ borderRadius: 16 }}
+          >
+            <View style={styles.cardOverlay} />
+            <View style={styles.cardContent}>
+              <View>
+                <View style={styles.tag}>
+                  <Text style={styles.tagText}>UPCOMING</Text>
+                </View>
+                {/* 💡 DB에서 가져온 실제 예약 날짜 연동 */}
+                <Text style={styles.cardDateText}>
+                  {formatReservationDate(upcomingReservation.reservation_date)}
+                </Text>
+                <Text style={styles.cardChildText}>
+                  {targetName} {isChild ? "학생" : "회원님"}
+                </Text>
+                <Text style={styles.branchText}>
+                  {userData?.branches?.name || "시흥본점"}
+                </Text>
+              </View>
+              {isChild && (
+                <TouchableOpacity style={styles.pickupBtnActive}>
+                  <Text style={styles.pickupBtnTextActive}>픽업 신청</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <Text style={styles.cardDateText}>05.01 WED 14:00</Text>
-            <Text style={styles.cardChildText}>
-              {targetName} {isChild ? "학생" : "회원님"}
+          </ImageBackground>
+        ) : (
+          // 💡 예약이 없을 때 보여주는 빈 화면 및 예약 버튼 유도
+          <View style={[styles.cardInner, styles.emptyCard]}>
+            <MaterialCommunityIcons name="calendar-blank" size={32} color="#D1D5DB" />
+            <Text style={[styles.emptyText, { marginTop: 8 }]}>
+              예정된 수업이 없습니다.
             </Text>
-            <Text style={styles.branchText}>
-              {userData?.branches?.name || "시흥본점"}
-            </Text>
-          </View>
-          {isChild && (
-            <TouchableOpacity style={styles.pickupBtnActive}>
-              <Text style={styles.pickupBtnTextActive}>픽업 신청</Text>
+            <TouchableOpacity 
+              style={{ marginTop: 12, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#4F46E5', borderRadius: 8 }}
+              onPress={() => navigation.navigate("Reservation")}
+            >
+              <Text style={{ color: 'white', fontSize: 12, fontWeight: '700' }}>예약하러 가기</Text>
             </TouchableOpacity>
-          )}
-        </View>
-      </ImageBackground>
-    </View>
-  );
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -205,11 +261,11 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.menuLabel}>갤러리</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Pickup")}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("PickupMain")}>
               <View style={styles.menuIconBg}>
                 <MaterialCommunityIcons name="bus-school" size={28} color="#111827" />
               </View>
-              <Text style={styles.menuLabel}>등하원</Text>
+              <Text style={styles.menuLabel}>픽업</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Attendance")}>
@@ -242,7 +298,7 @@ export default function HomeScreen({ navigation }: any) {
           {/* 4. 공지 사항 */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>공지 사항</Text>
-            <TouchableOpacity onPress={() => navigation.navigate("Notice")}>
+            <TouchableOpacity onPress={() => navigation.navigate("NoticeList")}>
               <Text style={styles.moreText}>MORE</Text>
             </TouchableOpacity>
           </View>
