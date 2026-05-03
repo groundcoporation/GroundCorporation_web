@@ -2,14 +2,14 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://github.com/groundcoporation/GroundCoropration_web",
+  "homepage": "https://groundcoporation.github.io/GroundCoropration_web",
   "scripts": {
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d out"
   },
   "dependencies": {
     "aos": "^2.3.4",
@@ -24,7 +24,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/aos": "^3.0.7",
-    "@types/node": "^20",
+    "@types/node": "^20.19.39",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
