@@ -1,9 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "export", // 이 줄을 추가하세요!
+  output: "export",
   images: {
-    unoptimized: true, // GitHub Pages는 이미지 최적화를 지원하지 않으므로 설정 필요
+    unoptimized: true,
   },
+  // 저장소 이름이 GroundCoropration_web 이 맞는지 꼭 확인!
+  basePath: "/GroundCoropration_web",
+  assetPrefix: "/GroundCoropration_web",
+  trailingSlash: true,
 };
 
 module.exports = nextConfig;

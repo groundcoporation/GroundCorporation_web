@@ -1,8 +1,18 @@
-import React, { useRef, useState } from 'react';
-import { View, StyleSheet, Modal, TouchableOpacity, Text, ActivityIndicator, Alert, Linking } from 'react-native';
-import { WebView } from 'react-native-webview';
-import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase';
+import React, { useRef, useState, useEffect } from "react";
+import {
+  View,
+  StyleSheet,
+  Modal,
+  TouchableOpacity,
+  Text,
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Platform,
+} from "react-native";
+import { WebView } from "react-native-webview";
+import { Ionicons } from "@expo/vector-icons";
+import { supabase } from "../../lib/supabase";
 
 interface KSPayProps {
   isVisible: boolean;
@@ -10,68 +20,116 @@ interface KSPayProps {
   paymentData: any;
 }
 
-export default function KSPayService({ isVisible, onClose, paymentData }: KSPayProps) {
+export default function KSPayService({
+  isVisible,
+  onClose,
+  paymentData,
+}: KSPayProps) {
   const webViewRef = useRef<WebView>(null);
-  const [loading, setLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [isPayStarted, setIsPayStarted] = useState(false);
 
-  // 1. 최종 승인 및 DB 저장 (kspay_service.dart 로직 이식)
+  useEffect(() => {
+    if (!isVisible) {
+      setIsProcessing(false);
+      setIsPayStarted(false);
+    }
+  }, [isVisible]);
+
   const approvePayment = async (payKey: string) => {
+    setIsProcessing(true);
     try {
-      setLoading(true);
-      const response = await fetch("https://pgdev.ksnet.co.kr/store/KSPayMobileV1.4/web_host/recv_jpost.jsp", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `sndCommConId=${payKey}&sndAmount=${paymentData.amount}&sndActionType=1&sndCharSet=UTF-8`
-      });
+      const response = await fetch(
+        "https://pgdev.ksnet.co.kr/store/KSPayMobileV1.4/web_host/recv_jpost.jsp",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: `sndCommConId=${payKey}&sndAmount=${paymentData.amount}&sndActionType=1&sndCharSet=UTF-8`,
+        },
+      );
 
       if (response.ok) {
-        // 이용권 만료일 계산 (보통 30일)
         const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + (paymentData.durationInDays || 30));
+        expiryDate.setDate(
+          expiryDate.getDate() + (paymentData.durationInDays || 30),
+        );
 
-        // Supabase user_packages 테이블에 인서트
-        const { error } = await supabase.from('user_packages').insert([{
-          user_id: paymentData.userId,
-          package_id: paymentData.packageId,
-          package_name: paymentData.packageName,
-          total_sessions: paymentData.totalSessions,
-          remaining_sessions: paymentData.totalSessions,
-          expiry_date: expiryDate.toISOString(),
-          branch_id: paymentData.branchId,
-          child_id: paymentData.childId,
-          child_name: paymentData.childName,
-          price: paymentData.amount,
-          status: 'active'
-        }]);
+        const { error: dbError } = await supabase.from("user_packages").insert([
+          {
+            user_id: paymentData.userId,
+            package_id: paymentData.packageId,
+            package_name: paymentData.packageName,
+            total_sessions: paymentData.totalSessions,
+            remaining_sessions: paymentData.totalSessions,
+            expiry_date: expiryDate.toISOString(),
+            branch_id: paymentData.branchId,
+            child_id: paymentData.childId,
+            child_name: paymentData.childName,
+            price: paymentData.amount,
+            status: "active",
+          },
+        ]);
 
-        if (error) throw error;
-        onClose(true); // 성공 핸들러 실행
+        if (dbError) throw dbError;
+        onClose(true);
       } else {
-        throw new Error("결제 승인 서버 응답 오류");
+        throw new Error("승인 서버 오류");
       }
     } catch (e: any) {
-      Alert.alert("승인 오류", e.message);
+      Alert.alert("결제 오류", e.message);
       onClose(false);
-    } finally {
-      setLoading(false);
     }
   };
 
-  // 2. 외부 스키마 처리 (카드사 앱 호출 등)
-  const handleShouldStartLoad = (request: any) => {
-    const { url } = request;
-    if (!url.startsWith('http') && !url.startsWith('about:blank')) {
-      Linking.openURL(url).catch(() => Alert.alert("알림", "카드사 앱을 실행할 수 없습니다."));
-      return false;
+  const processExternalLink = (url: string) => {
+    if (!url.startsWith("http") && !url.startsWith("about:blank")) {
+      console.log("[KSPay] 외부 앱 스키마 가로채기:", url);
+
+      // 안드로이드 Intent 스키마 처리
+      if (Platform.OS === "android" && url.startsWith("intent:")) {
+        const parts = url.split("#Intent;");
+        const schemePart = parts[1]
+          ?.split(";")
+          .find((s) => s.startsWith("scheme="));
+        const packagePart = parts[1]
+          ?.split(";")
+          .find((s) => s.startsWith("package="));
+
+        if (schemePart) {
+          const scheme = schemePart.replace("scheme=", "");
+          const finalUrl = url
+            .replace(
+              /intent:\/\/[^#]*/,
+              `${scheme}://` + url.split("://")[1].split("#")[0],
+            )
+            .split("#Intent;")[0];
+
+          Linking.canOpenURL(finalUrl)
+            .then((supported) => {
+              if (supported) {
+                Linking.openURL(finalUrl);
+              } else if (packagePart) {
+                const packageName = packagePart.replace("package=", "");
+                Linking.openURL(`market://details?id=${packageName}`);
+              }
+            })
+            .catch(() => {});
+          return true;
+        }
+      }
+
+      // 일반 앱 스키마 처리
+      Linking.openURL(url).catch(() => {
+        Alert.alert("알림", "결제 앱을 실행할 수 없습니다.");
+      });
+      return true;
     }
-    return true;
+    return false;
   };
 
   return (
     <Modal visible={isVisible} animationType="slide" transparent={false}>
       <View style={styles.container}>
-        {/* 헤더 */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => onClose(false)}>
             <Ionicons name="close" size={28} color="black" />
@@ -80,61 +138,74 @@ export default function KSPayService({ isVisible, onClose, paymentData }: KSPayP
           <View style={{ width: 28 }} />
         </View>
 
-        {/* 웹뷰 영역 */}
-        <WebView
-          ref={webViewRef}
-          source={{ uri: "https://pgdev.ksnet.co.kr/store/KSPayMobileV1.4/mall/app/sapp.jsp" }}
-          onMessage={(event) => {
-            const res = JSON.parse(event.nativeEvent.data);
-            if (res.successYn === 'Y' && res.payKey) {
-              approvePayment(res.payKey);
-            } else {
-              onClose(false);
-            }
-          }}
-          onShouldStartLoadWithRequest={handleShouldStartLoad}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          originWhitelist={['*']}
-          onLoadEnd={() => {
-            if (!isPayStarted) {
-              const jsCode = `
-                window.kspayCallback = function(data) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify(data));
-                };
-                if (typeof requestPay === 'function') {
-                  requestPay({
-                    callbackfunction: 'window.kspayCallback',
-                    mid: '2999199999',
-                    paymethod: 'card',
-                    ordernumb: 'ORD_${Date.now()}',
-                    productname: '${paymentData.packageName}',
-                    username: '${paymentData.userName}',
-                    userphonenumb: '${paymentData.userPhone}',
-                    payamount: ${paymentData.amount}
-                  });
+        <View style={{ flex: 1 }}>
+          <WebView
+            ref={webViewRef}
+            source={{
+              uri: "https://pgdev.ksnet.co.kr/store/KSPayMobileV1.4/mall/app/sapp.jsp",
+            }}
+            onMessage={(event) => {
+              try {
+                const res = JSON.parse(event.nativeEvent.data);
+                if (res.callbackReason === "INIT" || res.successYn === "S")
+                  return;
+                if (res.successYn === "Y" && res.payKey) {
+                  approvePayment(res.payKey);
+                } else if (res.successYn === "N") {
+                  onClose(false);
                 }
-              `;
-              webViewRef.current?.injectJavaScript(jsCode);
-              setIsPayStarted(true);
-            }
-          }}
-        />
-        
-        {loading && (
-          <View style={styles.overlay}>
-            <ActivityIndicator size="large" color="#6366F1" />
-            <Text style={{marginTop: 10, fontWeight: 'bold'}}>결제 처리 중...</Text>
-          </View>
-        )}
+              } catch (err) {
+                console.error("데이터 파싱 에러:", err);
+              }
+            }}
+            onShouldStartLoadWithRequest={(request) => {
+              const handled = processExternalLink(request.url);
+              return !handled;
+            }}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            originWhitelist={["*"]}
+            // 에러가 발생했던 속성을 제거하거나 올바른 명칭으로 수정
+            // 최신 버전에서는 아래 속성 없이도 동작합니다.
+            mixedContentMode="always"
+          />
+
+          {isProcessing && (
+            <View style={styles.fullOverlay}>
+              <ActivityIndicator size="large" color="#6366F1" />
+              <Text style={styles.loadingText}>결제 승인 처리 중...</Text>
+            </View>
+          )}
+        </View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 50, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#eee', alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 999 }
+  container: { flex: 1, backgroundColor: "#fff" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+    alignItems: "center",
+  },
+  headerTitle: { fontSize: 18, fontWeight: "bold" },
+  fullOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    zIndex: 9999,
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#111827",
+  },
 });
