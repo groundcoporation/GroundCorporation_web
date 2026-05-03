@@ -100,7 +100,11 @@ export default function HomePage() {
         onMouseLeave={() => setActiveMenu(null)}
       >
         <Link href="/">
-          <img src="/resource/image/logo.png" alt="Logo" className="h-7" />
+          <img
+            src="/GroundCoropration_web/resource/image/logo.png"
+            alt="Logo"
+            className="h-7"
+          />
         </Link>
 
         <nav className="hidden lg:flex gap-16 h-full items-center font-black text-[15px] uppercase tracking-tighter">
