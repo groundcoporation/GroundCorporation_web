@@ -254,7 +254,7 @@ export default function HomeScreen({ navigation }: any) {
             </TouchableOpacity>
 
             {/* 행 2 */}
-            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Gallery")}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("GalleryList")}>
               <View style={styles.menuIconBg}>
                 <MaterialCommunityIcons name="image-outline" size={28} color="#111827" />
               </View>

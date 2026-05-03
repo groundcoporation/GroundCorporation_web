@@ -172,7 +172,7 @@ export default function MyPageScreen({ navigation }: any) {
             <View style={styles.cardGroup}>
               {renderMenuItem("shield-checkmark-outline", "관리자 대시보드", () => {})}
               <View style={styles.divider} />
-              {renderMenuItem("bus-outline", "차량 운행 대시보드", () => {})}
+              {renderMenuItem("bus-outline", "차량 운행 대시보드", () => navigation.navigate("DriverDashboard"))}
             </View>
           </View>
         )}
