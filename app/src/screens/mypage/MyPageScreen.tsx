@@ -170,7 +170,7 @@ export default function MyPageScreen({ navigation }: any) {
           <View style={styles.sectionContainer}>
             <Text style={[styles.sectionTitle, { color: '#EF4444' }]}>관리자 메뉴</Text>
             <View style={styles.cardGroup}>
-              {renderMenuItem("shield-checkmark-outline", "관리자 대시보드", () => {})}
+              {renderMenuItem("shield-checkmark-outline", "관리자 대시보드", () => navigation.navigate("AdminHome"))}
               <View style={styles.divider} />
               {renderMenuItem("bus-outline", "차량 운행 대시보드", () => navigation.navigate("DriverDashboard"))}
             </View>

@@ -43,6 +43,15 @@ import DriverDashboardScreen from "./src/screens/driver/DriverDashboardScreen"; 
 import GalleryListScreen from "./src/screens/gallery/GalleryListScreen";
 import GalleryUploadScreen from "./src/screens/gallery/GalleryUploadScreen";
 import GalleryDetailScreen from "./src/screens/gallery/GalleryDetailScreen";
+import GalleryEditScreen from "./src/screens/gallery/GalleryEditScreen";
+
+// 🛠️ [관리자 대시보드 시스템 - 코치/원장용] // 👈 9번 섹션 추가!
+import AdminHomeScreen from "./src/screens/admin/AdminHomeScreen";
+import AdminConsultationScreen from "./src/screens/admin/AdminConsultationScreen";
+import AdminMemberScreen from "./src/screens/admin/AdminMemberScreen";
+import AdminScheduleScreen from "./src/screens/admin/AdminScheduleScreen";
+import AdminSettingScreen from "./src/screens/admin/AdminSettingScreen";
+import AdminMemberDetailScreen from "./src/screens/admin/AdminMemberDetailScreen"; // 관리자페이지 회원 상세 화면
 
 const Stack = createNativeStackNavigator();
 
@@ -128,6 +137,15 @@ export default function App() {
         <Stack.Screen name="GalleryList" component={GalleryListScreen} />
         <Stack.Screen name="GalleryUpload" component={GalleryUploadScreen} />
         <Stack.Screen name="GalleryDetail" component={GalleryDetailScreen} />
+        <Stack.Screen name="GalleryEdit" component={GalleryEditScreen} />
+
+        {/* 9. 관리자 대시보드 프로세스 (코치/원장용) */}
+        <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
+        <Stack.Screen name="AdminConsultation" component={AdminConsultationScreen} />
+        <Stack.Screen name="AdminMember" component={AdminMemberScreen} />
+        <Stack.Screen name="AdminSchedule" component={AdminScheduleScreen} />
+        <Stack.Screen name="AdminSetting" component={AdminSettingScreen} />
+        <Stack.Screen name="AdminMemberDetail" component={AdminMemberDetailScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>
