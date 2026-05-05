@@ -17,13 +17,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import KSPayService from "../../services/payment/KSPayService";
 
+// 💡 total_count 타입을 추가하여 TS 에러를 방지합니다.
 interface PackageOption {
   id: string;
   label: string;
   price: number;
-  total_count?: number; // 💡 이미지 데이터 기반 추가
+  total_count?: number;
 }
-
 interface Package {
   id: string;
   name: string;
@@ -31,7 +31,7 @@ interface Package {
   category_id: string;
   is_consult: boolean;
   price?: number;
-  total_sessions?: number; // 내부 로직용 이름 유지
+  total_count?: number; // 💡 total_sessions 대신 이것을 사용하거나 둘 다 정의
   duration_in_days?: number;
   weekly_limit?: number;
   package_options: PackageOption[];
@@ -145,19 +145,22 @@ export default function PassPurchaseScreen({ navigation }: any) {
           expiryDate.getDate() + (currentSelection?.duration_in_days || 30),
         );
 
-        // 💡 [수정] 실제 횟수(total_count)를 옵션 테이블에서 정확히 가져와 저장
-        const selectedOption =
-          currentSelection?.package_options[selectedCountIndex];
-        const actualTotalCount =
-          selectedOption?.total_count || currentSelection?.total_sessions || 0;
+        // 💡 핵심 수정 1: 선택한 옵션(칩)에서 정확한 횟수(total_count)를 꺼내옵니다.
+        const targetOption =
+          currentSelection?.package_options?.[selectedCountIndex];
+        const optionTotalCount = targetOption?.total_count || 10;
 
+        // 💡 핵심 수정 2: DB 저장 (컬럼명 일치 및 정확한 횟수 삽입)
         const { error: dbError } = await supabase.from("user_packages").insert([
           {
             user_id: currentUser.id,
             package_id: selectedMainId,
-            package_name: currentSelection?.name,
-            total_sessions: actualTotalCount,
-            remaining_sessions: actualTotalCount,
+            package_name: `${currentSelection?.name} (${targetOption?.label || "기본"})`, // 예: 정규반 (10회)
+
+            // 🛠️ 팀원 코드의 total_sessions를 우리가 바꾼 total_count로 수정!
+            total_count: optionTotalCount,
+            remaining_count: optionTotalCount,
+
             expiry_date: expiryDate.toISOString(),
             branch_id: selectedBranchId,
             child_id: selectedChild ? selectedChild.id : null,
@@ -231,6 +234,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
         currentSelection.package_options.length > 0
       ? currentSelection.package_options[selectedCountIndex].price
       : currentSelection?.price || 0;
+
   const finalPrice =
     basePrice + (addShuttle ? 14000 : 0) + (addJelly ? 39600 : 0);
 
@@ -559,8 +563,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
             userId: currentUser.id,
             childId: selectedChild ? selectedChild.id : null,
             childName: selectedChild ? selectedChild.child_name : "본인",
-            // 💡 totalSessions 데이터 전달 시 실제 횟수 반영
-            totalSessions:
+            // 💡 DB 컬럼명에 맞춰 totalCount라는 Key로 전송합니다.
+            totalCount:
               currentSelection?.package_options[selectedCountIndex]
                 ?.total_count || 10,
             durationInDays: currentSelection?.duration_in_days || 30,
@@ -731,6 +735,7 @@ const styles = StyleSheet.create({
   },
   consultActionBtn: { backgroundColor: "#10B981" },
   mainActionText: { color: "#FFF", fontSize: 15, fontWeight: "800" },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -772,6 +777,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   finalPayBtnText: { color: "#FFF", fontWeight: "bold" },
+
   consultModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
