@@ -136,22 +136,30 @@ export default function PassPurchaseScreen({ navigation }: any) {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: `sndCommConId=${payKey}&sndAmount=${finalPrice}&sndActionType=1&sndCharSet=UTF-8`,
-        },
+        }
       );
 
       if (response.ok) {
         const expiryDate = new Date();
         expiryDate.setDate(
-          expiryDate.getDate() + (currentSelection?.duration_in_days || 30),
+          expiryDate.getDate() + (currentSelection?.duration_in_days || 30)
         );
 
+        // 💡 핵심 수정 1: 선택한 옵션(칩)에서 정확한 횟수(total_count)를 꺼내옵니다.
+        const targetOption = currentSelection?.package_options?.[selectedCountIndex];
+        const optionTotalCount = targetOption?.total_count || 10;
+
+        // 💡 핵심 수정 2: DB 저장 (컬럼명 일치 및 정확한 횟수 삽입)
         const { error: dbError } = await supabase.from("user_packages").insert([
           {
             user_id: currentUser.id,
             package_id: selectedMainId,
-            package_name: currentSelection?.name,
-            total_sessions: currentSelection?.total_count || 0,
-            remaining_sessions: currentSelection?.total_count || 0,
+            package_name: `${currentSelection?.name} (${targetOption?.label || "기본"})`, // 예: 정규반 (10회)
+            
+            // 🛠️ 팀원 코드의 total_sessions를 우리가 바꾼 total_count로 수정!
+            total_count: optionTotalCount,
+            remaining_count: optionTotalCount,
+            
             expiry_date: expiryDate.toISOString(),
             branch_id: selectedBranchId,
             child_id: selectedChild ? selectedChild.id : null,
@@ -429,7 +437,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
           onPress={() => {
             if (currentSelection?.is_consult) {
               Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`);
-            } else if (isClassAssigned) {
+            } else if (!isClassAssigned) {
               setShowConsultModal(true);
             } else {
               setShowOptionModal(true);
