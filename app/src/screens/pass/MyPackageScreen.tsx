@@ -67,7 +67,7 @@ export default function MyPackageScreen({ navigation }: any) {
         <View style={styles.childTag}>
           <Text style={styles.childTagText}>{pkg.children?.child_name || "자녀 미지정"}</Text>
         </View>
-        <Text style={styles.sessionInfo}>{pkg.remaining_sessions} / {pkg.total_sessions}회</Text>
+        <Text style={styles.sessionInfo}>{pkg.remaining_count} / {pkg.total_count}회</Text>
       </View>
       <Text style={styles.packageName}>{pkg.package_name}</Text>
       <View style={styles.cardBottom}>

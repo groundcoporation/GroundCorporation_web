@@ -10,10 +10,11 @@ import { supabase } from '../../lib/supabase';
 // 💳 KSPay 모달 서비스 임포트
 import KSPayService from '../../services/payment/KSPayService';
 
-interface PackageOption { id: string; label: string; price: number; }
+// 💡 total_count 타입을 추가하여 TS 에러를 방지합니다.
+interface PackageOption { id: string; label: string; price: number; total_count?: number; }
 interface Package {
   id: string; name: string; description: string; category_id: string;
-  is_consult: boolean; price?: number; total_sessions?: number;
+  is_consult: boolean; price?: number; total_count?: number;
   duration_in_days?: number; weekly_limit?: number; package_options: PackageOption[];
 }
 
@@ -336,7 +337,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
             userId: currentUser.id,
             childId: selectedChild ? selectedChild.id : null, 
             childName: selectedChild ? selectedChild.child_name : "본인",
-            totalSessions: currentSelection?.total_sessions || 10,
+            // 💡 DB 컬럼명에 맞춰 totalCount라는 Key로 전송합니다.
+            totalCount: currentSelection?.package_options[selectedCountIndex]?.total_count || 10,
             durationInDays: currentSelection?.duration_in_days || 30,
             weeklyLimit: currentSelection?.weekly_limit || 2,
             branchId: selectedBranchId,
@@ -352,7 +354,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#FFF' },
   branchSwitcher: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  branchStatic: { paddingHorizontal: 12, paddingVertical: 6 }, // 💡 일반 유저용 스위처 없는 헤더 텍스트 여백
+  branchStatic: { paddingHorizontal: 12, paddingVertical: 6 }, 
   headerTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
   tabContainer: { flexDirection: 'row', backgroundColor: '#FFF', paddingHorizontal: 20, paddingBottom: 10 },
   tab: { marginRight: 20, paddingVertical: 10, borderBottomWidth: 3, borderBottomColor: 'transparent' },
@@ -393,7 +395,6 @@ const styles = StyleSheet.create({
   consultActionBtn: { backgroundColor: '#10B981' },
   mainActionText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
   
-  // 기존 옵션 모달 스타일
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
@@ -407,7 +408,6 @@ const styles = StyleSheet.create({
   finalPayBtn: { backgroundColor: '#6366F1', paddingHorizontal: 30, paddingVertical: 15, borderRadius: 16 },
   finalPayBtnText: { color: '#FFF', fontWeight: 'bold' },
 
-  // 💡 신규 회원 상담 모달 전용 스타일 추가 (기존 모달과 겹치지 않게 이름 분리)
   consultModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   consultModalContent: { width: '100%', backgroundColor: '#FFF', borderRadius: 24, padding: 24, alignItems: 'center' },
   consultModalIconBg: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
