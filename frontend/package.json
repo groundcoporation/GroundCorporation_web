@@ -12,6 +12,7 @@
     "deploy": "gh-pages -d out"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.105.3",
     "aos": "^2.3.4",
     "autoprefixer": "^10.5.0",
     "framer-motion": "^12.38.0",
