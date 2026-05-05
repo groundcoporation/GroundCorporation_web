@@ -59,9 +59,8 @@ export default function KSPayService({
             user_id: paymentData.userId,
             package_id: paymentData.packageId,
             package_name: paymentData.packageName,
-            total_count: paymentData.totalSessions, 
-          // 🛠️ 수정: remaining_sessions -> remaining_count
-            remaining_count: paymentData.totalSessions,
+            total_count: Number(paymentData.totalCount) || 10, 
+            remaining_count: Number(paymentData.remainingCount) || 10,
             expiry_date: expiryDate.toISOString(),
             branch_id: paymentData.branchId,
             child_id: paymentData.childId,
