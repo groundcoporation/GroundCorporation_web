@@ -15,6 +15,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 
+
+// 🚀 [팝업 관리자 임포트] 유니폼 및 공지사항 통제
+import PopupManager from "../../components/popups/PopupManager";
+
 const { width } = Dimensions.get("window");
 
 export default function HomeScreen({ navigation }: any) {
@@ -350,7 +354,13 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         </View>
       </ScrollView>
+
+      {/* 🚀 [중요] PopupManager는 반드시 SafeAreaView 안쪽에 위치해야 합니다! */}
+      <PopupManager />
+
     </SafeAreaView>
+
+    
   );
 }
 
