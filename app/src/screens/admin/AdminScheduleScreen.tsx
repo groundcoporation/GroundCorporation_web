@@ -7,15 +7,21 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker'; 
 
 export default function AdminScheduleScreen() {
   // --- 데이터 상태 ---
   const [branches, setBranches] = useState<any[]>([]); // DB 지점 목록
   const [selectedBranch, setSelectedBranch] = useState(''); // 선택된 지점 ID
-  const [activeTab, setActiveTab] = useState<'status' | 'manage'>('manage');
+  const [activeTab, setActiveTab] = useState<'status' | 'manage'>('status'); 
   const [selectedDay, setSelectedDay] = useState('월');
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // --- 출석 체크 전용 상태 추가 ---
+  const [currentDate, setCurrentDate] = useState(new Date()); // Date 객체로 관리
+  const [showDatePicker, setShowDatePicker] = useState(false); // 달력 모달 상태
+  const [combinedData, setCombinedData] = useState<any[]>([]); // 시간표 + 예약자 통합 데이터
 
   // --- 모달 상태 ---
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -29,7 +35,7 @@ export default function AdminScheduleScreen() {
     max_people: '10'
   });
 
-  const days = ['월', '화', '수', '목', '금', '토', '일'];
+  const days = ['일', '월', '화', '수', '목', '금', '토']; // 요일 배열
 
   // 🚀 1. 초기 로드: 지점 목록 가져오기
   useEffect(() => {
@@ -38,51 +44,102 @@ export default function AdminScheduleScreen() {
 
   const fetchBranches = async () => {
     try {
-      // created_at 대신 DB에 있는 display_order 컬럼을 사용합니다.
       const { data, error } = await supabase
         .from('branches')
         .select('*')
-        // 💡 id가 'unassigned'가 아닌 것들만 가져오기
         .neq('id', 'unassigned')
-        .order('display_order', { ascending: true }); // 숫자 작은 순서대로 정렬 (1 -> 2 -> 99)
+        .order('display_order', { ascending: true });
       
       if (error) throw error;
       if (data && data.length > 0) {
         setBranches(data);
-        setSelectedBranch(data[0].id); // 시흥점(1번)이 먼저 선택됩니다.
+        setSelectedBranch(data[0].id);
       }
     } catch (e) {
       console.error('지점 로드 실패:', e);
     }
   };
 
-  // 🚀 2. 시간표 로드: 지점이나 요일이 바뀔 때 실행
+  // 🚀 2. 데이터 통합 로드 (출석 현황 및 시간표 설정)
   useEffect(() => {
     if (selectedBranch) {
-      fetchSchedules();
+      if (activeTab === 'status') fetchStatusData();
+      else fetchManageSchedules();
     }
-  }, [selectedBranch, selectedDay, activeTab]);
+  }, [selectedBranch, currentDate, selectedDay, activeTab]);
 
-  const fetchSchedules = async () => {
+  // [Status 탭] 세로형 타임라인 데이터 (수업 + 예약자)
+  const fetchStatusData = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const dateString = currentDate.toISOString().split('T')[0];
+      const dayName = days[currentDate.getDay()];
+      
+      const { data: scheduleData } = await supabase
         .from('class_schedules')
         .select('*')
         .eq('branch_id', selectedBranch)
-        .eq('day_of_week', selectedDay)
+        .eq('day_of_week', dayName)
         .order('start_time', { ascending: true });
       
-      if (error) throw error;
-      setSchedules(data || []);
+      const { data: resData } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('class_date', dateString);
+
+      const formatted = (scheduleData || []).map(sched => ({
+        ...sched,
+        reservations: (resData || []).filter(r => r.schedule_id === sched.id)
+      }));
+
+      setCombinedData(formatted);
     } catch (e) {
-      console.error('시간표 로드 실패:', e);
+      console.error('현황 로드 실패:', e);
     } finally {
       setLoading(false);
     }
   };
 
-  // 🚀 3. 지점 스왑 로직 (DB 목록 기반 순회)
+  // [Manage 탭] 시간표 리스트 로드
+  const fetchManageSchedules = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('class_schedules')
+      .select('*')
+      .eq('branch_id', selectedBranch)
+      .eq('day_of_week', selectedDay)
+      .order('start_time', { ascending: true });
+    setSchedules(data || []);
+    setLoading(false);
+  };
+
+  // 🚀 3. 출결 핸들러 (등원, 하원, 결석, 보강지정)
+  const handleAttendance = async (resId: string, attStatus: string, isMakeup: boolean = false) => {
+    const updateData: any = { attendance_status: attStatus };
+    
+    // 보강 버튼 클릭 시 status 컬럼을 makeup으로 강제 지정
+    if (isMakeup) {
+      updateData.status = 'makeup';
+    }
+
+    const { error } = await supabase
+      .from('reservations')
+      .update(updateData)
+      .eq('id', resId);
+    
+    if (!error) fetchStatusData();
+    else Alert.alert("오류", "업데이트 실패");
+  };
+
+  // 🚀 4. 달력 핸들러
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setCurrentDate(selectedDate);
+    }
+  };
+
+  // 🚀 5. 지점 스왑 로직
   const toggleBranch = () => {
     if (branches.length < 2) return;
     const currentIndex = branches.findIndex(b => b.id === selectedBranch);
@@ -90,7 +147,7 @@ export default function AdminScheduleScreen() {
     setSelectedBranch(branches[nextIndex].id);
   };
 
-  // 🚀 4. 안드로이드 뒤로가기 대응
+  // 🚀 6. 안드로이드 뒤로가기 대응
   useEffect(() => {
     const backAction = () => {
       if (isModalVisible) {
@@ -103,7 +160,7 @@ export default function AdminScheduleScreen() {
     return () => backHandler.remove();
   }, [isModalVisible]);
 
-  // 🚀 5. 저장 로직 (지점 ID 자동 할당)
+  // 🚀 7. 저장 로직
   const handleSave = async () => {
     if (!form.target_class) return Alert.alert("알림", "반 이름을 입력해주세요.");
     
@@ -125,7 +182,7 @@ export default function AdminScheduleScreen() {
       Alert.alert("오류", "저장에 실패했습니다.");
     } else {
       setIsModalVisible(false);
-      fetchSchedules();
+      fetchManageSchedules();
     }
     setLoading(false);
   };
@@ -181,11 +238,108 @@ export default function AdminScheduleScreen() {
         </TouchableOpacity>
       </View>
 
-      {activeTab === 'manage' ? (
+      {activeTab === 'status' ? (
+        <View style={{ flex: 1 }}>
+          {/* 📅 날짜 선택 바 (달력 연동) */}
+          <View style={styles.statusDateHeader}>
+            <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.datePickerBtn}>
+              <Ionicons name="calendar-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
+              <Text style={styles.statusDateText}>
+                {currentDate.toISOString().split('T')[0]} ({days[currentDate.getDay()]})
+              </Text>
+              <Ionicons name="chevron-down" size={16} color="#94A3B8" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+            {loading && <ActivityIndicator size="small" color="#6366F1" />}
+          </View>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={currentDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              onChange={onDateChange}
+            />
+          )}
+
+          {/* 📋 세로형 수업 타임라인 명단 */}
+          <FlatList
+            data={combinedData}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 20 }}
+            renderItem={({ item }) => (
+              <View style={styles.timeSection}>
+                {/* 수업 시간표 구분 헤더 */}
+                <View style={styles.sectionTitleRow}>
+                  <View style={styles.timeTag}><Text style={styles.timeTagText}>{item.start_time.slice(0,5)}</Text></View>
+                  <Text style={styles.sectionTitleText}>{item.target_class}</Text>
+                  <Text style={styles.sectionCountText}>{item.reservations.length}명</Text>
+                </View>
+
+                {/* 해당 수업 예약자 명단 (등원/하원/결석/보강 버튼) */}
+                {item.reservations.length > 0 ? (
+                  item.reservations.map((res: any) => (
+                    <View key={res.id} style={[
+                      styles.statusItemCard,
+                      res.attendance_status === 'check_in' && styles.cardCheckIn,
+                      res.attendance_status === 'check_out' && styles.cardCheckOut,
+                      res.attendance_status === 'absent' && styles.cardAbsent
+                    ]}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={styles.statusChildName}>{res.child_name}</Text>
+                          {res.status === 'makeup' && (
+                            <View style={styles.makeupBadge}><Text style={styles.makeupText}>보강</Text></View>
+                          )}
+                        </View>
+                      </View>
+                      <View style={styles.statusBtnGroup}>
+                        {/* 등원 버튼 */}
+                        <TouchableOpacity 
+                          onPress={() => handleAttendance(res.id, 'check_in')}
+                          style={[styles.statusSmallBtn, res.attendance_status === 'check_in' && { backgroundColor: '#6366F1' }]}
+                        >
+                          <Text style={[styles.statusSmallBtnText, res.attendance_status === 'check_in' && { color: '#FFF' }]}>등원</Text>
+                        </TouchableOpacity>
+                        {/* 하원 버튼 */}
+                        <TouchableOpacity 
+                          onPress={() => handleAttendance(res.id, 'check_out')}
+                          style={[styles.statusSmallBtn, res.attendance_status === 'check_out' && { backgroundColor: '#10B981' }]}
+                        >
+                          <Text style={[styles.statusSmallBtnText, res.attendance_status === 'check_out' && { color: '#FFF' }]}>하원</Text>
+                        </TouchableOpacity>
+                        {/* 결석 버튼 */}
+                        <TouchableOpacity 
+                          onPress={() => handleAttendance(res.id, 'absent')}
+                          style={[styles.statusSmallBtn, res.attendance_status === 'absent' && { backgroundColor: '#EF4444' }]}
+                        >
+                          <Text style={[styles.statusSmallBtnText, res.attendance_status === 'absent' && { color: '#FFF' }]}>결석</Text>
+                        </TouchableOpacity>
+                        {/* 보강지정 버튼 */}
+                        <TouchableOpacity 
+                          onPress={() => handleAttendance(res.id, res.attendance_status || 'yet', true)}
+                          style={[styles.statusSmallBtn, res.status === 'makeup' && { backgroundColor: '#F59E0B' }]}
+                        >
+                          <Text style={[styles.statusSmallBtnText, res.status === 'makeup' && { color: '#FFF' }]}>보강</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.emptyStatusBox}>
+                    <Text style={styles.emptyStatusText}>예약 인원 없음</Text>
+                  </View>
+                )}
+              </View>
+            )}
+            onRefresh={fetchStatusData}
+            refreshing={loading}
+          />
+        </View>
+      ) : (
         <View style={{ flex: 1 }}>
           {/* 3. 요일 선택 바 */}
           <View style={styles.weekBar}>
-            {days.map(day => (
+            {['월', '화', '수', '목', '금', '토', '일'].map(day => (
               <TouchableOpacity 
                 key={day} 
                 style={[styles.dayCard, selectedDay === day && styles.activeDayCard]}
@@ -198,37 +352,27 @@ export default function AdminScheduleScreen() {
           </View>
 
           {/* 4. 시간표 리스트 */}
-          {loading && schedules.length === 0 ? (
-            <ActivityIndicator size="large" style={{ marginTop: 100 }} color="#6366F1" />
-          ) : (
-            <FlatList
-              data={schedules}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
-              renderItem={({ item }) => (
-                <TouchableOpacity style={styles.card} onPress={() => openEdit(item)}>
-                  <View style={styles.cardTimeBox}>
-                    <Text style={styles.cardTime}>{item.start_time.slice(0,5)}</Text>
-                    <View style={styles.timeLine} />
-                    <Text style={styles.cardTimeEnd}>{item.end_time.slice(0,5)}</Text>
-                  </View>
-                  <View style={styles.cardInfo}>
-                    <Text style={styles.cardClassName}>{item.target_class}</Text>
-                    <Text style={styles.cardDetail}>
-                      {item.min_age}-{item.max_age}세 · 정원 {item.max_people}명
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="calendar-outline" size={48} color="#E2E8F0" />
-                  <Text style={styles.emptyText}>등록된 수업 일정이 없습니다.</Text>
+          <FlatList
+            data={schedules}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.card} onPress={() => openEdit(item)}>
+                <View style={styles.cardTimeBox}>
+                  <Text style={styles.cardTime}>{item.start_time.slice(0,5)}</Text>
+                  <View style={styles.timeLine} />
+                  <Text style={styles.cardTimeEnd}>{item.end_time.slice(0,5)}</Text>
                 </View>
-              }
-            />
-          )}
+                <View style={styles.cardInfo}>
+                  <Text style={styles.cardClassName}>{item.target_class}</Text>
+                  <Text style={styles.cardDetail}>
+                    {item.min_age}-{item.max_age}세 · 정원 {item.max_people}명
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+              </TouchableOpacity>
+            )}
+          />
 
           <TouchableOpacity 
             style={styles.fab} 
@@ -240,10 +384,6 @@ export default function AdminScheduleScreen() {
           >
             <Ionicons name="add" size={30} color="#FFF" />
           </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Text style={{ color: '#94A3B8' }}>출석 체크 기능 준비 중입니다.</Text>
         </View>
       )}
 
@@ -359,8 +499,28 @@ const styles = StyleSheet.create({
     elevation: 8, shadowColor: '#6366F1', shadowOpacity: 0.4, shadowRadius: 10 
   },
 
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
-  emptyText: { marginTop: 12, color: '#94A3B8', fontSize: 13 },
+  // --- 출석 체크(Status) 스타일 ---
+  statusDateHeader: { padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  datePickerBtn: { flexDirection: 'row', alignItems: 'center' },
+  statusDateText: { fontSize: 17, fontWeight: '800', color: '#1E293B' },
+  timeSection: { marginBottom: 30 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  timeTag: { backgroundColor: '#6366F1', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, marginRight: 10 },
+  timeTagText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
+  sectionTitleText: { fontSize: 17, fontWeight: '800', color: '#1E293B', flex: 1 },
+  sectionCountText: { fontSize: 13, color: '#6366F1', fontWeight: '600' },
+  statusItemCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 16, borderRadius: 18, marginBottom: 10, elevation: 1 },
+  cardCheckIn: { borderLeftWidth: 5, borderLeftColor: '#6366F1' }, // 등원 시 파란색 테두리
+  cardCheckOut: { borderLeftWidth: 5, borderLeftColor: '#10B981', opacity: 0.8 }, // 하원 시 초록 테두리 + 흐리게
+  cardAbsent: { borderLeftWidth: 5, borderLeftColor: '#EF4444', backgroundColor: '#FEF2F2' }, // 결석 시 빨간 배경
+  statusChildName: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
+  makeupBadge: { backgroundColor: '#F59E0B', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginLeft: 8 },
+  makeupText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
+  statusBtnGroup: { flexDirection: 'row', gap: 6 },
+  statusSmallBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F1F5F9' },
+  statusSmallBtnText: { fontSize: 12, fontWeight: '800', color: '#64748B' },
+  emptyStatusBox: { padding: 20, backgroundColor: '#F8FAFC', borderRadius: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' },
+  emptyStatusText: { color: '#CBD5E1', fontSize: 12 },
 
   modalContainer: { flex: 1, backgroundColor: '#FFF' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
@@ -369,5 +529,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#F8FAFC', padding: 14, borderRadius: 12, fontSize: 15, color: '#1E293B', borderWidth: 1, borderColor: '#E2E8F0' },
   row: { flexDirection: 'row' },
   submitBtn: { backgroundColor: '#1E1B4B', padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 30, marginBottom: 30 },
-  submitBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' }
+  submitBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
+  emptyText: { marginTop: 12, color: '#94A3B8', fontSize: 13 }
 });
