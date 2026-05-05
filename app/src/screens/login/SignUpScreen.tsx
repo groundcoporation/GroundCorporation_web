@@ -208,13 +208,13 @@ export default function SignUpScreen({ navigation }: any) {
 
         <View style={styles.section}>
           <Text style={styles.label}>소속 지점 선택</Text>
-          <div style={styles.branchContainer}>
+          <View style={styles.branchContainer}>
             {[{ id: 'branch_1', name: '시흥본점' }, { id: 'branch_2', name: '영종도점' }, { id: 'unassigned', name: '미정' }].map((branch) => (
               <TouchableOpacity key={branch.id} style={[styles.branchButton, branchId === branch.id && styles.branchButtonActive]} onPress={() => setBranchId(branch.id)}>
                 <Text style={[styles.branchText, branchId === branch.id && styles.branchTextActive]}>{branch.name}</Text>
               </TouchableOpacity>
             ))}
-          </div>
+          </View>
         </View>
 
         <TouchableOpacity style={styles.signUpButton} onPress={handleSignUp} disabled={isLoading}>

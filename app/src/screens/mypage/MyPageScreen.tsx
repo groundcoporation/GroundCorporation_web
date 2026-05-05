@@ -48,8 +48,24 @@ export default function MyPageScreen({ navigation }: any) {
         text: "로그아웃", 
         style: "destructive",
         onPress: async () => {
-          await supabase.auth.signOut();
-          navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+          try {
+            // 1. 서버 세션 종료
+            await supabase.auth.signOut();
+            
+            // 2. 현재 화면의 데이터 초기화 (내 정보가 남지 않도록)
+            setUserData(null); 
+            
+            // 3. 네비게이션 초기화 및 스택 비우기 (뒤로가기 방지)
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "Login" }],
+            });
+            
+          } catch (error) {
+            console.error("로그아웃 도중 에러:", error);
+            // 에러가 나더라도 사용자는 일단 로그인 페이지로 보내는 것이 좋습니다.
+            navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+          }
         }
       }
     ]);
