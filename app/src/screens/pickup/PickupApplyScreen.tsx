@@ -17,52 +17,70 @@ export default function PickupApplyScreen({ navigation }: any) {
   const [selectedSpot, setSelectedSpot] = useState<any>(null); // 선택된 정류장 객체 {id, name}
   const [showSpotDropdown, setShowSpotDropdown] = useState(false); // 드롭다운 열림/닫힘
 
+  // 💡 Phase 4: 탑승지 변경 감지를 위한 기존 ID 저장 상태
+  const [originalSpotId, setOriginalSpotId] = useState<string | null>(null);
+
   const TEST_CHILD_ID = "550e8400-e29b-41d4-a716-446655440000"; 
 
-  // 💡 컴포넌트가 켜질 때 DB에서 정류장 목록을 가져옵니다.
+  // 💡 컴포넌트가 켜질 때 DB에서 정류장 목록 및 기존 설정 정보를 가져옵니다.
   useEffect(() => {
-    const fetchSpots = async () => {
+    const fetchData = async () => {
       setLoadingSpots(true);
-      const { data, error } = await supabase
+      
+      // 1. 정류장 목록 가져오기
+      const { data: spotData, error: spotError } = await supabase
         .from('pickup_spots')
         .select('id, name');
       
-      if (!error && data) {
-        setSpots(data);
+      if (!spotError && spotData) {
+        setSpots(spotData);
       }
+
+      // 2. 💡 기존 픽업 설정 정보 불러오기 (수정 모드 대응)
+      const { data: existingData } = await supabase
+        .from('pickup_settings')
+        .select('*')
+        .eq('child_id', TEST_CHILD_ID)
+        .single();
+
+      if (existingData) {
+        setArea(existingData.area);
+        setDetailLocation(existingData.detail_location);
+        setOriginalSpotId(existingData.pickup_spot_id);
+        // 선택된 정류장 상태 미리 세팅
+        setSelectedSpot({ 
+          id: existingData.pickup_spot_id, 
+          name: existingData.apartment_name 
+        });
+      }
+
       setLoadingSpots(false);
     };
-    fetchSpots();
+    fetchData();
   }, []);
 
-  const handleSave = async () => {
-    // 유효성 검사 (아파트 텍스트 대신 selectedSpot 객체가 있는지 확인)
-    if (!area || !selectedSpot || !detailLocation) {
-      Alert.alert("알림", "모든 정보를 입력해야 기사님이 찾으실 수 있어요!");
-      return;
-    }
-
+  // 💡 저장 실행 함수 (중복 코드를 방지하기 위해 분리)
+  const executeSave = async () => {
     try {
       setIsSubmitting(true);
 
-      // 💡 저장 로직: 단순 텍스트가 아닌 '정류장 ID'를 저장합니다.
       const { error } = await supabase
         .from('pickup_settings')
         .upsert({
           child_id: TEST_CHILD_ID, 
-          area: area,              
-          pickup_spot_id: selectedSpot.id,   // 👈 핵심! 객관식 고유 ID 저장
-          apartment_name: selectedSpot.name, // 👈 이름도 같이 저장해두면 나중에 편함
+          area: area,               
+          pickup_spot_id: selectedSpot.id,   
+          apartment: selectedSpot.name, 
           detail_location: detailLocation, 
-          is_active: true,         
+          is_active: true,          
           updated_at: new Date(),
         });
 
       if (error) throw error;
 
       Alert.alert(
-        "등록 완료", 
-        "픽업 정보가 안전하게 저장되었습니다.",
+        "저장 완료", 
+        "픽업 정보가 안전하게 변경되었습니다.",
         [{ text: "확인", onPress: () => navigation.goBack() }]
       );
     } catch (error: any) {
@@ -70,6 +88,30 @@ export default function PickupApplyScreen({ navigation }: any) {
       Alert.alert("에러", "정보 저장 중 문제가 발생했습니다.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    // 유효성 검사
+    if (!area || !selectedSpot || !detailLocation) {
+      Alert.alert("알림", "모든 정보를 입력해야 기사님이 찾으실 수 있어요!");
+      return;
+    }
+
+    // 💡 [Phase 4] 탑승지 변경 경고 시스템 로직
+    // 기존에 등록된 정류장이 있고, 새로 선택한 정류장이 다를 경우 팝업 노출
+    if (originalSpotId && originalSpotId !== selectedSpot.id) {
+      Alert.alert(
+        "탑승지 변경 알림",
+        "갑작스러운 승하차 위치 변경은 배차 동선에 지장을 줄 수 있습니다. 정말 변경하시겠습니까?",
+        [
+          { text: "취소", style: "cancel" },
+          { text: "변경 동의", onPress: () => executeSave() }
+        ]
+      );
+    } else {
+      // 신규 등록이거나 위치 변경이 없는 경우 바로 저장
+      executeSave();
     }
   };
 
@@ -111,7 +153,7 @@ export default function PickupApplyScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* 💡 수정된 부분: 아파트명 드롭다운 선택 */}
+          {/* 아파트명 드롭다운 선택 */}
           <View style={styles.section}>
             <Text style={styles.label}>아파트명 / 정류장 (선택)</Text>
             
@@ -203,7 +245,6 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 14, color: '#64748B', fontWeight: '700' },
   activeChipText: { color: '#FFFFFF' },
   
-  // 드롭다운 관련 스타일
   dropdownSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16 },
   dropdownText: { fontSize: 15, color: '#1E293B', fontWeight: '600', flex: 1 },
   dropdownListContainer: { marginTop: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
