@@ -6,30 +6,28 @@ import {
   TouchableOpacity,
   Platform,
 } from "react-native";
-// 경고 해결을 위해 react-native-safe-area-context 사용
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function ReservationSuccessScreen({ navigation }: any) {
+export default function PurchaseSuccessScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.iconCircle}>
-          {/* 예약 완료를 상징하는 캘린더 체크 아이콘으로 변경 */}
-          <Ionicons name="calendar-outline" size={80} color="#6366F1" />
+          {/* 결제 성공을 의미하는 카드/체크 아이콘 */}
+          <Ionicons name="card" size={80} color="#4F46E5" />
         </View>
 
-        <Text style={styles.title}>수업 예약 완료! 📅</Text>
-        
+        <Text style={styles.title}>결제가 완료되었습니다! 🎉</Text>
         <Text style={styles.subtitle}>
-          선택하신 수업의 예약이 확정되었습니다.{"\n"}
-          아이와 함께 늦지 않게 방문해 주세요!
+          이용권 구매가 정상적으로 처리되었습니다.{"\n"}
+          지금 바로 아이의 수업 스케줄을 예약해보세요!
         </Text>
 
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>
-            상세 예약 내역 및 스케줄 확인은{"\n"}
-            마이페이지 {'>'} 내 활동 메뉴에서 가능합니다.
+            구매하신 이용권 내역 및 잔여 횟수는{"\n"}
+            마이페이지에서 상시 확인 가능합니다.
           </Text>
         </View>
       </View>
@@ -37,18 +35,17 @@ export default function ReservationSuccessScreen({ navigation }: any) {
       <View style={styles.buttonGroup}>
         <TouchableOpacity
           style={styles.primaryButton}
-          // 메인으로 돌아가서 다른 활동을 하도록 유도
-          onPress={() => navigation.navigate("Home")}
+          // 결제 후 바로 예약을 유도하여 이탈률을 줄입니다.
+          onPress={() => navigation.navigate("Reservation")}
         >
-          <Text style={styles.primaryButtonText}>홈으로 돌아가기</Text>
+          <Text style={styles.primaryButtonText}>바로 수업 예약하기</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.secondaryButton}
-          // 추가 예약을 원하는 부모님을 위해 다시 예약 화면으로 이동
-          onPress={() => navigation.navigate("Reservation")}
+          onPress={() => navigation.replace("Home")}
         >
-          <Text style={styles.secondaryButtonText}>추가 수업 예약하기</Text>
+          <Text style={styles.secondaryButtonText}>확인 후 홈으로 이동</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

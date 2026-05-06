@@ -170,14 +170,15 @@ export default function PassPurchaseScreen({ navigation }: any) {
         ]);
 
         if (dbError) throw dbError;
-        navigation.replace("ReservationSuccess");
+        navigation.replace("PurchaseSuccess");
       } else {
         throw new Error("결제 승인 응답 실패");
       }
     } catch (e: any) {
       console.error(e);
-      Alert.alert("결제 오류", "결제 승인 중 문제가 발생했습니다.");
-      navigation.replace("ReservationFail");
+    // ✅ [수정] 실패 시에도 전용 실패 페이지로 보냅니다.
+    // Alert보다는 실패 페이지에서 "다시 시도"를 유도하는 것이 흐름상 좋습니다.
+      navigation.replace("PurchaseFail");
     } finally {
       setIsProcessing(false);
     }

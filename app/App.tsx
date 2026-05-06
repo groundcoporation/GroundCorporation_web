@@ -10,6 +10,9 @@ import SignUpScreen from "./src/screens/login/SignUpScreen";
 import FindAuthScreen from "./src/screens/login/FindAuthScreen";
 import HomeScreen from "./src/screens/home/HomeScreen";
 
+//로그인관련 슈퍼베이스 연결
+import { supabase } from "./src/lib/supabase";
+
 // 💳 [이용권 및 결제 관련]
 import PassPurchaseScreen from "./src/screens/pass/PassPurchaseScreen"; 
 import KSPayService from "./src/services/payment/KSPayService"; 
@@ -20,10 +23,16 @@ import ReservationScreen from "./src/screens/reservation/ReservationScreen";
 import ReservationSuccessScreen from "./src/screens/reservation/ReservationSuccessScreen";
 import ReservationFailScreen from "./src/screens/reservation/ReservationFailScreen";
 
+//이용권 구매 성공/실패 화면
+import PurchaseSuccessScreen from "./src/screens/pass/PurchaseSuccessScreen";
+import PurchaseFailScreen from "./src/screens/pass/PurchaseFailScreen";
+
 // 👤 [마이페이지 관련]
 import MyPageScreen from "./src/screens/mypage/MyPageScreen"; 
 import ProfileEditScreen from "./src/screens/mypage/ProfileEditScreen"; 
 import ChildManagementScreen from "./src/screens/mypage/ChildManagementScreen"; 
+import ReservationListScreen from "./src/screens/reservation/ReservationListScreen";
+
 
 // 📢 [공지사항 관련]
 import NoticeListScreen from "./src/screens/notice/NoticeListScreen";
@@ -60,18 +69,29 @@ export default function App() {
   const [initialRoute, setInitialRoute] = useState<"Login" | "Home">("Login");
 
   useEffect(() => {
-    async function initializeAuth() {
-      try {
-        const autoLoginEnabled = await AsyncStorage.getItem("auto_login");
-        setInitialRoute(autoLoginEnabled === "true" ? "Home" : "Login");
-      } catch (error) {
-        console.error("인증 초기화 중 에러:", error);
-      } finally {
-        setIsLoading(false);
+  async function initializeAuth() {
+    try {
+      // 1. 자동 로그인 설정값 확인
+      const autoLoginEnabled = await AsyncStorage.getItem("auto_login");
+      
+      // 2. 💡 [핵심] Supabase에 실제 로그인된 세션이 있는지 확인
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // 자동로그인이 켜져있고 + 실제로 세션도 살아있어야만 Home으로 보냄
+      if (autoLoginEnabled === "true" && session) {
+        setInitialRoute("Home");
+      } else {
+        setInitialRoute("Login");
       }
+    } catch (error) {
+      console.error("인증 초기화 중 에러:", error);
+      setInitialRoute("Login");
+    } finally {
+      setIsLoading(false);
     }
-    initializeAuth();
-  }, []);
+  }
+  initializeAuth();
+}, []);
 
   if (isLoading) {
     return (
@@ -114,10 +134,15 @@ export default function App() {
         <Stack.Screen name="ReservationSuccess" component={ReservationSuccessScreen} />
         <Stack.Screen name="ReservationFail" component={ReservationFailScreen} /> 
 
+        {/* 이용권 구매 관련  */}
+        <Stack.Screen name="PurchaseSuccess" component={PurchaseSuccessScreen} />
+        <Stack.Screen name="PurchaseFail" component={PurchaseFailScreen} />
+
         {/* 4. 마이페이지 프로세스 */}
         <Stack.Screen name="MyPage" component={MyPageScreen} />
         <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
         <Stack.Screen name="ChildManagement" component={ChildManagementScreen} />
+        <Stack.Screen name="ReservationList" component={ReservationListScreen} />
 
         {/* 5. 공지사항 프로세스 */}
         <Stack.Screen name="NoticeList" component={NoticeListScreen} />

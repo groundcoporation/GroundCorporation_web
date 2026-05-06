@@ -19,6 +19,7 @@ export default function LoginScreen({ navigation }: any) {
   const [isLoading, setIsLoading] = useState(false);
   const [rememberId, setRememberId] = useState(false);
   const [autoLogin, setAutoLogin] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // 💡 비밀번호 보이기 상태 추가
 
   useEffect(() => {
     loadSavedCredentials();
@@ -125,13 +126,26 @@ export default function LoginScreen({ navigation }: any) {
         autoCapitalize="none"
       />
 
-      <TextInput
-        style={styles.input}
-        placeholder="비밀번호"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry={true}
-      />
+      {/* 💡 비밀번호 입력 섹션 (눈 모양 아이콘 추가) */}
+      <View style={styles.passwordContainer}>
+        <TextInput
+          style={styles.passwordInput}
+          placeholder="비밀번호"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!showPassword} // 💡 showPassword 상태에 따라 가림/보임
+        />
+        <TouchableOpacity 
+          style={styles.eyeIcon} 
+          onPress={() => setShowPassword(!showPassword)}
+        >
+          <Ionicons 
+            name={showPassword ? "eye-outline" : "eye-off-outline"} 
+            size={22} 
+            color="#888" 
+          />
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.checkboxContainer}>
         <TouchableOpacity 
@@ -193,6 +207,27 @@ const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 32, backgroundColor: '#fff' },
   title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 40 },
   input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 15, marginBottom: 15, fontSize: 16 },
+  
+  // 💡 비밀번호 입력창 스타일 추가
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    marginBottom: 15,
+    backgroundColor: '#fff',
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 15,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 10,
+    marginRight: 5,
+  },
+
   checkboxContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
   checkboxWrapper: { flexDirection: 'row', alignItems: 'center' },
   checkboxText: { marginLeft: 8, fontSize: 14 },

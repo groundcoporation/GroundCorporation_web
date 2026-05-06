@@ -6,49 +6,44 @@ import {
   TouchableOpacity,
   Platform,
 } from "react-native";
-// 경고 해결을 위해 react-native-safe-area-context 사용
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function ReservationSuccessScreen({ navigation }: any) {
+export default function PurchaseFailScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <View style={styles.iconCircle}>
-          {/* 예약 완료를 상징하는 캘린더 체크 아이콘으로 변경 */}
-          <Ionicons name="calendar-outline" size={80} color="#6366F1" />
+        <View style={[styles.iconCircle, { backgroundColor: "#FEF2F2" }]}>
+          <Ionicons name="alert-circle" size={80} color="#EF4444" />
         </View>
 
-        <Text style={styles.title}>수업 예약 완료! 📅</Text>
-        
+        <Text style={styles.title}>결제에 실패했습니다.</Text>
         <Text style={styles.subtitle}>
-          선택하신 수업의 예약이 확정되었습니다.{"\n"}
-          아이와 함께 늦지 않게 방문해 주세요!
+          한도 초과, 네트워크 오류 또는 결제 취소 등{"\n"}
+          예기치 못한 문제가 발생했습니다.
         </Text>
 
         <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
-            상세 예약 내역 및 스케줄 확인은{"\n"}
-            마이페이지 {'>'} 내 활동 메뉴에서 가능합니다.
+          <Text style={[styles.infoText, { color: "#F87171" }]}>
+            지속적으로 실패할 경우 고객센터로 문의해주세요.
           </Text>
         </View>
       </View>
 
       <View style={styles.buttonGroup}>
         <TouchableOpacity
-          style={styles.primaryButton}
-          // 메인으로 돌아가서 다른 활동을 하도록 유도
-          onPress={() => navigation.navigate("Home")}
+          style={[styles.primaryButton, { backgroundColor: "#EF4444" }]}
+          // 다시 결제 화면으로 돌아가 시도하게 합니다.
+          onPress={() => navigation.goBack()}
         >
-          <Text style={styles.primaryButtonText}>홈으로 돌아가기</Text>
+          <Text style={styles.primaryButtonText}>다시 시도하기</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.secondaryButton}
-          // 추가 예약을 원하는 부모님을 위해 다시 예약 화면으로 이동
-          onPress={() => navigation.navigate("Reservation")}
+          onPress={() => navigation.replace("Home")}
         >
-          <Text style={styles.secondaryButtonText}>추가 수업 예약하기</Text>
+          <Text style={styles.secondaryButtonText}>홈으로 이동</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -67,7 +62,7 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#F9FAFB",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 30,
@@ -87,12 +82,12 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   infoBox: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#FFF5F5",
     padding: 15,
     borderRadius: 12,
     width: "100%",
   },
-  infoText: { color: "#94A3B8", fontSize: 13, textAlign: "center", lineHeight: 18 },
+  infoText: { color: "#94A3B8", fontSize: 13, textAlign: "center" },
   buttonGroup: {
     padding: 20,
     gap: 12,
