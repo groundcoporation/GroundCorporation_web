@@ -46,6 +46,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
   const [selectedBranchId, setSelectedBranchId] = useState<
     "branch_1" | "branch_2"
   >("branch_1");
+  const [categories, setCategories] = useState<any[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("regular");
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,8 +65,35 @@ export default function PassPurchaseScreen({ navigation }: any) {
 
   useEffect(() => {
     fetchInitialData();
-    fetchPackagesFromDB();
-  }, [selectedBranchId, activeCategory]);
+    fetchCategoriesFromDB(true); // 지점 변경 시에만 'true' 전달하여 첫 탭으로 초기화
+  }, [selectedBranchId]);
+
+  useEffect(() => {
+    if (activeCategory) {
+      fetchPackagesFromDB();
+    }
+  }, [activeCategory, selectedBranchId]);
+
+  const fetchCategoriesFromDB = async (shouldReset: boolean) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("package_categories")
+        .select("*")
+        .eq("branch_id", selectedBranchId)
+        .order("display_order", { ascending: true });
+
+      if (error) throw error;
+
+      setCategories(data || []);
+      // shouldReset이 true일 때만 첫 번째 카테고리 선택
+      if (shouldReset && data && data.length > 0) {
+        setActiveCategory(data[0].id);
+      }
+    } catch (e) {
+      console.error("카테고리 로드 실패:", e);
+    }
+  };
 
   const fetchInitialData = async () => {
     const {
@@ -177,8 +205,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
       }
     } catch (e: any) {
       console.error(e);
-    // ✅ [수정] 실패 시에도 전용 실패 페이지로 보냅니다.
-    // Alert보다는 실패 페이지에서 "다시 시도"를 유도하는 것이 흐름상 좋습니다.
+      // ✅ [수정] 실패 시에도 전용 실패 페이지로 보냅니다.
+      // Alert보다는 실패 페이지에서 "다시 시도"를 유도하는 것이 흐름상 좋습니다.
       navigation.replace("PurchaseFail");
     } finally {
       setIsProcessing(false);
@@ -293,13 +321,14 @@ export default function PassPurchaseScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.tabContainer}>
-          {[
-            { id: "regular", name: "정규반" },
-            { id: "care", name: "집중케어" },
-            { id: "lesson", name: "레슨/상담" },
-            { id: "rental", name: "기타" },
-          ].map((tab) => (
+        {/* 🚀 변경 포인트 5: DB 카테고리 데이터로 탭 렌더링 */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabContainer}
+          contentContainerStyle={styles.tabScrollContent} // 스타일 연결
+        >
+          {categories.map((tab) => (
             <TouchableOpacity
               key={tab.id}
               style={[
@@ -318,7 +347,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
 
         <View style={styles.mainPadding}>
           <View style={styles.eventBanner}>
@@ -334,7 +363,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
               color="#6366F1"
               style={{ marginTop: 50 }}
             />
-          ) : (
+          ) : packages.length > 0 ? (
             packages.map((item) => {
               const isSelected = selectedMainId === item.id;
               return (
@@ -405,6 +434,12 @@ export default function PassPurchaseScreen({ navigation }: any) {
                 </View>
               );
             })
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                해당 분류의 상품이 준비 중입니다.
+              </Text>
+            </View>
           )}
 
           <View style={styles.bottomInfo}>
@@ -614,6 +649,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     paddingHorizontal: 20,
     paddingBottom: 10,
+  },
+  tabScrollContent: {
+    paddingHorizontal: 20,
+    paddingRight: 50, // 마지막 아이템 오른쪽 치우침 해결
+    alignItems: "center",
   },
   tab: {
     marginRight: 20,
@@ -863,4 +903,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#111827",
   },
+  emptyContainer: { paddingVertical: 40, alignItems: "center" },
+  emptyText: { color: "#94A3B8", fontSize: 14, fontWeight: "600" },
 });
