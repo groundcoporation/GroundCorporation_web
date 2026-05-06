@@ -15,7 +15,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 
-
 // 🚀 [팝업 관리자 임포트] 유니폼 및 공지사항 통제
 import PopupManager from "../../components/popups/PopupManager";
 
@@ -26,7 +25,7 @@ export default function HomeScreen({ navigation }: any) {
   const [children, setChildren] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeChildIndex, setActiveChildIndex] = useState(0);
-  
+
   // 💡 새로 추가된 상태: 가장 가까운 예약 데이터
   const [upcomingReservation, setUpcomingReservation] = useState<any>(null);
 
@@ -66,7 +65,7 @@ export default function HomeScreen({ navigation }: any) {
           .order("reservation_date", { ascending: true }) // 가장 빠른 날짜순
           .limit(1)
           .single();
-          
+
         if (reservation) {
           setUpcomingReservation(reservation);
         }
@@ -131,15 +130,27 @@ export default function HomeScreen({ navigation }: any) {
         ) : (
           // 💡 예약이 없을 때 보여주는 빈 화면 및 예약 버튼 유도
           <View style={[styles.cardInner, styles.emptyCard]}>
-            <MaterialCommunityIcons name="calendar-blank" size={32} color="#D1D5DB" />
+            <MaterialCommunityIcons
+              name="calendar-blank"
+              size={32}
+              color="#D1D5DB"
+            />
             <Text style={[styles.emptyText, { marginTop: 8 }]}>
               예정된 수업이 없습니다.
             </Text>
-            <TouchableOpacity 
-              style={{ marginTop: 12, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#4F46E5', borderRadius: 8 }}
+            <TouchableOpacity
+              style={{
+                marginTop: 12,
+                paddingVertical: 8,
+                paddingHorizontal: 16,
+                backgroundColor: "#4F46E5",
+                borderRadius: 8,
+              }}
               onPress={() => navigation.navigate("Reservation")}
             >
-              <Text style={{ color: 'white', fontSize: 12, fontWeight: '700' }}>예약하러 가기</Text>
+              <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>
+                예약하러 가기
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -198,7 +209,10 @@ export default function HomeScreen({ navigation }: any) {
               renderItem={({ item }) => (
                 <View style={styles.cardWrapper}>
                   {item ? (
-                    renderLessonCard(item.name || item.child_name, children.length > 0)
+                    renderLessonCard(
+                      item.name || item.child_name,
+                      children.length > 0,
+                    )
                   ) : (
                     <View style={[styles.cardInner, styles.emptyCard]}>
                       <Text style={styles.emptyText}>
@@ -227,54 +241,104 @@ export default function HomeScreen({ navigation }: any) {
 
           {/* 2. Quick Menu - 4열 2행 구조 (개별 경로 명시형으로 수정) */}
           <View style={styles.quickMenuGrid}>
-            
             {/* 행 1 */}
-            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Reservation")}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate("Reservation")}
+            >
               <View style={styles.menuIconBg}>
-                <MaterialCommunityIcons name="calendar-plus" size={28} color="#4F46E5" />
+                <MaterialCommunityIcons
+                  name="calendar-plus"
+                  size={28}
+                  color="#4F46E5"
+                />
               </View>
-              <Text style={[styles.menuLabel, { color: "#4F46E5" }]}>수업 예약</Text>
+              <Text style={[styles.menuLabel, { color: "#4F46E5" }]}>
+                수업 예약
+              </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Pass")}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate("Pass")}
+            >
               <View style={styles.menuIconBg}>
-                <MaterialCommunityIcons name="ticket-confirmation-outline" size={28} color="#111827" />
+                <MaterialCommunityIcons
+                  name="ticket-confirmation-outline"
+                  size={28}
+                  color="#111827"
+                />
               </View>
               <Text style={styles.menuLabel}>이용권 구매</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("MyPackage")}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate("MyPackage")}
+            >
               <View style={styles.menuIconBg}>
-                <MaterialCommunityIcons name="ticket-account" size={28} color="#111827" />
+                <MaterialCommunityIcons
+                  name="ticket-account"
+                  size={28}
+                  color="#111827"
+                />
               </View>
               <Text style={styles.menuLabel}>이용권 확인</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => Linking.openURL("http://vog-sports.com/")}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => Linking.openURL("http://vog-sports.com/")}
+            >
               <View style={styles.menuIconBg}>
-                <MaterialCommunityIcons name="shopping-outline" size={28} color="#111827" />
+                <MaterialCommunityIcons
+                  name="shopping-outline"
+                  size={28}
+                  color="#111827"
+                />
               </View>
               <Text style={styles.menuLabel}>쇼핑몰</Text>
             </TouchableOpacity>
 
             {/* 행 2 */}
-            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("GalleryList")}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate("GalleryList")}
+            >
               <View style={styles.menuIconBg}>
-                <MaterialCommunityIcons name="image-outline" size={28} color="#111827" />
+                <MaterialCommunityIcons
+                  name="image-outline"
+                  size={28}
+                  color="#111827"
+                />
               </View>
               <Text style={styles.menuLabel}>갤러리</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("PickupMain")}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate("PickupMain")}
+            >
               <View style={styles.menuIconBg}>
-                <MaterialCommunityIcons name="bus-school" size={28} color="#111827" />
+                <MaterialCommunityIcons
+                  name="bus-school"
+                  size={28}
+                  color="#111827"
+                />
               </View>
               <Text style={styles.menuLabel}>픽업</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Attendance")}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate("Attendance")}
+            >
               <View style={styles.menuIconBg}>
-                <MaterialCommunityIcons name="check-decagram" size={28} color="#111827" />
+                <MaterialCommunityIcons
+                  name="check-decagram"
+                  size={28}
+                  color="#111827"
+                />
               </View>
               <Text style={styles.menuLabel}>출석확인</Text>
             </TouchableOpacity>
@@ -336,12 +400,20 @@ export default function HomeScreen({ navigation }: any) {
 
             <View style={styles.footerLinks}>
               <TouchableOpacity
-                onPress={() => Linking.openURL("https://docs.google.com")}
+                onPress={() =>
+                  Linking.openURL(
+                    "https://docs.google.com/document/d/1w8fZDkcwXM6GATj6cAqmPHRny08w8KikLdFSuogXpmw/edit?tab=t.0",
+                  )
+                }
               >
                 <Text style={styles.footerLink}>이용약관</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => Linking.openURL("https://docs.google.com")}
+                onPress={() =>
+                  Linking.openURL(
+                    "https://docs.google.com/document/d/1plQT2VJIrK8nxG1m3huj3LuUsCKea-dl37HEEBOhnJw/edit?tab=t.0",
+                  )
+                }
               >
                 <Text style={[styles.footerLink, { marginLeft: 16 }]}>
                   개인정보 처리방침
@@ -357,10 +429,7 @@ export default function HomeScreen({ navigation }: any) {
 
       {/* 🚀 [중요] PopupManager는 반드시 SafeAreaView 안쪽에 위치해야 합니다! */}
       <PopupManager />
-
     </SafeAreaView>
-
-    
   );
 }
 
@@ -413,7 +482,7 @@ const styles = StyleSheet.create({
   pageViewSection: { marginBottom: 32 },
   cardWrapper: { width: width - 48, marginRight: 24 },
   cardShadow: { borderRadius: 16, backgroundColor: "#fff" },
-  cardInner: { height: 150, justifyContent: "flex-end" }, 
+  cardInner: { height: 150, justifyContent: "flex-end" },
   cardOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
@@ -461,10 +530,10 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     marginBottom: 12,
   },
-  menuItem: { 
-    alignItems: "center", 
+  menuItem: {
+    alignItems: "center",
     width: "25%",
-    marginBottom: 24
+    marginBottom: 24,
   },
   menuIconBg: {
     width: 50,
