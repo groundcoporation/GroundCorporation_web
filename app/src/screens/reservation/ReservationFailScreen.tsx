@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   Platform,
 } from "react-native";
-// 1. 경고 제거 및 일관성을 위해 react-native-safe-area-context 사용
+// 경고 제거 및 일관성을 위해 react-native-safe-area-context 사용
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -16,18 +16,20 @@ export default function ReservationFailScreen({ navigation }: any) {
       {/* 1. 실패 메시지 영역 */}
       <View style={styles.content}>
         <View style={styles.iconCircle}>
-          <Ionicons name="warning" size={80} color="#EF4444" />
+          {/* 예약 실패를 의미하는 경고/닫기 아이콘으로 변경 */}
+          <Ionicons name="close-circle-outline" size={80} color="#EF4444" />
         </View>
 
-        <Text style={styles.title}>결제에 실패했습니다</Text>
+        <Text style={styles.title}>예약에 실패했습니다</Text>
         <Text style={styles.subtitle}>
-          시스템 오류 또는 결제 정보 오류일 수 있습니다.{"\n"}
-          다시 시도하거나 지점으로 문의해 주세요.
+          선택하신 수업의 정원이 방금 마감되었거나,{"\n"}
+          이용권 잔여 횟수가 부족할 수 있습니다.
         </Text>
 
         <View style={styles.errorDetailBox}>
           <Text style={styles.errorDetailText}>
-            네트워크 연결 상태나 카드 한도를 확인해주세요.
+            이용권 현황을 확인하시거나{"\n"}
+            다른 수업 시간을 선택해 주세요.
           </Text>
         </View>
       </View>
@@ -36,15 +38,15 @@ export default function ReservationFailScreen({ navigation }: any) {
       <View style={styles.buttonGroup}>
         <TouchableOpacity
           style={styles.retryButton}
-          // navigation.goBack()은 스택 상황에 따라 결제창으로 다시 돌아갈 수 있는지 확인이 필요합니다.
+          // 이전 화면(수업 선택 화면)으로 돌아가서 다시 선택하게 합니다.
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.retryButtonText}>다시 시도하기</Text>
+          <Text style={styles.retryButtonText}>다른 수업 선택하기</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.homeButton}
-          // navigation.replace는 현재 화면을 히스토리에서 제거하고 이동하므로 적절한 선택입니다.
+          // 메인으로 돌아가서 상황을 재확인하도록 합니다.
           onPress={() => navigation.replace("Home")}
         >
           <Text style={styles.homeButtonText}>확인 후 홈으로 이동</Text>
@@ -98,11 +100,11 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     fontSize: 13,
     textAlign: "center",
+    lineHeight: 18,
   },
   buttonGroup: {
     padding: 20,
     gap: 12,
-    // iOS의 하단 홈 바(Indicator) 공간을 확보하기 위해 SafeAreaView와 조합하여 사용합니다.
     marginBottom: Platform.OS === "ios" ? 8 : 10,
   },
   retryButton: {

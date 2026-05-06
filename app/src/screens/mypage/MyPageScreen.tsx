@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function MyPageScreen({ navigation }: any) {
   const [userData, setUserData] = useState<any>(null);
@@ -49,13 +50,18 @@ export default function MyPageScreen({ navigation }: any) {
         style: "destructive",
         onPress: async () => {
           try {
-            // 1. 서버 세션 종료
+            // 1. 서버 세션 종료 (Supabase에 알림)
             await supabase.auth.signOut();
             
-            // 2. 현재 화면의 데이터 초기화 (내 정보가 남지 않도록)
+            // 2. 💡 [핵심] 자동 로그인 방지용 데이터 삭제
+            // 이 코드가 있어야 앱을 다시 켰을 때 App.js가 "로그인 화면"으로 보냅니다.
+            await AsyncStorage.setItem("auto_login", "false"); 
+            
+            
+            // 3. 현재 화면 데이터 초기화
             setUserData(null); 
             
-            // 3. 네비게이션 초기화 및 스택 비우기 (뒤로가기 방지)
+            // 4. 네비게이션 초기화
             navigation.reset({
               index: 0,
               routes: [{ name: "Login" }],
@@ -63,7 +69,6 @@ export default function MyPageScreen({ navigation }: any) {
             
           } catch (error) {
             console.error("로그아웃 도중 에러:", error);
-            // 에러가 나더라도 사용자는 일단 로그인 페이지로 보내는 것이 좋습니다.
             navigation.reset({ index: 0, routes: [{ name: "Login" }] });
           }
         }
@@ -140,7 +145,7 @@ export default function MyPageScreen({ navigation }: any) {
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>내 활동</Text>
           <View style={styles.cardGroup}>
-            {/* 자녀 관리 메뉴 하나로 깔끔하게 통합 */}
+            {/* 자녀 관리 메뉴 */}
             <TouchableOpacity 
               style={styles.menuItem} 
               onPress={() => navigation.navigate("ChildManagement")}
@@ -152,6 +157,34 @@ export default function MyPageScreen({ navigation }: any) {
               <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
             </TouchableOpacity>
             
+            <View style={styles.divider} />
+
+            {/* 🚀 수업 예약 내역 (추가) */}
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => navigation.navigate("ReservationList")}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="calendar-check" size={24} color="#4F46E5" />
+                <Text style={[styles.menuItemTitle, { color: "#111827", fontWeight: "700" }]}>수업 예약 내역</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* 🚀 내 이용권 확인 (추가) */}
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => navigation.navigate("MyPackage")}
+            >
+              <View style={styles.menuItemLeft}>
+                <MaterialCommunityIcons name="card-bulleted" size={24} color="#4F46E5" />
+                <Text style={[styles.menuItemTitle, { color: "#111827", fontWeight: "700" }]}>내 이용권 확인</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            </TouchableOpacity>
+
             <View style={styles.divider} />
             
             {/* 💡 알림 설정 토글 */}

@@ -39,7 +39,7 @@ export default function HomeScreen({ navigation }: any) {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        // 1. 유저 정보 로드
+        // 1. 유저 정보 로드 (소속 지점 포함)
         const { data: userProfile } = await supabase
           .from("users")
           .select("*, branches(name)")
@@ -55,6 +55,7 @@ export default function HomeScreen({ navigation }: any) {
           .order("created_at", { ascending: true });
         setChildren(childrenList || []);
 
+<<<<<<< HEAD
         // 💡 3. 새로 추가: 다가오는 예약 로드 (오늘 이후의 가장 빠른 예약 1건)
         const today = new Date().toISOString();
         const { data: reservation } = await supabase
@@ -69,25 +70,54 @@ export default function HomeScreen({ navigation }: any) {
         if (reservation) {
           setUpcomingReservation(reservation);
         }
+=======
+        // 💡 3. [수정] 다가오는 예약 로드 (오늘 이후의 가장 빠른 예약 1건 + 수업 상세 정보 JOIN)
+        const today = new Date().toISOString().split('T')[0];
+      
+      const { data: reservation } = await supabase
+        .from("reservations")
+        .select(`
+          *,
+          branches ( name ), 
+          class_schedules (
+            target_class,
+            start_time,
+            end_time
+          )
+        `)
+        .eq("user_id", user.id)
+        .gte("class_date", today)
+        .eq("status", "pending")
+        .order("class_date", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+        
+      if (reservation) {
+        setUpcomingReservation(reservation);
+      } else {
+        setUpcomingReservation(null);
+>>>>>>> 97f46581bc66c44234ac18c99b3c32993a2429bf
       }
-    } catch (e) {
-      console.log("데이터 로드 에러:", e);
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (e) {
+    console.log("데이터 로드 에러:", e);
+  } finally {
+    setLoading(false);
+  }
+};
 
-  // 💡 새로 추가: 예약 날짜 포맷 함수 (예: 05.01 WED 14:00)
-  const formatReservationDate = (dateString: string) => {
+  // 💡 예약 날짜와 수업 시간을 합쳐서 포맷 (예: 05.01 WED 14:00)
+  const formatReservationDate = (dateString: string, startTime: string) => {
     if (!dateString) return "";
     const date = new Date(dateString);
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
     const dayOfWeek = days[date.getDay()];
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${month}.${day} ${dayOfWeek} ${hours}:${minutes}`;
+    
+    const time = startTime ? startTime.slice(0, 5) : "";
+    
+    return `${month}.${day} ${dayOfWeek} ${time}`;
   };
 
   const renderLessonCard = (targetName: string, isChild: boolean) => {
@@ -109,26 +139,22 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={styles.tag}>
                   <Text style={styles.tagText}>UPCOMING</Text>
                 </View>
-                {/* 💡 DB에서 가져온 실제 예약 날짜 연동 */}
+                {/* 💡 [수정] 예약된 날짜와 수업 시간을 정확히 표시 */}
                 <Text style={styles.cardDateText}>
-                  {formatReservationDate(upcomingReservation.reservation_date)}
+                  {formatReservationDate(upcomingReservation.class_date, upcomingReservation.class_schedules?.start_time)}
                 </Text>
                 <Text style={styles.cardChildText}>
-                  {targetName} {isChild ? "학생" : "회원님"}
+                  {upcomingReservation.class_schedules?.target_class} | {targetName} {isChild ? "학생" : "회원님"}
                 </Text>
+                {/* 💡 [수정] '미정' 방지: 예약 데이터의 지점 정보를 먼저 보여줌 */}
                 <Text style={styles.branchText}>
-                  {userData?.branches?.name || "시흥본점"}
+                {/* 1순위: 예약된 수업의 지점 한글명 / 2순위: 내 소속 지점 한글명 / 3순위: 기본값 */}
+                  {upcomingReservation?.branches?.name || userData?.branches?.name || "시흥본점"}
                 </Text>
               </View>
-              {isChild && (
-                <TouchableOpacity style={styles.pickupBtnActive}>
-                  <Text style={styles.pickupBtnTextActive}>픽업 신청</Text>
-                </TouchableOpacity>
-              )}
             </View>
           </ImageBackground>
         ) : (
-          // 💡 예약이 없을 때 보여주는 빈 화면 및 예약 버튼 유도
           <View style={[styles.cardInner, styles.emptyCard]}>
             <MaterialCommunityIcons
               name="calendar-blank"
@@ -239,13 +265,17 @@ export default function HomeScreen({ navigation }: any) {
             )}
           </View>
 
-          {/* 2. Quick Menu - 4열 2행 구조 (개별 경로 명시형으로 수정) */}
+          {/* 2. Quick Menu */}
           <View style={styles.quickMenuGrid}>
+<<<<<<< HEAD
             {/* 행 1 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("Reservation")}
             >
+=======
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Reservation")}>
+>>>>>>> 97f46581bc66c44234ac18c99b3c32993a2429bf
               <View style={styles.menuIconBg}>
                 <MaterialCommunityIcons
                   name="calendar-plus"
@@ -300,11 +330,15 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.menuLabel}>쇼핑몰</Text>
             </TouchableOpacity>
 
+<<<<<<< HEAD
             {/* 행 2 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("GalleryList")}
             >
+=======
+            <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("GalleryList")}>
+>>>>>>> 97f46581bc66c44234ac18c99b3c32993a2429bf
               <View style={styles.menuIconBg}>
                 <MaterialCommunityIcons
                   name="image-outline"
@@ -343,7 +377,6 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.menuLabel}>출석확인</Text>
             </TouchableOpacity>
 
-            {/* 마지막 칸 비워둠 (4열 맞춤용) */}
             <View style={styles.menuItem} />
           </View>
 
@@ -427,13 +460,14 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* 🚀 [중요] PopupManager는 반드시 SafeAreaView 안쪽에 위치해야 합니다! */}
+      {/* 🚀 PopupManager */}
       <PopupManager />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  // 스타일 코드는 기존과 동일하므로 유지합니다.
   safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
   container: { flex: 1 },
   appBar: {
@@ -517,13 +551,6 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   branchText: { fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 4 },
-  pickupBtnActive: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  pickupBtnTextActive: { color: "#111827", fontWeight: "700", fontSize: 13 },
   quickMenuGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
