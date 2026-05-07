@@ -30,6 +30,8 @@ interface Package {
   description: string;
   category_id: string;
   is_consult: boolean;
+  is_option?: boolean; // 🚀 추가: DB의 is_option 컬럼 (팝업 옵션 여부)
+  display_order?: number; // 🚀 정렬용: DB의 display_order
   price?: number;
   total_count?: number; // 💡 total_sessions 대신 이것을 사용하거나 둘 다 정의
   duration_in_days?: number;
@@ -37,8 +39,17 @@ interface Package {
   package_options: PackageOption[];
 }
 
+// 🚀 장바구니에 담길 아이템 인터페이스 (수량 quantity 추가!)
+interface CartItem {
+  uniqueId: string;
+  pkg: Package;
+  optIndex: number;
+  quantity: number; // 🚀 같은 제품을 여러 개 살 수 있도록 수량 추가
+}
+
 const formatCurrency = (amount: number | null) => {
-  if (amount === null || amount === 0) return "상담 요망";
+  // 🚀 상담 요망 -> 0원으로 변경
+  if (amount === null || amount === 0) return "0원";
   return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "원";
 };
 
@@ -49,16 +60,24 @@ export default function PassPurchaseScreen({ navigation }: any) {
   const [categories, setCategories] = useState<any[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("regular");
   const [packages, setPackages] = useState<Package[]>([]);
+  const [allPackages, setAllPackages] = useState<Package[]>([]); // 전체 데이터 보관용
   const [loading, setLoading] = useState(true);
   const [selectedMainId, setSelectedMainId] = useState<string | null>(null);
   const [selectedCountIndex, setSelectedCountIndex] = useState<number>(0);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  
+  // 🚀 다자녀 처리를 위한 상태 추가
+  const [allChildren, setAllChildren] = useState<any[]>([]); 
   const [selectedChild, setSelectedChild] = useState<any>(null);
+  
   const [showOptionModal, setShowOptionModal] = useState(false);
   const [showKSPay, setShowKSPay] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [addShuttle, setAddShuttle] = useState(false);
-  const [addJelly, setAddJelly] = useState(false);
+  
+  // 🚀 스택형 장바구니 상태 관리
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [isCartExpanded, setIsCartExpanded] = useState(false); // 장바구니 펼침 상태
+  
   const [isClassAssigned, setIsClassAssigned] = useState(false);
   const [showConsultModal, setShowConsultModal] = useState(false);
   const [branchContact, setBranchContact] = useState({ phone: "", kakao: "" });
@@ -106,11 +125,17 @@ export default function PassPurchaseScreen({ navigation }: any) {
         .eq("id", user.id)
         .single();
       setCurrentUser(profile);
+      
       const { data: children } = await supabase
         .from("children")
         .select("*")
         .eq("parent_id", user.id);
-      if (children && children.length > 0) setSelectedChild(children[0]);
+        
+      if (children) {
+        setAllChildren(children);
+        // 🚀 팀장님 결단: 구매 시점에서는 누굴 지정할 필요 없이 무조건 공용이므로 초기화!
+        setSelectedChild(null);
+      }
 
       const isAdultAssigned =
         profile?.target_class && String(profile.target_class).trim() !== "";
@@ -136,16 +161,34 @@ export default function PassPurchaseScreen({ navigation }: any) {
           kakao: branchData.kakao_link || "",
         });
       }
+      
+      // 🚀 순서 문제 해결 1: nullsFirst=false 옵션으로 빈 값을 뒤로 보냄
       const { data, error } = await supabase
         .from("packages")
         .select(`*, package_options (*)`)
         .eq("branch_id", selectedBranchId)
-        .eq("category_id", activeCategory)
-        .order("display_order", { ascending: true });
+        .order("display_order", { ascending: true, nullsFirst: false });
+      
       if (error) throw error;
-      setPackages(data || []);
-      if (data && data.length > 0) {
-        setSelectedMainId(data[0].id);
+      
+      // 🚀 순서 문제 해결 2: 자바스크립트 단에서 한 번 더 강력하게 정렬 (쐐기 박기)
+      const sortedData = (data || []).sort((a, b) => {
+        const orderA = a.display_order ?? 999; // 값이 없으면 맨 뒤(999)로
+        const orderB = b.display_order ?? 999;
+        return orderA - orderB;
+      });
+
+      setAllPackages(sortedData);
+
+      // 🚀 is_option 상관없이 해당 카테고리 패키지면 모두 표시 (단품 구매 가능)
+      const displayPackages = sortedData.filter(
+        (p) => p.category_id === activeCategory
+      );
+      
+      setPackages(displayPackages);
+      
+      if (displayPackages && displayPackages.length > 0) {
+        setSelectedMainId(displayPackages[0].id);
         setSelectedCountIndex(0);
       }
     } catch (e) {
@@ -168,35 +211,34 @@ export default function PassPurchaseScreen({ navigation }: any) {
       );
 
       if (response.ok) {
-        const expiryDate = new Date();
-        expiryDate.setDate(
-          expiryDate.getDate() + (currentSelection?.duration_in_days || 30),
-        );
+        // 🚀 다건(장바구니) 결제 DB 기록: 수량(quantity)만큼 DB에 개별 행으로 인서트
+        const dbInserts: any[] = [];
+        
+        cartItems.forEach((cartItem) => {
+          const opt = cartItem.pkg.package_options?.[cartItem.optIndex];
+          const optionTotalCount = opt?.total_count || cartItem.pkg.total_count || 10;
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + (cartItem.pkg.duration_in_days || 30));
 
-        // 💡 핵심 수정 1: 선택한 옵션(칩)에서 정확한 횟수(total_count)를 꺼내옵니다.
-        const targetOption =
-          currentSelection?.package_options?.[selectedCountIndex];
-        const optionTotalCount = targetOption?.total_count || 10;
+          // 수량만큼 반복해서 DB 삽입 배열에 넣습니다.
+          for (let i = 0; i < cartItem.quantity; i++) {
+            dbInserts.push({
+              user_id: currentUser.id,
+              package_id: cartItem.pkg.id,
+              package_name: `${cartItem.pkg.name} (${opt?.label || "기본"})`, // 예: 정규반 (10회)
+              total_count: optionTotalCount,
+              remaining_count: optionTotalCount,
+              expiry_date: expiryDate.toISOString(),
+              branch_id: selectedBranchId,
+              child_id: null, // 🚀 팀장님 최종 기획 반영: 구매 시에는 무조건 null로 세팅!
+              child_name: "공용 이용권", // 🚀 누구나 쓸 수 있다는 의미로 네이밍
+              price: opt?.price || cartItem.pkg.price || 0,
+              status: "active",
+            });
+          }
+        });
 
-        // 💡 핵심 수정 2: DB 저장 (컬럼명 일치 및 정확한 횟수 삽입)
-        const { error: dbError } = await supabase.from("user_packages").insert([
-          {
-            user_id: currentUser.id,
-            package_id: selectedMainId,
-            package_name: `${currentSelection?.name} (${targetOption?.label || "기본"})`, // 예: 정규반 (10회)
-
-            // 🛠️ 팀원 코드의 total_sessions를 우리가 바꾼 total_count로 수정!
-            total_count: optionTotalCount,
-            remaining_count: optionTotalCount,
-
-            expiry_date: expiryDate.toISOString(),
-            branch_id: selectedBranchId,
-            child_id: selectedChild ? selectedChild.id : null,
-            child_name: selectedChild ? selectedChild.child_name : "본인",
-            price: finalPrice,
-            status: "active",
-          },
-        ]);
+        const { error: dbError } = await supabase.from("user_packages").insert(dbInserts);
 
         if (dbError) throw dbError;
         navigation.replace("PurchaseSuccess");
@@ -205,8 +247,6 @@ export default function PassPurchaseScreen({ navigation }: any) {
       }
     } catch (e: any) {
       console.error(e);
-      // ✅ [수정] 실패 시에도 전용 실패 페이지로 보냅니다.
-      // Alert보다는 실패 페이지에서 "다시 시도"를 유도하는 것이 흐름상 좋습니다.
       navigation.replace("PurchaseFail");
     } finally {
       setIsProcessing(false);
@@ -256,19 +296,71 @@ export default function PassPurchaseScreen({ navigation }: any) {
     Linking.openURL(branchContact.kakao || "https://pf.kakao.com/_xxxxxx");
   };
 
-  const currentSelection = packages.find((p) => p.id === selectedMainId);
-  const basePrice = currentSelection?.is_consult
-    ? 0
-    : currentSelection?.package_options &&
-        currentSelection.package_options.length > 0
-      ? currentSelection.package_options[selectedCountIndex].price
-      : currentSelection?.price || 0;
+  // 🚀 장바구니에 아이템 담기 (중복 시 수량만 증가)
+  const addToCart = (pkg: Package, optIndex: number) => {
+    const existingIndex = cartItems.findIndex(
+      (c) => c.pkg.id === pkg.id && c.optIndex === optIndex
+    );
 
-  const finalPrice =
-    basePrice + (addShuttle ? 14000 : 0) + (addJelly ? 39600 : 0);
+    if (existingIndex !== -1) {
+      // 이미 같은 상품+옵션이 있으면 수량만 +1
+      const newCart = [...cartItems];
+      newCart[existingIndex].quantity += 1;
+      setCartItems(newCart);
+    } else {
+      // 없으면 새로 추가
+      setCartItems([
+        ...cartItems,
+        { uniqueId: Date.now().toString() + Math.random(), pkg, optIndex, quantity: 1 }
+      ]);
+    }
+    setIsCartExpanded(true); // 담으면 장바구니 열기
+  };
+
+  // 🚀 장바구니 내 수량 조절
+  const updateQuantity = (uniqueId: string, delta: number) => {
+    setCartItems((prev) => {
+      const updated = prev.map((item) => {
+        if (item.uniqueId === uniqueId) {
+          const newQty = item.quantity + delta;
+          return newQty > 0 ? { ...item, quantity: newQty } : item;
+        }
+        return item;
+      });
+      return updated;
+    });
+  };
+
+  // 🚀 장바구니 내 아이템 완전 삭제
+  const removeCartItem = (uniqueId: string) => {
+    const newCart = cartItems.filter((c) => c.uniqueId !== uniqueId);
+    setCartItems(newCart);
+    if (newCart.length === 0) setIsCartExpanded(false);
+  };
+
+  // 🚀 장바구니(cartItems) 수량 곱한 총 금액 계산
+  const finalPrice = cartItems.reduce((sum, cartItem) => {
+    const p = cartItem.pkg.package_options?.[cartItem.optIndex]?.price || cartItem.pkg.price || 0;
+    return sum + (p * cartItem.quantity); // 수량 반영
+  }, 0);
+
+  // 🚀 장바구니에 들어있는 총 상품 개수
+  const totalCartCount = cartItems.reduce((acc, c) => acc + c.quantity, 0);
+
+  // 🚀 장바구니에 상담 전용 상품이 하나라도 들어있는지 확인
+  const hasConsult = cartItems.some(c => c.pkg.is_consult);
+
+  // 🚀 팝업 옵션 필터링: DB에서 is_option=true 이면서 장바구니(cartItems)에 안 담긴 놈만 팝업 표시
+  const popupOptions = allPackages.filter(
+    (p) => p.is_option && !cartItems.some(cart => cart.pkg.id === p.id)
+  );
 
   const handleOpenPayment = () => {
-    if (!selectedChild && !currentUser) {
+    if (cartItems.length === 0) {
+      Alert.alert("알림", "원하시는 상품을 화면에서 담아주세요.");
+      return;
+    }
+    if (!currentUser) {
       Alert.alert(
         "알림",
         "사용자 정보를 불러올 수 없습니다. 다시 시도해주세요.",
@@ -319,7 +411,11 @@ export default function PassPurchaseScreen({ navigation }: any) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        // 🚀 하단 가림 완벽 방지: 장바구니가 열려있을 땐 여백을 400으로 팍 늘려주고, 닫히면 160으로 줍니다.
+        contentContainerStyle={[
+          styles.scrollContent, 
+          { paddingBottom: isCartExpanded && cartItems.length > 0 ? 400 : 160 }
+        ]}
       >
         {/* 🚀 변경 포인트 5: DB 카테고리 데이터로 탭 렌더링 */}
         <ScrollView
@@ -366,29 +462,27 @@ export default function PassPurchaseScreen({ navigation }: any) {
           ) : packages.length > 0 ? (
             packages.map((item) => {
               const isSelected = selectedMainId === item.id;
+              // 🚀 장바구니에 들어있는지 확인하여 테두리 색상 처리용
+              const isInCart = cartItems.some(c => c.pkg.id === item.id);
+              
               return (
                 <View
                   key={item.id}
                   style={[
                     styles.packageCard,
-                    isSelected && styles.selectedCard,
+                    // 🚀 카드 선택시 혹은 장바구니에 이미 담겨있을 때 파란색 테두리 유지
+                    (isSelected || isInCart) && styles.selectedCard,
                   ]}
                 >
                   <TouchableOpacity
                     style={styles.cardHeader}
                     onPress={() => {
+                      // 🚀 강제 장바구니행 방지: 누르면 옵션창(아래 View)만 열립니다!
                       setSelectedMainId(item.id);
                       setSelectedCountIndex(0);
                     }}
                   >
-                    <View
-                      style={[
-                        styles.radioCircle,
-                        isSelected && styles.activeRadio,
-                      ]}
-                    >
-                      {isSelected && <View style={styles.radioInner} />}
-                    </View>
+                    {/* 🚀 불필요한 라디오(동그라미) UI 완벽 제거 */}
                     <View style={{ flex: 1 }}>
                       <Text style={styles.packageName}>{item.name}</Text>
                       {item.description && (
@@ -398,37 +492,64 @@ export default function PassPurchaseScreen({ navigation }: any) {
                       )}
                     </View>
                   </TouchableOpacity>
-                  {isSelected && !item.is_consult && (
+                  
+                  {/* 🚀 옵션이 열렸을 때 (선택된 카드일 때) */}
+                  {isSelected && (
                     <View style={styles.optionContainer}>
-                      <View style={styles.chipRow}>
-                        {item.package_options?.map((opt, idx) => (
-                          <TouchableOpacity
-                            key={opt.id}
-                            style={[
-                              styles.chip,
-                              selectedCountIndex === idx && styles.activeChip,
-                            ]}
-                            onPress={() => setSelectedCountIndex(idx)}
-                          >
-                            <Text
-                              style={[
-                                styles.chipText,
-                                selectedCountIndex === idx &&
-                                  styles.activeChipText,
-                              ]}
-                            >
-                              {opt.label}
+                      {!item.is_consult ? (
+                        <>
+                          <View style={styles.chipRow}>
+                            {item.package_options?.map((opt, idx) => (
+                              <TouchableOpacity
+                                key={opt.id}
+                                style={[
+                                  styles.chip,
+                                  selectedCountIndex === idx && styles.activeChip,
+                                ]}
+                                onPress={() => setSelectedCountIndex(idx)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.chipText,
+                                    selectedCountIndex === idx &&
+                                      styles.activeChipText,
+                                  ]}
+                                >
+                                  {opt.label}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                          
+                          {/* 🚀 담기 버튼 및 가격 명확히 분리 */}
+                          <View style={styles.priceRow}>
+                            <Text style={styles.priceValue}>
+                              {formatCurrency(
+                                item.package_options[selectedCountIndex]?.price ||
+                                  item.price ||
+                                  0,
+                              )}
                             </Text>
+                            <TouchableOpacity 
+                              style={styles.addCartBtn} 
+                              onPress={() => addToCart(item, selectedCountIndex)}
+                            >
+                              <Text style={styles.addCartBtnText}>장바구니 담기</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </>
+                      ) : (
+                        // 상담 전용 상품일 경우
+                        <View style={styles.priceRow}>
+                          <Text style={styles.priceValue}>상담 후 결제</Text>
+                          <TouchableOpacity 
+                            style={styles.addCartBtn} 
+                            onPress={() => addToCart(item, 0)}
+                          >
+                            <Text style={styles.addCartBtnText}>담기</Text>
                           </TouchableOpacity>
-                        ))}
-                      </View>
-                      <Text style={styles.priceValue}>
-                        {formatCurrency(
-                          item.package_options[selectedCountIndex]?.price ||
-                            item.price ||
-                            0,
-                        )}
-                      </Text>
+                        </View>
+                      )}
                     </View>
                   )}
                 </View>
@@ -457,34 +578,94 @@ export default function PassPurchaseScreen({ navigation }: any) {
         </View>
       </ScrollView>
 
-      <View style={styles.floatingFooter}>
-        <View style={styles.footerPriceBox}>
-          <Text style={styles.footerLabel}>선택 금액</Text>
-          <Text style={styles.footerPrice}>
-            {currentSelection?.is_consult
-              ? "상담 대기"
-              : formatCurrency(basePrice)}
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={[
-            styles.mainActionBtn,
-            currentSelection?.is_consult && styles.consultActionBtn,
-          ]}
-          onPress={() => {
-            if (currentSelection?.is_consult) {
-              Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`);
-            } else if (!isClassAssigned) {
-              setShowConsultModal(true);
-            } else {
-              setShowOptionModal(true);
-            }
-          }}
+      {/* 🚀 스택 장바구니 + 결제 푸터 일체형 패널 */}
+      <View style={styles.integratedFooterWrapper}>
+        
+        {/* 장바구니 헤더 (토글 버튼 역할) */}
+        <TouchableOpacity 
+          style={styles.cartToggleHeader}
+          onPress={() => cartItems.length > 0 && setIsCartExpanded(!isCartExpanded)}
+          activeOpacity={0.8}
         >
-          <Text style={styles.mainActionText}>
-            {currentSelection?.is_consult ? "상담 전화하기" : "결제하기"}
+          <Text style={styles.cartToggleText}>
+            {cartItems.length > 0 ? `🛒 장바구니에 ${totalCartCount}개 담김` : '🛒 상품을 선택해주세요'}
           </Text>
+          {cartItems.length > 0 && (
+            <Ionicons name={isCartExpanded ? "chevron-down" : "chevron-up"} size={20} color="#64748B" />
+          )}
         </TouchableOpacity>
+
+        {/* 🚀 펼쳐지는 장바구니 리스트 영역 */}
+        {isCartExpanded && cartItems.length > 0 && (
+          <View style={styles.cartListContainer}>
+            <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+              {cartItems.map((cartItem) => {
+                const opt = cartItem.pkg.package_options?.[cartItem.optIndex];
+                const price = opt?.price || cartItem.pkg.price || 0;
+                return (
+                  <View key={cartItem.uniqueId} style={styles.cartItem}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cartItemName}>
+                        {cartItem.pkg.name} {opt ? `(${opt.label})` : ""}
+                      </Text>
+                      <Text style={styles.cartItemPrice}>{formatCurrency(price * cartItem.quantity)}</Text>
+                    </View>
+                    
+                    {/* 🚀 수량 컨트롤러 (+, -) */}
+                    <View style={styles.quantityController}>
+                      <TouchableOpacity onPress={() => updateQuantity(cartItem.uniqueId, -1)} style={styles.qtyBtn}>
+                        <Ionicons name="remove" size={16} color="#64748B" />
+                      </TouchableOpacity>
+                      <Text style={styles.qtyText}>{cartItem.quantity}</Text>
+                      <TouchableOpacity onPress={() => updateQuantity(cartItem.uniqueId, 1)} style={styles.qtyBtn}>
+                        <Ionicons name="add" size={16} color="#64748B" />
+                      </TouchableOpacity>
+                    </View>
+                    
+                    {/* 삭제 버튼 */}
+                    <TouchableOpacity onPress={() => removeCartItem(cartItem.uniqueId)} style={styles.deleteBtn}>
+                      <Ionicons name="close" size={20} color="#CBD5E1" />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* 결제하기 버튼 영역 */}
+        <View style={styles.payBar}>
+          <View style={styles.payInfoBox}>
+            <Text style={styles.payInfoLabel}>총 결제 금액</Text>
+            <Text style={styles.payInfoPrice}>{hasConsult ? "상담 대기" : formatCurrency(finalPrice)}</Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.mainActionBtn,
+              hasConsult && styles.consultActionBtn,
+              cartItems.length === 0 && { backgroundColor: '#94A3B8' } // 비었을 때 회색 처리
+            ]}
+            onPress={() => {
+              if (cartItems.length === 0) {
+                Alert.alert("알림", "원하시는 상품에서 [담기] 버튼을 눌러주세요.");
+                return;
+              }
+              if (hasConsult) {
+                Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`);
+              } else if (!isClassAssigned) {
+                setShowConsultModal(true);
+              } else if (popupOptions.length > 0) {
+                setShowOptionModal(true);
+              } else {
+                setShowKSPay(true);
+              }
+            }}
+          >
+            <Text style={styles.mainActionText}>
+              {hasConsult ? "상담 전화하기" : "결제하기"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Modal visible={showConsultModal} transparent animationType="fade">
@@ -538,36 +719,41 @@ export default function PassPurchaseScreen({ navigation }: any) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>추가 옵션 선택</Text>
+              <Text style={styles.modalTitle}>추가 혜택 추천</Text>
               <TouchableOpacity onPress={() => setShowOptionModal(false)}>
                 <Ionicons name="close" size={24} color="#111827" />
               </TouchableOpacity>
             </View>
             <View style={styles.optionList}>
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={() => setAddShuttle(!addShuttle)}
-              >
-                <Ionicons
-                  name={addShuttle ? "checkbox" : "square-outline"}
-                  size={24}
-                  color={addShuttle ? "#6366F1" : "#D1D5DB"}
-                />
-                <Text style={styles.optionName}>
-                  유료 셔틀버스 신청 (+14,000원)
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={() => setAddJelly(!addJelly)}
-              >
-                <Ionicons
-                  name={addJelly ? "checkbox" : "square-outline"}
-                  size={24}
-                  color={addJelly ? "#6366F1" : "#D1D5DB"}
-                />
-                <Text style={styles.optionName}>키즈젤리 단품 (+39,600원)</Text>
-              </TouchableOpacity>
+              {/* 🚀 팝업 옵션 리스트 렌더링 */}
+              {popupOptions.map((opt) => {
+                // 팝업에서 담은 것도 즉시 장바구니로 들어갑니다!
+                const isChecked = cartItems.some(c => c.pkg.id === opt.id);
+                const optPrice = opt.package_options?.[0]?.price || opt.price || 0;
+                
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={styles.optionItem}
+                    onPress={() => {
+                      if (isChecked) {
+                        setCartItems(cartItems.filter(c => c.pkg.id !== opt.id));
+                      } else {
+                        addToCart(opt, 0); // 팝업에서는 기본 옵션(0)으로 1개 담기
+                      }
+                    }}
+                  >
+                    <Ionicons
+                      name={isChecked ? "checkbox" : "square-outline"}
+                      size={24}
+                      color={isChecked ? "#6366F1" : "#D1D5DB"}
+                    />
+                    <Text style={styles.optionName}>
+                      {opt.name} (+{formatCurrency(optPrice)})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
             <View style={styles.modalFooter}>
               <View style={styles.modalPriceBox}>
@@ -586,25 +772,26 @@ export default function PassPurchaseScreen({ navigation }: any) {
         </View>
       </Modal>
 
-      {showKSPay && currentUser && (
+      {showKSPay && currentUser && cartItems.length > 0 && (
         <KSPayService
           isVisible={showKSPay}
           onClose={handleCloseKSPay}
           paymentData={{
             amount: finalPrice,
-            packageName: `${currentSelection?.name} (${currentSelection?.package_options[selectedCountIndex]?.label || "기본"})`,
+            // 🚀 다건 결제명: 총 상품 개수에 따라 OOO 외 N건 표시
+            packageName: totalCartCount > 1 
+              ? `${cartItems[0].pkg.name} 외 ${totalCartCount - 1}건`
+              : `${cartItems[0].pkg.name} (${cartItems[0].pkg.package_options?.[cartItems[0].optIndex]?.label || "기본"})`,
             userName: currentUser.name,
             userPhone: currentUser.phone || "01000000000",
-            packageId: selectedMainId || "",
+            packageId: cartItems[0].pkg.id, // 대표 ID 하나만 전송
             userId: currentUser.id,
-            childId: selectedChild ? selectedChild.id : null,
-            childName: selectedChild ? selectedChild.child_name : "본인",
+            childId: null, // 🚀 결제 단계에서는 자녀 정보를 넘기지 않음
+            childName: "공용 이용권",
             // 💡 DB 컬럼명에 맞춰 totalCount라는 Key로 전송합니다.
-            totalCount:
-              currentSelection?.package_options[selectedCountIndex]
-                ?.total_count || 10,
-            durationInDays: currentSelection?.duration_in_days || 30,
-            weeklyLimit: currentSelection?.weekly_limit || 2,
+            totalCount: cartItems[0].pkg.package_options?.[cartItems[0].optIndex]?.total_count || 10,
+            durationInDays: cartItems[0].pkg.duration_in_days || 30,
+            weeklyLimit: cartItems[0].pkg.weekly_limit || 2,
             branchId: selectedBranchId,
             branchName:
               selectedBranchId === "branch_1" ? "시흥본점" : "영종도점",
@@ -664,7 +851,9 @@ const styles = StyleSheet.create({
   activeTab: { borderBottomColor: "#6366F1" },
   tabText: { fontSize: 15, fontWeight: "600", color: "#94A3B8" },
   activeTabText: { color: "#111827", fontWeight: "800" },
-  scrollContent: { paddingBottom: 140 },
+  
+  // 🚀 통합 일체형 푸터가 화면 하단을 덮으므로 paddingBottom은 동적으로 위에서 관리함!
+  scrollContent: { }, 
   mainPadding: { padding: 20 },
   eventBanner: {
     flexDirection: "row",
@@ -693,23 +882,7 @@ const styles = StyleSheet.create({
   },
   selectedCard: { borderColor: "#6366F1", borderWidth: 2 },
   cardHeader: { flexDirection: "row", alignItems: "center" },
-  radioCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: "#D1D5DB",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  activeRadio: { borderColor: "#6366F1" },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#6366F1",
-  },
+  // 🚀 라디오(동그라미) 관련 스타일 완전 삭제
   packageName: { fontSize: 16, fontWeight: "700", color: "#1E293B" },
   packageSubDesc: { fontSize: 12, color: "#94A3B8", marginTop: 2 },
   optionContainer: {
@@ -732,12 +905,31 @@ const styles = StyleSheet.create({
   activeChip: { backgroundColor: "#1E1B4B", borderColor: "#1E1B4B" },
   chipText: { fontSize: 13, color: "#64748B", fontWeight: "600" },
   activeChipText: { color: "#FFF" },
+  
+  // 🚀 새로 추가한 [담기] 버튼 영역 스타일
+  priceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 5,
+  },
   priceValue: {
     fontSize: 22,
     fontWeight: "900",
     color: "#111827",
-    textAlign: "right",
   },
+  addCartBtn: {
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  addCartBtnText: {
+    color: "#4F46E5",
+    fontWeight: "800",
+    fontSize: 14,
+  },
+
   bottomInfo: {
     marginTop: 20,
     padding: 20,
@@ -753,29 +945,104 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   infoItem: { fontSize: 12, color: "#64748B", marginBottom: 6, lineHeight: 18 },
-  floatingFooter: {
+  
+  // 🚀 [디자인 개선] 배민 스타일 일체형 하단 푸터
+  integratedFooterWrapper: {
     position: "absolute",
-    bottom: 30,
-    left: 20,
-    right: 20,
-    backgroundColor: "#111827",
-    borderRadius: 24,
-    padding: 20,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20, // 아이폰 하단 홈바 대응
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  cartToggleHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
   },
-  footerPriceBox: { flex: 1 },
-  footerLabel: { color: "#94A3B8", fontSize: 10 },
-  footerPrice: { color: "#FFF", fontSize: 20, fontWeight: "900" },
+  cartToggleText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1E293B",
+  },
+  cartListContainer: {
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  cartItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F8FAFC",
+  },
+  cartItemName: { fontSize: 15, fontWeight: "700", color: "#1E293B" },
+  cartItemPrice: { fontSize: 14, color: "#6366F1", marginTop: 4, fontWeight: "700" },
+  
+  // 🚀 수량 컨트롤러 스타일 (+, -)
+  quantityController: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 8,
+    marginRight: 12,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  qtyBtn: {
+    padding: 4,
+  },
+  qtyText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    marginHorizontal: 12,
+  },
+  deleteBtn: {
+    padding: 4,
+  },
+
+  payBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  payInfoBox: {
+    flex: 1,
+  },
+  payInfoLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+    marginBottom: 4,
+  },
+  payInfoPrice: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#111827",
+  },
   mainActionBtn: {
     backgroundColor: "#6366F1",
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 18,
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    borderRadius: 16,
   },
   consultActionBtn: { backgroundColor: "#10B981" },
-  mainActionText: { color: "#FFF", fontSize: 15, fontWeight: "800" },
+  mainActionText: { color: "#FFF", fontSize: 16, fontWeight: "800" },
 
   modalOverlay: {
     flex: 1,

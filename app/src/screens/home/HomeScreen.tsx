@@ -17,6 +17,8 @@ import { supabase } from "../../lib/supabase";
 
 // 🚀 [팝업 관리자 임포트] 유니폼 및 공지사항 통제
 import PopupManager from "../../components/popups/PopupManager";
+// 🚀 [알림 종 임포트] 실시간 알림 및 모달 기능 추가
+import NotificationBell from "../../components/notification/NotificationBell";
 
 const { width } = Dimensions.get("window");
 
@@ -187,10 +189,9 @@ export default function HomeScreen({ navigation }: any) {
           </Text>
         </View>
         <View style={styles.appBarActions}>
-          <TouchableOpacity style={styles.iconCircle}>
-            <Ionicons name="notifications-outline" size={22} color="#111827" />
-            <View style={styles.badge} />
-          </TouchableOpacity>
+          {/* 🚀 [변경] 기존 단순 아이콘+배지 코드를 NotificationBell 컴포넌트로 교체 */}
+          <NotificationBell />
+
           <TouchableOpacity
             style={[styles.iconCircle, { marginLeft: 12 }]}
             onPress={() => navigation.navigate("MyPage")}
@@ -448,7 +449,6 @@ export default function HomeScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  // 스타일 코드는 기존과 동일하므로 유지합니다.
   safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
   container: { flex: 1 },
   appBar: {
@@ -470,15 +470,15 @@ const styles = StyleSheet.create({
   },
   logoBrandAccent: { color: "#4F46E5" },
   appBarActions: { flexDirection: "row", alignItems: "center" },
-  iconCircle: { position: "relative" },
-  badge: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: "#4F46E5",
+  // 🚀 NotificationBell 내부에서 숫자가 포함된 배지를 직접 그리므로 HomeScreen의 badge 스타일은 더 이상 사용되지 않습니다.
+  iconCircle: { 
+    position: "relative",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F9FAFB",
+    justifyContent: "center",
+    alignItems: "center",
   },
   mainPadding: { padding: 24 },
   welcomeSection: { marginBottom: 32 },

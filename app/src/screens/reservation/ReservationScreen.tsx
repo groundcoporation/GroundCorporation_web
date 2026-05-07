@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Modal, // 🚀 모달 추가
+  Modal, 
+  Platform, // 🚀 에러 해결: Platform 추가
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Calendar, LocaleConfig } from "react-native-calendars";
@@ -43,9 +44,10 @@ export default function ReservationScreen({ navigation }: any) {
   const [selectedChild, setSelectedChild] = useState<any>(null);
   const [availablePackages, setAvailablePackages] = useState<any[]>([]); // 🚀 사용 가능 이용권 목록
 
-  // 🚀 모달 제어 상태
+  // 🚀 모달 및 장바구니 제어 상태
   const [childModalVisible, setChildModalVisible] = useState(false);
   const [packageModalVisible, setPackageModalVisible] = useState(false);
+  const [isCartExpanded, setIsCartExpanded] = useState(false); // 🚀 장바구니 펼침 여부
 
   useEffect(() => {
     fetchInitialData();
@@ -77,7 +79,11 @@ export default function ReservationScreen({ navigation }: any) {
       
       if (children && children.length > 0) {
         setAllChildren(children);
-        setSelectedChild(children[0]); // 기본 선택
+        // 초기값은 일단 첫째로 세팅 (화면 상단 표시용)
+        setSelectedChild(children[0]);
+      } else {
+        setAllChildren([]);
+        setSelectedChild(null); // 자녀 없음 (성인 본인)
       }
     }
   };
@@ -116,42 +122,63 @@ export default function ReservationScreen({ navigation }: any) {
       (c) => c.id === item.id && c.date === selectedDate,
     );
     if (isSelected) {
-      setCart(
-        cart.filter((c) => !(c.id === item.id && c.date === selectedDate)),
-      );
+      const newCart = cart.filter((c) => !(c.id === item.id && c.date === selectedDate));
+      setCart(newCart);
+      if (newCart.length === 0) setIsCartExpanded(false); // 다 지우면 장바구니 닫기
     } else {
       setCart([...cart, { ...item, date: selectedDate }]);
+      setIsCartExpanded(true); // 담으면 장바구니 스르륵 열리기
     }
   };
 
-  // 🚀 [단계 1] 예약하기 버튼 클릭 시 흐름 시작
+  // 🚀 장바구니에서 개별 아이템 삭제
+  const removeCartItem = (itemId: string, itemDate: string) => {
+    const newCart = cart.filter((c) => !(c.id === itemId && c.date === itemDate));
+    setCart(newCart);
+    if (newCart.length === 0) setIsCartExpanded(false);
+  };
+
+  // 🚀 [단계 1] 예약하기 버튼 클릭 시 흐름 시작 (팀장님 요청 로직 반영)
   const handleStartBooking = () => {
     if (cart.length === 0) return;
     
-    // 자녀가 2명 이상이면 자녀 선택 모달 오픈
     if (allChildren.length > 1) {
+      // 1️⃣ 자녀가 2명 이상이면 -> 누구 수업인지 물어본다 (모달)
       setChildModalVisible(true);
+    } else if (allChildren.length === 1) {
+      // 2️⃣ 자녀가 1명이면 -> 자동으로 그 자녀로 이용권 체크
+      checkPackagesForAttendee(allChildren[0]);
     } else {
-      // 자녀가 1명이면 바로 이용권 체크 단계로
-      checkPackagesForChild(allChildren[0]);
+      // 3️⃣ 자녀가 없으면 (성인반) -> 본인으로 이용권 체크
+      checkPackagesForAttendee(null);
     }
   };
 
-  // 🚀 [단계 2] 선택된 자녀의 이용권 확인
-  const checkPackagesForChild = async (child: any) => {
+  // 🚀 [단계 2] 대상자(자녀 또는 본인)의 이용권 확인 (Lock 로직 적용)
+  const checkPackagesForAttendee = async (child: any) => {
     setSelectedChild(child);
     setChildModalVisible(false);
 
-    const { data: pkgs } = await supabase
+    // 🚀 핵심 필터링: 아무도 안 쓴 수강권(null)이거나, 이 대상에게 이미 Lock된 수강권만 가져옴
+    let query = supabase
       .from("user_packages")
       .select("*")
       .eq("user_id", currentUser.id)
       .eq("status", "active")
-      .gt("remaining_count", 0)
-      .order("created_at", { ascending: true });
+      .gt("remaining_count", 0);
 
-    if (!pkgs || pkgs.length === 0) {
-      Alert.alert("알림", "사용 가능한 이용권이 없습니다.");
+    if (child) {
+      // 자녀 수강권: child_id가 비어있거나, 선택한 자녀 ID와 일치하는 것
+      query = query.or(`child_id.is.null,child_id.eq.${child.id}`);
+    } else {
+      // 본인 수강권: child_id가 아예 없는(null) 것만 가져옴
+      query = query.is("child_id", null);
+    }
+
+    const { data: pkgs, error } = await query.order("created_at", { ascending: true });
+
+    if (error || !pkgs || pkgs.length === 0) {
+      Alert.alert("알림", "사용 가능한 이용권이 없습니다. 먼저 이용권을 구매해주세요.");
       return;
     }
 
@@ -165,7 +192,7 @@ export default function ReservationScreen({ navigation }: any) {
     }
   };
 
-  // 🚀 [단계 3] 최종 DB 저장 및 횟수 차감 (하드코딩 제거)
+  // 🚀 [단계 3] 최종 DB 저장, 횟수 차감, 그리고 수강권 Lock 처리
   const processFinalReservation = async (child: any, pkg: any) => {
     setPackageModalVisible(false);
     
@@ -177,12 +204,12 @@ export default function ReservationScreen({ navigation }: any) {
     setIsSubmitting(true);
 
     try {
-      // 💡 하드코딩 제거: 수업 스케줄의 branch_id 또는 유저의 소속 지점 ID 사용
+      // 💡 1. 예약 데이터 생성
       const reservationsToInsert = cart.map((item) => ({
         branch_id: item.branch_id || currentUser.branch_id, 
         user_id: currentUser.id,
-        child_id: child.id,
-        child_name: child.child_name,
+        child_id: child ? child.id : null,
+        child_name: child ? child.child_name : currentUser.name,
         schedule_id: item.id,
         package_id: pkg.id,
         class_date: item.date,
@@ -196,14 +223,31 @@ export default function ReservationScreen({ navigation }: any) {
 
       if (insertError) throw insertError;
 
+      // 💡 2. 수강권 횟수 차감 및 자녀 락(Lock) 처리
+      // 만약 이용권이 null 상태였다면, 이번 수강생으로 고정시킵니다.
+      const updatePayload: any = {
+        remaining_count: pkg.remaining_count - cart.length
+      };
+
+      if (!pkg.child_id) {
+        if (child) {
+          updatePayload.child_id = child.id;
+          updatePayload.child_name = child.child_name;
+        } else {
+          // 성인인 경우 본인 이름으로 락 (child_id는 null로 유지하거나 특정값 부여 가능)
+          updatePayload.child_name = `${currentUser.name}(본인)`;
+        }
+      }
+
       const { error: updateError } = await supabase
         .from("user_packages")
-        .update({ remaining_count: pkg.remaining_count - cart.length })
+        .update(updatePayload)
         .eq("id", pkg.id);
 
       if (updateError) throw updateError;
 
       setCart([]);
+      setIsCartExpanded(false);
       navigation.navigate("ReservationSuccess");
 
     } catch (error) {
@@ -234,8 +278,8 @@ export default function ReservationScreen({ navigation }: any) {
         <View>
           <Text style={styles.branchName}>{currentUser?.branch_name || "시흥본점"}</Text>
           <Text style={styles.childBadge}>
-            대상: {targetInfo.name} (
-            {targetAge > 0 ? `${targetAge}세` : "연령 정보 없음"})
+            현재 선택: {targetInfo.name} (
+            {targetAge > 0 ? `${targetAge}세` : "정보 없음"})
           </Text>
           {targetInfo.target && (
             <Text style={styles.targetClassInfo}>
@@ -251,7 +295,10 @@ export default function ReservationScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: isCartExpanded && cart.length > 0 ? 320 : 140 }}
+      >
         <Calendar
           current={selectedDate}
           onDayPress={(day: any) => setSelectedDate(day.dateString)}
@@ -327,28 +374,68 @@ export default function ReservationScreen({ navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* 하단 플로팅 장바구니 */}
-      {cart.length > 0 && (
-        <View style={styles.bookingBar}>
-          <View style={styles.bookingInfo}>
-            <Text style={styles.totalCount}>총 {cart.length}건 선택됨</Text>
-            <TouchableOpacity onPress={() => setCart([])}>
-              <Text style={styles.resetText}>초기화</Text>
-            </TouchableOpacity>
+      {/* 🚀 스택 장바구니 + 예약 푸터 통합 UI */}
+      <View style={styles.footerWrapper}>
+        
+        {/* 장바구니 헤더 (토글) */}
+        <TouchableOpacity 
+          style={styles.cartToggleHeader}
+          onPress={() => cart.length > 0 && setIsCartExpanded(!isCartExpanded)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.cartToggleText}>
+            {cart.length > 0 ? `🛒 예약 바구니에 ${cart.length}건 담김` : '🛒 예약할 수업을 눌러주세요'}
+          </Text>
+          {cart.length > 0 && (
+            <Ionicons name={isCartExpanded ? "chevron-down" : "chevron-up"} size={20} color="#64748B" />
+          )}
+        </TouchableOpacity>
+
+        {/* 🚀 펼쳐지는 장바구니 리스트 영역 */}
+        {isCartExpanded && cart.length > 0 && (
+          <View style={styles.cartListContainer}>
+            <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+              {cart.map((cartItem, index) => (
+                <View key={index} style={styles.cartItem}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cartItemName}>
+                      {cartItem.target_class} 수업
+                    </Text>
+                    <Text style={styles.cartItemDesc}>
+                      {cartItem.date.slice(5)} ({cartItem.start_time.slice(0, 5)} - {cartItem.end_time.slice(0, 5)})
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeCartItem(cartItem.id, cartItem.date)} style={styles.deleteBtn}>
+                    <Ionicons name="close-circle" size={24} color="#CBD5E1" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
           </View>
+        )}
+
+        {/* 하단 예약하기 버튼 영역 */}
+        <View style={styles.payBar}>
+          <TouchableOpacity onPress={() => { setCart([]); setIsCartExpanded(false); }}>
+             <Text style={styles.resetText}>{cart.length > 0 ? "비우기" : ""}</Text>
+          </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.confirmBtn, isSubmitting && { opacity: 0.7 }]}
+            style={[
+              styles.mainActionBtn, 
+              cart.length === 0 && { backgroundColor: '#94A3B8' }, // 안 담겼을 때 회색 처리
+              isSubmitting && { opacity: 0.7 }
+            ]}
             onPress={handleStartBooking} 
-            disabled={isSubmitting}
+            disabled={isSubmitting || cart.length === 0}
           >
             {isSubmitting ? (
               <ActivityIndicator color="#FFF" />
             ) : (
-              <Text style={styles.confirmBtnText}>선택 수업 예약하기</Text>
+              <Text style={styles.mainActionText}>선택 수업 예약하기</Text>
             )}
           </TouchableOpacity>
         </View>
-      )}
+      </View>
 
       {/* 🚀 자녀 선택 모달 */}
       <Modal visible={childModalVisible} transparent animationType="slide">
@@ -359,13 +446,13 @@ export default function ReservationScreen({ navigation }: any) {
               <TouchableOpacity 
                 key={child.id} 
                 style={styles.modalItem} 
-                onPress={() => checkPackagesForChild(child)}
+                onPress={() => checkPackagesForAttendee(child)}
               >
                 <Text style={styles.modalItemText}>{child.child_name}</Text>
               </TouchableOpacity>
             ))}
             <TouchableOpacity onPress={() => setChildModalVisible(false)} style={styles.closeBtn}>
-              <Text style={{color: '#94A3B8'}}>취소</Text>
+              <Text style={{color: '#94A3B8', fontWeight: "bold"}}>취소</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -383,10 +470,12 @@ export default function ReservationScreen({ navigation }: any) {
                 onPress={() => processFinalReservation(selectedChild, pkg)}
               >
                 <Text style={styles.modalItemText}>{pkg.package_name} ({pkg.remaining_count}회 남음)</Text>
+                {pkg.child_id && <Text style={{fontSize: 12, color: "#6366F1", textAlign: "center", marginTop: 4}}>[{pkg.child_name} 전용]</Text>}
+                {!pkg.child_id && <Text style={{fontSize: 12, color: "#F59E0B", textAlign: "center", marginTop: 4}}>[공용 이용권]</Text>}
               </TouchableOpacity>
             ))}
             <TouchableOpacity onPress={() => setPackageModalVisible(false)} style={styles.closeBtn}>
-              <Text style={{color: '#94A3B8'}}>취소</Text>
+              <Text style={{color: '#94A3B8', fontWeight: "bold"}}>취소</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -402,12 +491,12 @@ const styles = StyleSheet.create({
   childBadge: { fontSize: 13, color: "#6366F1", fontWeight: "600", marginTop: 2 },
   targetClassInfo: { fontSize: 11, color: "#94A3B8", marginTop: 2 },
   changeChildBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#F8FAFC", justifyContent: "center", alignItems: "center" },
-  scheduleContainer: { padding: 20, paddingBottom: 120 },
+  scheduleContainer: { padding: 20 },
   listHeader: { marginBottom: 20 },
   listTitle: { fontSize: 20, fontWeight: "800", color: "#1E293B" },
   emptyText: { textAlign: "center", color: "#94A3B8", marginTop: 40 },
   classCard: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, backgroundColor: "#F8FAFC", borderRadius: 24, marginBottom: 12, borderWidth: 1, borderColor: "#F1F5F9" },
-  selectedCard: { borderColor: "#6366F1", backgroundColor: "#EEF2FF" },
+  selectedCard: { borderColor: "#6366F1", backgroundColor: "#EEF2FF", borderWidth: 2 },
   disabledCard: { backgroundColor: "#F1F5F9", opacity: 0.5, borderColor: "#E2E8F0" },
   classInfo: { flex: 1 },
   timeText: { fontSize: 16, fontWeight: "800", color: "#111827" },
@@ -418,24 +507,55 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 12, fontWeight: "bold", color: "#64748B" },
   selectedStatusText: { color: "#FFF" },
   disabledStatusText: { color: "#94A3B8" },
-  bookingBar: { position: "absolute", bottom: 30, left: 20, right: 20, backgroundColor: "#111827", borderRadius: 28, padding: 20, elevation: 10 },
-  bookingInfo: { flexDirection: "row", justifyContent: "space-between", marginBottom: 15 },
-  totalCount: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
-  resetText: { color: "#94A3B8" },
-  confirmBtn: { backgroundColor: "#6366F1", paddingVertical: 16, borderRadius: 20, alignItems: "center" },
-  confirmBtnText: { color: "#FFF", fontSize: 16, fontWeight: "800" },
-  // 🚀 모달 스타일 추가
+  disabledBadge: { backgroundColor: "#E2E8F0", borderColor: "#CBD5E1" },
+
+  footerWrapper: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  cartToggleHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  cartToggleText: { fontSize: 15, fontWeight: "700", color: "#1E293B" },
+  cartListContainer: { marginTop: 10, marginBottom: 20 },
+  cartItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F8FAFC",
+  },
+  cartItemName: { fontSize: 15, fontWeight: "700", color: "#1E293B" },
+  cartItemDesc: { fontSize: 13, color: "#6366F1", marginTop: 4, fontWeight: "700" },
+  deleteBtn: { padding: 4 },
+  payBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 },
+  resetText: { color: "#94A3B8", fontWeight: "600", paddingHorizontal: 10 },
+  mainActionBtn: { backgroundColor: "#6366F1", paddingHorizontal: 28, paddingVertical: 16, borderRadius: 16, flex: 1, marginLeft: 15, alignItems: "center" },
+  mainActionText: { color: "#FFF", fontSize: 16, fontWeight: "800" },
+
   modalContainer: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
   modalContent: { backgroundColor: "#FFF", padding: 25, borderTopLeftRadius: 30, borderTopRightRadius: 30 },
   modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 20, textAlign: "center" },
   modalItem: { padding: 20, backgroundColor: "#F1F5F9", borderRadius: 15, marginBottom: 10 },
   modalItemText: { fontSize: 16, fontWeight: "600", textAlign: "center" },
   closeBtn: { marginTop: 10, padding: 15, alignItems: "center" },
-
-  
-  disabledBadge: { 
-    backgroundColor: "#E2E8F0", 
-    borderColor: "#CBD5E1" 
-  },
-  
 });

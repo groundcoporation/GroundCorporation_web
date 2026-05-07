@@ -124,7 +124,7 @@ export default function AdminHomeScreen({ navigation }: any) {
           {renderGridMenu("신규 상담", "chatbubbles-outline", "#6366F1", "AdminConsultation", "상담 및 반배정")}
           {renderGridMenu("회원 관리", "person-add-outline", "#10B981", "AdminMember", "정보 및 수강권")}
           {renderGridMenu("예약 현황", "calendar-outline", "#F59E0B", "AdminSchedule", "출석 및 시간표")}
-          {renderGridMenu("지점 설정", "options-outline", "#64748B", "AdminSetting", "금액 및 정보수정")}
+          {renderGridMenu("이용권 설정", "options-outline", "#64748B", "AdminSetting", "이용권 및 가격")}
         </View>
 
         <TouchableOpacity style={styles.bannerCard} onPress={() => navigation.navigate("DriverDashboard")}>
