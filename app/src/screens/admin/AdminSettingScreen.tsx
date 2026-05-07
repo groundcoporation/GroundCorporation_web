@@ -91,6 +91,14 @@ export default function AdminPackageScreen() {
     fetchPackages(category.id);
   };
 
+  // 지점 스왑 로직
+  const toggleBranch = () => {
+    if (branches.length < 2) return;
+    const currentIndex = branches.findIndex((b) => b.id === selectedBranch);
+    const nextIndex = (currentIndex + 1) % branches.length;
+    setSelectedBranch(branches[nextIndex].id);
+  };
+
   // --- 🚀 삭제 로직 (카테고리 & 패키지) ---
 
   const deleteCategory = async (catId: string, catName: string) => {
@@ -213,16 +221,14 @@ export default function AdminPackageScreen() {
     if (!catForm.name) return Alert.alert("알림", "분류명 입력");
     const generatedId =
       catForm.name.toLowerCase().replace(/\s+/g, "_") + "_" + Date.now();
-    const { error } = await supabase
-      .from("package_categories")
-      .insert([
-        {
-          id: generatedId,
-          name: catForm.name,
-          display_order: parseInt(catForm.display_order),
-          branch_id: selectedBranch,
-        },
-      ]);
+    const { error } = await supabase.from("package_categories").insert([
+      {
+        id: generatedId,
+        name: catForm.name,
+        display_order: parseInt(catForm.display_order),
+        branch_id: selectedBranch,
+      },
+    ]);
     if (!error) {
       setIsCatModalVisible(false);
       setCatForm({ name: "", display_order: "1" });
@@ -259,6 +265,11 @@ export default function AdminPackageScreen() {
           <Text style={styles.headerSubtitle}>PRODUCT SETTINGS</Text>
           <Text style={styles.headerTitle}>🏫 {currentBranch?.name}</Text>
         </View>
+        {branches.length > 1 && (
+          <TouchableOpacity style={styles.branchToggle} onPress={toggleBranch}>
+            <Ionicons name="swap-horizontal" size={20} color="#6366F1" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* 📂 카테고리 리스트 (삭제 버튼 추가) */}
@@ -637,6 +648,14 @@ const styles = StyleSheet.create({
     padding: 15,
     backgroundColor: "#1E1B4B",
     borderRadius: 12,
+    alignItems: "center",
+  },
+  branchToggle: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
     alignItems: "center",
   },
 });
