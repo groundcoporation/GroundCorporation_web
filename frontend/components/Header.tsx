@@ -56,11 +56,7 @@ export default function Header() {
         onMouseLeave={() => setActiveMenu(null)}
       >
         <Link href="/">
-          <img
-            src="/GroundCoropration_web/resource/image/logo.png"
-            alt="Logo"
-            className="h-50"
-          />
+          <img src="/resource/image/logo.png" alt="Logo" className="h-50" />
         </Link>
 
         <nav className="hidden lg:flex gap-12 h-full items-center font-black text-[14px] uppercase tracking-tighter text-[#050a14]">

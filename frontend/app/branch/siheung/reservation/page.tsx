@@ -41,7 +41,12 @@ export default function SiheungBooking() {
   const [selectedTimeId, setSelectedTimeId] = useState<string | null>(null); // 예약할 수업 ID
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<any>(null); // 로그인 유저의 상세 정보 (나이, 지정반)
-
+  const startDay = new Date(
+    selectedDate.getFullYear(),
+    selectedDate.getMonth(),
+    1,
+  ).getDay();
+  const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   // [SECTION] 3. Data Fetching: Initial (초기 데이터 로드)
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -210,7 +215,7 @@ export default function SiheungBooking() {
             Siheung Branch
           </span>
           <Link
-            href="/"
+            href="/branch/siheung/main"
             className="text-xs font-black uppercase text-slate-400"
           >
             Close
@@ -218,14 +223,14 @@ export default function SiheungBooking() {
         </div>
       </header>
 
-      <main className="pt-[110px] px-[5%] md:px-[10%] max-w-6xl mx-auto">
+      <main className="pt-[110px] px-[5%] md:px-[5%] max-w-7xl mx-auto">
         {/* 이용권 카드 리스트 */}
         <section className="mb-12">
           <h2 className="text-xl font-black mb-6 flex items-center gap-2">
             <CheckCircle2 size={20} className="text-blue-500" /> 보유 중인
             이용권
           </h2>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {myPasses.length > 0 ? (
               myPasses.map((pass) => (
                 <div
@@ -237,127 +242,193 @@ export default function SiheungBooking() {
                       : "bg-white border-transparent text-slate-800"
                   }`}
                 >
-                  <span className="text-[10px] font-black px-2 py-1 rounded-md bg-white/20 mb-4 inline-block">
-                    ACTIVE
+                  <span className="text-[10px] font-black px-2 py-1 rounded-md bg-white/20 mb-4 inline-block uppercase tracking-wider">
+                    Active
                   </span>
-                  <h3 className="text-lg font-black uppercase italic">
+                  <h3 className="text-lg font-black uppercase italic leading-tight">
                     {pass.package_name}
                   </h3>
-                  <div className="text-3xl font-black mt-2">
+                  <div className="text-2xl font-black mt-2">
                     {pass.remaining_count} / {pass.total_count}회 남음
                   </div>
                 </div>
               ))
             ) : (
-              <div className="col-span-2 text-center py-10 bg-white rounded-[32px] border border-dashed text-slate-400">
+              <div className="col-span-full text-center py-10 bg-white rounded-[32px] border border-dashed border-slate-200 text-slate-400 font-bold">
                 로그인이 필요하거나 사용 가능한 이용권이 없습니다.
               </div>
             )}
           </div>
         </section>
 
-        <div className="grid lg:grid-cols-2 gap-10">
-          {/* 달력 섹션 */}
+        {/* 하단 2단 레이아웃을 1단 세로형으로 변경하여 가로폭 확보 */}
+        <div className="flex flex-col gap-12">
+          {/* 달력 섹션 - 가로폭 전체 사용 및 날짜 크기 확대 */}
           <section>
-            <h2 className="text-xl font-black mb-6 flex items-center gap-2">
-              <CalendarIcon size={20} className="text-blue-500" /> 예약 날짜
-            </h2>
-            <div className="bg-white rounded-[40px] p-8 shadow-sm border border-slate-100">
-              <div className="grid grid-cols-7 gap-3 text-center">
+            <div className="flex justify-between items-end mb-6">
+              <h2 className="text-xl font-black flex items-center gap-2">
+                <CalendarIcon size={22} className="text-blue-500" /> 예약 날짜
+                선택
+              </h2>
+              {/* 현재 연도와 월 표시 */}
+              <div className="text-right">
+                <span className="text-slate-400 text-xs font-bold block uppercase tracking-widest">
+                  {selectedDate.getFullYear()}
+                </span>
+                <span className="text-2xl font-black text-blue-600 uppercase italic">
+                  {selectedDate.toLocaleString("default", { month: "long" })}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[40px] p-6 md:p-10 shadow-sm border border-slate-100">
+              {/* 요일 헤더 */}
+              <div className="grid grid-cols-7 gap-2 mb-4 border-b border-slate-50 pb-4">
+                {daysOfWeek.map((day) => (
+                  <div
+                    key={day}
+                    className={`text-center text-[10px] font-black tracking-tighter ${day === "SUN" ? "text-red-400" : day === "SAT" ? "text-blue-400" : "text-slate-300"}`}
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* 날짜 그리드 */}
+              <div className="grid grid-cols-7 gap-2 md:gap-4">
+                {/* 1일 시작 전 빈 칸 채우기 */}
+                {Array.from({ length: startDay }).map((_, i) => (
+                  <div key={`empty-${i}`} className="aspect-square" />
+                ))}
+
+                {/* 실제 날짜들 */}
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(
-                  (day) => (
-                    <button
-                      key={day}
-                      onClick={() => {
-                        const newDate = new Date(selectedDate);
-                        newDate.setDate(day);
-                        setSelectedDate(newDate);
-                      }}
-                      className={`aspect-square rounded-2xl flex items-center justify-center text-sm font-bold transition-all ${
-                        selectedDate.getDate() === day
-                          ? "bg-blue-600 text-white scale-110 shadow-lg"
-                          : "hover:bg-blue-50"
-                      }`}
-                    >
-                      {day}
-                    </button>
-                  ),
+                  (day) => {
+                    const isSelected = selectedDate.getDate() === day;
+                    return (
+                      <button
+                        key={day}
+                        onClick={() => {
+                          const newDate = new Date(selectedDate);
+                          newDate.setDate(day);
+                          setSelectedDate(newDate);
+                        }}
+                        className={`relative aspect-square rounded-2xl md:rounded-3xl flex flex-col items-center justify-center transition-all ${
+                          isSelected
+                            ? "bg-blue-600 text-white shadow-xl shadow-blue-200 scale-105 z-10"
+                            : "bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-blue-600"
+                        }`}
+                      >
+                        <span className="text-base md:text-xl font-black">
+                          {day}
+                        </span>
+                        {/* 오늘 날짜 표시용 점 (필요시) */}
+                        {new Date().getDate() === day &&
+                          new Date().getMonth() === selectedDate.getMonth() &&
+                          !isSelected && (
+                            <div className="absolute bottom-2 w-1 h-1 bg-blue-400 rounded-full" />
+                          )}
+                      </button>
+                    );
+                  },
                 )}
               </div>
             </div>
           </section>
 
-          {/* 수업 목록 선택 섹션 */}
+          {/* 수업 목록 선택 섹션 - 가로폭을 넓게 쓰고 2열 그리드 적용 */}
           <section>
             <h2 className="text-xl font-black mb-6 flex items-center gap-2">
               <Clock size={20} className="text-blue-500" /> 예약 시간 선택
             </h2>
-            <div className="bg-white rounded-[40px] p-8 shadow-sm border border-slate-100 flex flex-col gap-3">
-              {availableTimes.length > 0 ? (
-                availableTimes.map((item) => {
-                  const canReserve = checkCanReserve(item);
-                  return (
-                    <button
-                      key={item.id}
-                      disabled={!canReserve}
-                      onClick={() => setSelectedTimeId(item.id)}
-                      className={`w-full p-5 rounded-2xl text-left transition-all border-2 flex justify-between items-center ${
-                        !canReserve
-                          ? "opacity-40 bg-slate-50 border-slate-100 cursor-not-allowed"
-                          : selectedTimeId === item.id
-                            ? "bg-slate-900 text-white border-slate-900 shadow-md"
-                            : "bg-white border-slate-50 hover:border-blue-200"
-                      }`}
-                    >
-                      <div>
-                        <div className="text-sm font-black">
+            <div className="bg-white rounded-[40px] p-6 md:p-10 shadow-sm border border-slate-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {availableTimes.length > 0 ? (
+                  availableTimes.map((item) => {
+                    const canReserve = checkCanReserve(item);
+                    return (
+                      <button
+                        key={item.id}
+                        disabled={!canReserve}
+                        onClick={() => setSelectedTimeId(item.id)}
+                        className={`relative w-full p-6 md:p-8 rounded-[28px] text-left transition-all border-2 flex flex-col gap-4 ${
+                          !canReserve
+                            ? "opacity-40 bg-slate-50 border-slate-100 cursor-not-allowed"
+                            : selectedTimeId === item.id
+                              ? "bg-slate-900 text-white border-slate-900 shadow-xl scale-[1.02]"
+                              : "bg-white border-slate-100 hover:border-blue-200 shadow-sm"
+                        }`}
+                      >
+                        {/* 상태 뱃지 (우측 상단 고정) */}
+                        <div className="absolute top-6 right-6">
+                          <div
+                            className={`text-[10px] font-black px-3 py-1 rounded-full border ${
+                              selectedTimeId === item.id
+                                ? "border-blue-400 text-blue-400"
+                                : "border-current opacity-60"
+                            }`}
+                          >
+                            {canReserve
+                              ? selectedTimeId === item.id
+                                ? "선택됨"
+                                : "예약가능"
+                              : "대상아님"}
+                          </div>
+                        </div>
+
+                        {/* 시간 정보 */}
+                        <div className="text-2xl md:text-3xl font-black tracking-tight">
                           {item.start_time.slice(0, 5)} -{" "}
                           {item.end_time.slice(0, 5)}
                         </div>
-                        <div className="text-xs opacity-60 font-bold">
-                          {item.target_class} ({item.min_age}~{item.max_age}세)
-                        </div>
-                      </div>
-                      <div className="text-[10px] font-black px-3 py-1 rounded-full border border-current">
-                        {canReserve
-                          ? selectedTimeId === item.id
-                            ? "선택됨"
-                            : "예약가능"
-                          : "대상아님"}
-                      </div>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="text-center py-20 text-slate-300 font-bold">
-                  해당 요일엔 수업이 없습니다.
-                </div>
-              )}
 
-              {/* 안내 문구 */}
-              <div className="bg-slate-50 rounded-2xl p-5 mt-4 border border-slate-100">
-                <h4 className="flex items-center gap-2 text-blue-600 font-black text-sm mb-2">
-                  <AlertCircle size={16} /> 예약 안내
-                </h4>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  • 반 배정 상담을 받은 학생만 본인의 반으로 예약이 가능합니다.
-                </p>
+                        {/* 클래스 정보 */}
+                        <div className="space-y-1">
+                          <div className="text-lg font-black leading-snug">
+                            {item.target_class}
+                          </div>
+                          <div className="text-sm opacity-60 font-bold">
+                            수강 대상: {item.min_age}~{item.max_age}세
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="col-span-full text-center py-24 text-slate-300 font-bold text-lg">
+                    선택하신 날짜에는 운영되는 수업이 없습니다.
+                  </div>
+                )}
               </div>
 
-              {/* 예약 확정 버튼 */}
-              <button
-                onClick={handleBooking}
-                disabled={!selectedTimeId || loading}
-                className={`w-full py-6 rounded-[25px] font-black text-lg mt-4 transition-all ${
-                  selectedTimeId
-                    ? "bg-blue-600 text-white shadow-xl shadow-blue-100 hover:bg-blue-700"
-                    : "bg-slate-100 text-slate-300 cursor-not-allowed"
-                }`}
-              >
-                {selectedTimeId
-                  ? `${selectedDate.getDate()}일 수업 예약 완료`
-                  : "수업을 선택해주세요"}
-              </button>
+              {/* 하단 정보 및 버튼 영역 */}
+              <div className="mt-12 space-y-4">
+                <div className="bg-slate-50 rounded-[25px] p-6 border border-slate-100">
+                  <h4 className="flex items-center gap-2 text-blue-600 font-black text-base mb-2">
+                    <AlertCircle size={18} /> 예약 시 주의사항
+                  </h4>
+                  <p className="text-sm text-slate-500 leading-relaxed font-medium">
+                    • 반 배정 상담을 받은 학생만 본인의 지정반 수업으로 예약이
+                    가능합니다.
+                    <br />• 수강 대상 나이가 일치하지 않거나 지정반 정보가 다를
+                    경우 '대상아님'으로 표시됩니다.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleBooking}
+                  disabled={!selectedTimeId || loading}
+                  className={`w-full py-8 rounded-[30px] font-black text-xl md:text-2xl transition-all ${
+                    selectedTimeId
+                      ? "bg-blue-600 text-white shadow-2xl shadow-blue-200 hover:bg-blue-700 active:scale-[0.98]"
+                      : "bg-slate-100 text-slate-300 cursor-not-allowed"
+                  }`}
+                >
+                  {selectedTimeId
+                    ? `${selectedDate.getDate()}일 수업 예약 확정하기`
+                    : "목록에서 수업 시간을 선택해주세요"}
+                </button>
+              </div>
             </div>
           </section>
         </div>

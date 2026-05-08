@@ -92,7 +92,7 @@ export default function HomePage() {
         {/* 배경 이미지: 4갈래로 정렬된 역동적인 종합 스포츠 이미지 */}
         <div className="absolute inset-0 w-full h-full opacity-50 scale-105">
           <img
-            src="/GroundCoropration_web/resource/image/hero_section_image.png"
+            src="/resource/image/hero_section_image.png"
             alt="Multi-Sports Action"
             className="w-full h-full object-cover object-center"
           />
@@ -117,7 +117,7 @@ export default function HomePage() {
             className="flex justify-center items-center"
           >
             <img
-              src="/GroundCoropration_web/resource/image/logo.png"
+              src="/resource/image/logo.png"
               alt="Ground Corporation Logo"
               className="w-[80%] md:w-full max-w-[700px] h-auto object-contain brightness-0 invert"
               /* brightness-0 invert: 로고가 어두운 색일 경우 흰색으로 반전시켜 히어로 섹션에서 돋보이게 함 */
@@ -309,11 +309,7 @@ export default function HomePage() {
       <footer className="bg-[#12151c] text-white px-[5%] py-24 font-sans border-t border-white/5">
         <div className="flex flex-col md:flex-row justify-between items-start gap-16 border-b border-white/10 pb-20">
           <div className="max-w-md text-left">
-            <img
-              src="/GroundCoropration_web/resource/image/logo.png"
-              alt="Logo"
-              className="h-40"
-            />
+            <img src="/resource/image/logo.png" alt="Logo" className="h-40" />
             <p className="text-white/40 font-medium leading-relaxed text-xs text-white/40">
               (주)그라운드코퍼레이션 | 대표이사: 김강태 <br />
               본사: 경기도 시흥시 배곧지구 내 프리미엄 센터 <br />
