@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 // supabase 클라이언트가 설정되어 있다고 가정합니다.
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function SiheungBranch() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -165,7 +165,7 @@ export default function SiheungBranch() {
               </div>
             ) : (
               <Link
-                href="/login"
+                href="/auth/login"
                 className="flex items-center gap-2 px-5 py-2.5 rounded-full font-black text-[13px] text-[#1a3021] border-2 border-[#1a3021] hover:bg-[#1a3021] hover:text-white transition-all uppercase tracking-tighter"
               >
                 <User size={16} />

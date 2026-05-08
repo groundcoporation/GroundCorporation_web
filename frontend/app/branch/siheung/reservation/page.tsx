@@ -1,73 +1,217 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { useAOS } from "@/hooks/useAOS";
 import {
   Calendar as CalendarIcon,
   Clock,
   CheckCircle2,
   AlertCircle,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 
-// 보유 이용권 데이터 타입
+// [SECTION] 1. Type Definition (데이터 구조 정의)
 interface MyPass {
-  id: number;
-  name: string;
-  remaining: number;
-  total: number;
-  expiryDate: string;
+  id: string;
+  package_name: string;
+  remaining_count: number;
+  total_count: number;
+  expiry_date: string;
+}
+
+interface Schedule {
+  id: string;
+  target_class: string;
+  start_time: string;
+  end_time: string;
+  min_age: number;
+  max_age: number;
+  is_active: boolean;
 }
 
 export default function SiheungBooking() {
   useAOS();
-  const [selectedDate, setSelectedDate] = useState<number>(
-    new Date().getDate(),
-  );
-  const [selectedPass, setSelectedPass] = useState<number>(1);
-  const [selectedTime, setSelectedTime] = useState<string>("");
 
-  // 1. 시흥 지점 보유 이용권 리스트 (Mock Data)
-  const myPasses: MyPass[] = [
-    {
-      id: 1,
-      name: "시흥 엘리트 유소년반 (주 2회)",
-      remaining: 12,
-      total: 20,
-      expiryDate: "2026.08.15",
-    },
-    {
-      id: 2,
-      name: "성인 야간 정기 대관",
-      remaining: 3,
-      total: 4,
-      expiryDate: "2026.05.30",
-    },
-  ];
+  // [SECTION] 2. State Management (상태 관리)
+  const [myPasses, setMyPasses] = useState<MyPass[]>([]); // 보유 이용권 목록
+  const [availableTimes, setAvailableTimes] = useState<Schedule[]>([]); // 선택 날짜의 수업 목록
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date()); // 달력에서 선택된 날짜
+  const [selectedPass, setSelectedPass] = useState<string | null>(null); // 사용할 이용권 ID
+  const [selectedTimeId, setSelectedTimeId] = useState<string | null>(null); // 예약할 수업 ID
+  const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<any>(null); // 로그인 유저의 상세 정보 (나이, 지정반)
 
-  // 2. 예약 가능 시간 (시흥 지점 스케줄)
-  const availableTimes = ["10:00", "13:00", "15:00", "17:00", "19:00", "21:00"];
+  // [SECTION] 3. Data Fetching: Initial (초기 데이터 로드)
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      setLoading(true);
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      if (authUser) {
+        // [Step 1] 유저 프로필 조회 (예약 제한 조건인 '지정반' 및 '생년월일' 확인용)
+        const { data: profile } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", authUser.id)
+          .single();
+        setUserProfile(profile);
+
+        // [Step 2] 시흥 지점의 활성화된 이용권 조회
+        const { data: passes, error } = await supabase
+          .from("user_packages")
+          .select("*")
+          .eq("user_id", authUser.id)
+          .eq("branch_id", "branch_1") // 시흥점 ID 고정
+          .eq("status", "active")
+          .gt("remaining_count", 0); // 잔여 횟수가 1회 이상인 것만
+
+        if (!error && passes) {
+          const typedPasses: MyPass[] = passes as MyPass[];
+          setMyPasses(typedPasses);
+          if (typedPasses.length > 0) {
+            setSelectedPass(typedPasses[0].id); // 첫 번째 이용권 자동 선택
+          }
+        }
+      }
+      setLoading(false);
+    };
+    fetchInitialData();
+  }, []);
+
+  // [SECTION] 4. Data Fetching: Schedules (수업 목록 로드)
+  const fetchSchedules = useCallback(async () => {
+    // DB의 요일 형식이 한글("월", "화"...)이므로 해당 날짜의 요일을 한글로 추출
+    const days = ["일", "월", "화", "수", "목", "금", "토"];
+    const dayName = days[selectedDate.getDay()];
+
+    const { data, error } = await supabase
+      .from("class_schedules")
+      .select("*")
+      .eq("branch_id", "branch_1")
+      .eq("day_of_week", dayName) // 선택한 요일에 해당하는 수업만 필터링
+      .eq("is_active", true)
+      .order("start_time", { ascending: true });
+
+    if (!error && data) {
+      setAvailableTimes(data as Schedule[]);
+    } else {
+      setAvailableTimes([]);
+    }
+    setSelectedTimeId(null); // 날짜가 바뀌면 기존 선택된 시간 초기화
+  }, [selectedDate]);
+
+  useEffect(() => {
+    fetchSchedules();
+  }, [fetchSchedules]);
+
+  // [SECTION] 5. Logic: Validation (예약 가능 여부 판단)
+  /**
+   * 나이 계산 함수: 8자리 생년월일을 기준으로 한국 나이 계산
+   */
+  const calculateAge = (birthDate: string | null) => {
+    if (!birthDate || birthDate.length !== 8) return 0;
+    const year = parseInt(birthDate.substring(0, 4));
+    return new Date().getFullYear() - year + 1;
+  };
+
+  /**
+   * 수강 대상 체크 로직 (앱 로직과 동일)
+   * 1. 유저에게 '지정반(target_class)'이 있다면 해당 수업만 예약 가능
+   * 2. 지정반이 없다면 나이 제한(min_age ~ max_age) 이내인 수업만 가능
+   */
+  const checkCanReserve = (item: Schedule) => {
+    if (!userProfile) return false;
+
+    if (userProfile.target_class && userProfile.target_class.trim() !== "") {
+      return userProfile.target_class === item.target_class;
+    }
+
+    const age = calculateAge(userProfile.birth_date);
+    return age >= item.min_age && age <= item.max_age;
+  };
+
+  // [SECTION] 6. Main Logic: Booking (예약 실행)
+  const handleBooking = async () => {
+    if (!userProfile || !selectedPass || !selectedTimeId) return;
+
+    const currentPass = myPasses.find((p) => p.id === selectedPass);
+    const selectedTime = availableTimes.find((t) => t.id === selectedTimeId);
+
+    // 횟수 재검증
+    if (!currentPass || currentPass.remaining_count <= 0) {
+      alert("잔여 횟수가 부족합니다.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `${selectedDate.getDate()}일 ${selectedTime?.start_time.slice(0, 5)} 수업을 예약하시겠습니까?`,
+      )
+    )
+      return;
+
+    try {
+      // [Step 1] 이용권 횟수 차감
+      const { error: updateError } = await supabase
+        .from("user_packages")
+        .update({ remaining_count: currentPass.remaining_count - 1 } as never)
+        .eq("id", selectedPass);
+
+      if (updateError) throw updateError;
+
+      // [Step 2] 예약 내역(Reservations) 생성
+      const { error: insertError } = await supabase
+        .from("reservations")
+        .insert([
+          {
+            user_id: userProfile.id,
+            package_id: selectedPass,
+            schedule_id: selectedTimeId,
+            class_date: selectedDate.toISOString().split("T")[0],
+            branch_id: "branch_1",
+            status: "pending",
+            attendance_status: "yet",
+            child_name: userProfile.name, // 웹은 현재 로그인한 사용자 본인 이름 기준
+          } as never,
+        ]);
+
+      if (insertError) throw insertError;
+
+      alert("예약이 정상적으로 완료되었습니다!");
+      window.location.reload(); // 데이터 갱신을 위해 리로드
+    } catch (err: any) {
+      alert("예약 처리 중 오류가 발생했습니다.");
+    }
+  };
+
+  // [SECTION] 7. UI Rendering
+  const daysInMonth = new Date(
+    selectedDate.getFullYear(),
+    selectedDate.getMonth() + 1,
+    0,
+  ).getDate();
 
   return (
     <div className="bg-[#f8fafc] min-h-screen text-[#0f172a] font-sans pb-20">
-      {/* Header: 시흥 지점 블루 테마 */}
+      {/* Header 영역 */}
       <header className="fixed top-0 w-full h-[70px] flex justify-between items-center px-[5%] z-[1000] bg-white/90 backdrop-blur-md border-b border-blue-100">
         <Link href="/">
           <img
-            src="/resource/image/logo.png" // 시흥은 기존 메인 로고 사용
+            src="/resource/image/logo.png"
             alt="Logo"
             className="h-6 md:h-7"
           />
         </Link>
         <div className="flex items-center gap-4">
-          <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-widest border border-blue-100">
+          <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full uppercase border border-blue-100">
             Siheung Branch
           </span>
           <Link
             href="/"
-            className="text-xs font-black uppercase text-slate-400 hover:text-blue-600 transition-colors"
+            className="text-xs font-black uppercase text-slate-400"
           >
             Close
           </Link>
@@ -75,166 +219,149 @@ export default function SiheungBooking() {
       </header>
 
       <main className="pt-[110px] px-[5%] md:px-[10%] max-w-6xl mx-auto">
-        {/* SECTION 1: 보유 이용권 (시흥 블루 테마) */}
-        <section className="mb-12" data-aos="fade-down">
+        {/* 이용권 카드 리스트 */}
+        <section className="mb-12">
           <h2 className="text-xl font-black mb-6 flex items-center gap-2">
             <CheckCircle2 size={20} className="text-blue-500" /> 보유 중인
             이용권
           </h2>
           <div className="grid gap-4 md:grid-cols-2">
-            {myPasses.map((pass) => (
-              <div
-                key={pass.id}
-                onClick={() => setSelectedPass(pass.id)}
-                className={`cursor-pointer p-7 rounded-[32px] transition-all border-2 ${
-                  selectedPass === pass.id
-                    ? "bg-blue-600 text-white border-blue-600 shadow-xl shadow-blue-200"
-                    : "bg-white border-transparent text-slate-800 shadow-sm hover:border-blue-200"
-                }`}
-              >
-                <div className="flex justify-between items-start mb-5">
-                  <span
-                    className={`text-[10px] font-black px-2.5 py-1 rounded-lg ${
-                      selectedPass === pass.id
-                        ? "bg-white/20 text-white"
-                        : "bg-blue-50 text-blue-600"
-                    }`}
-                  >
-                    ACTIVE PASS
+            {myPasses.length > 0 ? (
+              myPasses.map((pass) => (
+                <div
+                  key={pass.id}
+                  onClick={() => setSelectedPass(pass.id)}
+                  className={`cursor-pointer p-7 rounded-[32px] transition-all border-2 ${
+                    selectedPass === pass.id
+                      ? "bg-blue-600 text-white border-blue-600 shadow-xl"
+                      : "bg-white border-transparent text-slate-800"
+                  }`}
+                >
+                  <span className="text-[10px] font-black px-2 py-1 rounded-md bg-white/20 mb-4 inline-block">
+                    ACTIVE
                   </span>
-                  <span
-                    className={`text-xs font-bold ${selectedPass === pass.id ? "text-white/60" : "text-slate-400"}`}
-                  >
-                    유효기간: {pass.expiryDate}
-                  </span>
+                  <h3 className="text-lg font-black uppercase italic">
+                    {pass.package_name}
+                  </h3>
+                  <div className="text-3xl font-black mt-2">
+                    {pass.remaining_count} / {pass.total_count}회 남음
+                  </div>
                 </div>
-                <h3 className="text-lg font-black mb-3 italic uppercase">
-                  {pass.name}
-                </h3>
-                <div className="flex items-end gap-1">
-                  <span
-                    className={`text-4xl font-black ${selectedPass === pass.id ? "text-white" : "text-blue-600"}`}
-                  >
-                    {pass.remaining}
-                  </span>
-                  <span
-                    className={`text-sm font-bold mb-1.5 ${selectedPass === pass.id ? "text-white/60" : "text-slate-400"}`}
-                  >
-                    / {pass.total}회 남음
-                  </span>
-                </div>
+              ))
+            ) : (
+              <div className="col-span-2 text-center py-10 bg-white rounded-[32px] border border-dashed text-slate-400">
+                로그인이 필요하거나 사용 가능한 이용권이 없습니다.
               </div>
-            ))}
+            )}
           </div>
         </section>
 
         <div className="grid lg:grid-cols-2 gap-10">
-          {/* SECTION 2: 캘린더 (시흥 블루 스타일) */}
-          <section data-aos="fade-right">
+          {/* 달력 섹션 */}
+          <section>
             <h2 className="text-xl font-black mb-6 flex items-center gap-2">
               <CalendarIcon size={20} className="text-blue-500" /> 예약 날짜
-              선택
             </h2>
             <div className="bg-white rounded-[40px] p-8 shadow-sm border border-slate-100">
-              <div className="flex justify-between items-center mb-8 px-2">
-                <h3 className="text-2xl font-black tracking-tighter uppercase italic">
-                  May 2026
-                </h3>
-                <div className="flex gap-1">
-                  <button className="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-400 hover:text-blue-600">
-                    <ChevronLeft size={20} />
-                  </button>
-                  <button className="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-400 hover:text-blue-600">
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-7 gap-2 text-center mb-6 text-[11px] font-black text-slate-300">
-                {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((d) => (
-                  <div key={d} className="tracking-widest">
-                    {d}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-3">
-                {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                  <button
-                    key={day}
-                    onClick={() => setSelectedDate(day)}
-                    className={`aspect-square rounded-2xl flex items-center justify-center text-sm font-bold transition-all ${
-                      selectedDate === day
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-200 scale-110"
-                        : "text-slate-600 hover:bg-blue-50 hover:text-blue-600"
-                    }`}
-                  >
-                    {day}
-                  </button>
-                ))}
+              <div className="grid grid-cols-7 gap-3 text-center">
+                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(
+                  (day) => (
+                    <button
+                      key={day}
+                      onClick={() => {
+                        const newDate = new Date(selectedDate);
+                        newDate.setDate(day);
+                        setSelectedDate(newDate);
+                      }}
+                      className={`aspect-square rounded-2xl flex items-center justify-center text-sm font-bold transition-all ${
+                        selectedDate.getDate() === day
+                          ? "bg-blue-600 text-white scale-110 shadow-lg"
+                          : "hover:bg-blue-50"
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  ),
+                )}
               </div>
             </div>
           </section>
 
-          {/* SECTION 3: 시간 선택 및 주의사항 */}
-          <section data-aos="fade-left">
+          {/* 수업 목록 선택 섹션 */}
+          <section>
             <h2 className="text-xl font-black mb-6 flex items-center gap-2">
               <Clock size={20} className="text-blue-500" /> 예약 시간 선택
             </h2>
-            <div className="bg-white rounded-[40px] p-8 shadow-sm border border-slate-100 flex flex-col h-full">
-              <div className="grid grid-cols-3 gap-3 mb-10">
-                {availableTimes.map((time) => (
-                  <button
-                    key={time}
-                    onClick={() => setSelectedTime(time)}
-                    className={`py-4 rounded-2xl font-black text-sm transition-all border-2 ${
-                      selectedTime === time
-                        ? "bg-slate-900 text-white border-slate-900 shadow-lg"
-                        : "bg-white border-slate-50 text-slate-400 hover:border-blue-200 hover:text-blue-600"
-                    }`}
-                  >
-                    {time}
-                  </button>
-                ))}
-              </div>
+            <div className="bg-white rounded-[40px] p-8 shadow-sm border border-slate-100 flex flex-col gap-3">
+              {availableTimes.length > 0 ? (
+                availableTimes.map((item) => {
+                  const canReserve = checkCanReserve(item);
+                  return (
+                    <button
+                      key={item.id}
+                      disabled={!canReserve}
+                      onClick={() => setSelectedTimeId(item.id)}
+                      className={`w-full p-5 rounded-2xl text-left transition-all border-2 flex justify-between items-center ${
+                        !canReserve
+                          ? "opacity-40 bg-slate-50 border-slate-100 cursor-not-allowed"
+                          : selectedTimeId === item.id
+                            ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                            : "bg-white border-slate-50 hover:border-blue-200"
+                      }`}
+                    >
+                      <div>
+                        <div className="text-sm font-black">
+                          {item.start_time.slice(0, 5)} -{" "}
+                          {item.end_time.slice(0, 5)}
+                        </div>
+                        <div className="text-xs opacity-60 font-bold">
+                          {item.target_class} ({item.min_age}~{item.max_age}세)
+                        </div>
+                      </div>
+                      <div className="text-[10px] font-black px-3 py-1 rounded-full border border-current">
+                        {canReserve
+                          ? selectedTimeId === item.id
+                            ? "선택됨"
+                            : "예약가능"
+                          : "대상아님"}
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="text-center py-20 text-slate-300 font-bold">
+                  해당 요일엔 수업이 없습니다.
+                </div>
+              )}
 
-              {/* 주의사항 (시흥 스타일: Soft Blue/Slate) */}
-              <div className="bg-slate-50 rounded-[30px] p-7 mb-10 border border-slate-100">
-                <h4 className="flex items-center gap-2 text-blue-600 font-black text-sm mb-4">
-                  <AlertCircle size={16} /> 시흥점 예약 필독 사항
+              {/* 안내 문구 */}
+              <div className="bg-slate-50 rounded-2xl p-5 mt-4 border border-slate-100">
+                <h4 className="flex items-center gap-2 text-blue-600 font-black text-sm mb-2">
+                  <AlertCircle size={16} /> 예약 안내
                 </h4>
-                <ul className="text-[13px] text-slate-500 space-y-2.5 font-bold leading-relaxed">
-                  <li className="flex gap-2">
-                    <span>•</span> 수업 1일 전까지만 취소 및 변경이 가능합니다.
-                  </li>
-                  <li className="flex gap-2 text-red-400">
-                    <span>•</span> 당일 취소 시 이용권 1회가 자동 차감됩니다.
-                  </li>
-                  <li className="flex gap-2">
-                    <span>•</span> 쾌적한 환경을 위해 실내 전용 풋살화를
-                    권장합니다.
-                  </li>
-                </ul>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  • 반 배정 상담을 받은 학생만 본인의 반으로 예약이 가능합니다.
+                </p>
               </div>
 
+              {/* 예약 확정 버튼 */}
               <button
-                disabled={!selectedTime}
-                className={`mt-auto w-full py-6 rounded-[25px] font-black text-lg transition-all ${
-                  selectedTime
-                    ? "bg-blue-600 text-white shadow-2xl shadow-blue-200 hover:bg-blue-700 hover:scale-[1.02]"
+                onClick={handleBooking}
+                disabled={!selectedTimeId || loading}
+                className={`w-full py-6 rounded-[25px] font-black text-lg mt-4 transition-all ${
+                  selectedTimeId
+                    ? "bg-blue-600 text-white shadow-xl shadow-blue-100 hover:bg-blue-700"
                     : "bg-slate-100 text-slate-300 cursor-not-allowed"
                 }`}
               >
-                {selectedTime
-                  ? `${selectedDate}일 ${selectedTime} 예약 완료하기`
-                  : "날짜와 시간을 선택해주세요"}
+                {selectedTimeId
+                  ? `${selectedDate.getDate()}일 수업 예약 완료`
+                  : "수업을 선택해주세요"}
               </button>
             </div>
           </section>
         </div>
       </main>
-
-      <footer className="mt-20 text-center opacity-30 text-[10px] font-black uppercase tracking-[0.5em] text-slate-400">
-        &copy; Ground Siheung Branch Schedule System
-      </footer>
     </div>
   );
 }
