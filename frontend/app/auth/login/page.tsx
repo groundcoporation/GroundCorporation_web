@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import React, { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -16,10 +18,9 @@ export default function LoginPage() {
   const router = useRouter();
 
   // [SECTION] 2. Utilities (배포 환경 설정)
+  // 수정 후 (Vercel 배포용)
   const getBasePath = () => {
-    return process.env.NODE_ENV === "production"
-      ? "/GroundCoropration_web"
-      : "";
+    return ""; // 무조건 빈 문자열로 바꿉니다.
   };
 
   // [SECTION] 3. Auth Logic (로그인 처리 로직)

@@ -15,6 +15,7 @@ import {
   Mail,
 } from "lucide-react";
 import Link from "next/link";
+import Header from "@/components/Header";
 
 export default function AgencyPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -30,44 +31,7 @@ export default function AgencyPage() {
   return (
     <div className="bg-white text-[#050a14] font-sans overflow-x-hidden">
       {/* --- 1. 헤더 (Header) --- */}
-      <header className="fixed top-0 w-full h-[80px] flex justify-between items-center px-[5%] z-[1000] bg-white/90 backdrop-blur-md border-b border-gray-100">
-        <Link href="/">
-          <img src="/resource/image/logo.png" alt="Logo" className="h-7" />
-        </Link>
-        <nav className="hidden lg:flex gap-10 font-black text-[14px] uppercase tracking-tighter text-[#050a14]">
-          <Link
-            href="/#about"
-            className="hover:text-blue-600 transition-colors"
-          >
-            기업 개요
-          </Link>
-          <Link
-            href="/#business"
-            className="hover:text-blue-600 transition-colors"
-          >
-            사업 영역
-          </Link>
-          <Link
-            href="/branch/siheung/main"
-            className="text-blue-500 hover:text-blue-700"
-          >
-            슈팅스타
-          </Link>
-          <Link
-            href="http://vog-sports.com/"
-            target="_blank"
-            className="hover:text-blue-600"
-          >
-            V.O.G SHOP
-          </Link>
-        </nav>
-        <button
-          onClick={() => toggleSidebar(true)}
-          className="p-2 hover:bg-gray-100 rounded-full transition-all"
-        >
-          <Menu size={26} />
-        </button>
-      </header>
+      <Header />
 
       {/* --- 2. 사이드바 (Sidebar) --- */}
       <div
