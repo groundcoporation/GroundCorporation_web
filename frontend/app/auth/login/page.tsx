@@ -1,42 +1,67 @@
 "use client";
 
 import React, { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
+import { User, Lock, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  // [SECTION] 1. State & Hooks (상태 관리 및 훅)
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const router = useRouter();
 
-  // 배포 환경과 로컬 환경의 basePath 대응
+  // [SECTION] 2. Utilities (배포 환경 설정)
   const getBasePath = () => {
     return process.env.NODE_ENV === "production"
       ? "/GroundCoropration_web"
       : "";
   };
 
+  // [SECTION] 3. Auth Logic (로그인 처리 로직)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg("");
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      let loginEmail = identifier.trim();
+
+      // [Sub-Logic] 아이디 로그인일 경우 이메일 추출
+      if (!loginEmail.includes("@")) {
+        const { data: userData, error: userError } = await supabase
+          .from("users")
+          .select("email")
+          .eq("username", loginEmail)
+          .maybeSingle<{ email: string }>();
+
+        if (userError || !userData) {
+          setErrorMsg("존재하지 않는 아이디입니다.");
+          setLoading(false);
+          return;
+        }
+        loginEmail = userData.email;
+      }
+
+      // [Sub-Logic] Supabase 최종 인증
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: password,
       });
 
-      if (error) throw error;
+      if (authError) {
+        setErrorMsg("아이디 또는 비밀번호가 일치하지 않습니다.");
+        setLoading(false);
+        return;
+      }
 
-      // 로그인 성공 시 메인 페이지로 이동
-      router.push(`${getBasePath()}/`);
+      router.push("/");
     } catch (error: any) {
-      setErrorMsg(error.message || "로그인 중 오류가 발생했습니다.");
+      setErrorMsg("로그인 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -45,6 +70,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#f2efe9] flex items-center justify-center px-5 py-20">
       <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 border border-black/5">
+        {/* [UI] 상단 헤더 & 로고 */}
         <div className="text-center mb-10">
           <Link href="/">
             <img
@@ -61,33 +87,36 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* [UI] 로그인 입력 폼 */}
         <form onSubmit={handleLogin} className="space-y-6">
           {errorMsg && (
-            <div className="bg-red-50 text-red-500 p-4 rounded-2xl text-sm font-bold border border-red-100">
+            <div className="bg-red-50 text-red-500 p-4 rounded-2xl text-sm font-bold border border-red-100 text-center">
               {errorMsg}
             </div>
           )}
 
+          {/* 아이디/이메일 입력 구역 */}
           <div className="space-y-2">
             <label className="text-[12px] font-black text-[#1a3021] uppercase ml-2">
-              Email Address
+              ID / Email
             </label>
             <div className="relative">
-              <Mail
+              <User
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
                 size={20}
               />
               <input
-                type="email"
-                placeholder="example@email.com"
+                type="text"
+                placeholder="아이디 또는 이메일"
                 className="w-full bg-[#f8f6f2] border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-[#d35400] transition-all font-medium"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
               />
             </div>
           </div>
 
+          {/* 비밀번호 입력 구역 */}
           <div className="space-y-2">
             <label className="text-[12px] font-black text-[#1a3021] uppercase ml-2">
               Password
@@ -98,16 +127,24 @@ export default function LoginPage() {
                 size={20}
               />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
-                className="w-full bg-[#f8f6f2] border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-[#d35400] transition-all font-medium"
+                className="w-full bg-[#f8f6f2] border-none rounded-2xl py-4 pl-12 pr-12 focus:ring-2 focus:ring-[#d35400] transition-all font-medium"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
             </div>
           </div>
 
+          {/* 로그인 실행 버튼 */}
           <button
             type="submit"
             disabled={loading}
@@ -123,7 +160,8 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-10 text-center space-y-4">
+        {/* [UI] 하단 안내 링크 */}
+        <div className="mt-10 text-center">
           <p className="text-gray-400 font-bold text-sm">
             아직 회원이 아니신가요?{" "}
             <Link

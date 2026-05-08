@@ -118,7 +118,7 @@ export default function YeongjongBranch() {
         {/* 우측 버튼 세션 */}
         <div className="flex items-center gap-3">
           <Link
-            href="/login"
+            href="/auth/login"
             className="hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-full font-black text-[13px] text-[#1b4332] border-2 border-[#1b4332] hover:bg-[#1b4332] hover:text-white transition-all uppercase"
           >
             <User size={16} />

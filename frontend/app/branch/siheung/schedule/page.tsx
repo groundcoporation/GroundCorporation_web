@@ -1,202 +1,401 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
 import AOS from "aos";
 import "aos/dist/aos.css";
 import {
-  Calendar,
+  Calendar as CalendarIcon,
   Clock,
-  Download,
-  Maximize2,
-  Info,
+  User,
   CheckCircle2,
+  Info,
+  Loader2,
   ChevronRight,
+  X,
+  Ticket,
 } from "lucide-react";
-import Link from "next/link";
+import { format } from "date-fns";
+import { ko } from "date-fns/locale";
 
-export default function SiheungSchedule() {
-  const [isZoomed, setIsZoomed] = useState(false);
+// --- 인터페이스 정의 ---
+interface Schedule {
+  id: string;
+  start_time: string;
+  end_time: string;
+  target_class: string;
+  min_age: number;
+  max_age: number;
+  branch_id: string;
+}
+interface Child {
+  id: string;
+  child_name: string;
+  child_birth: string;
+  target_class?: string;
+}
+interface UserPackage {
+  id: string;
+  package_name: string;
+  remaining_count: number;
+}
+interface ReservationInsert {
+  branch_id: string;
+  user_id: string;
+  child_id: string;
+  child_name: string;
+  schedule_id: string;
+  package_id: string;
+  class_date: string;
+  status: string;
+  attendance_status: string;
+}
+
+export default function ReservationPage() {
+  const router = useRouter();
+  const [selectedDate, setSelectedDate] = useState<string>(
+    format(new Date(), "yyyy-MM-dd"),
+  );
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [cart, setCart] = useState<Schedule[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [allChildren, setAllChildren] = useState<Child[]>([]);
+  const [selectedChild, setSelectedChild] = useState<Child | null>(null);
+  const [availablePackages, setAvailablePackages] = useState<UserPackage[]>([]);
+  const [modalStep, setModalStep] = useState<"none" | "child" | "package">(
+    "none",
+  );
 
   useEffect(() => {
-    AOS.init({ duration: 1000, once: true });
+    AOS.init({ duration: 800 });
+    fetchInitialData();
   }, []);
 
-  // 실제 시간표 이미지 경로 (현재는 샘플 이미지입니다)
-  const scheduleImageUrl =
-    "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?q=80&w=2000";
+  useEffect(() => {
+    fetchSchedules();
+  }, [selectedDate]);
+
+  const fetchInitialData = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      setCurrentUser(profile);
+      const { data: children } = await supabase
+        .from("children")
+        .select("*")
+        .eq("parent_id", user.id);
+      if (children && children.length > 0) {
+        setAllChildren(children as Child[]);
+        setSelectedChild(children[0] as Child);
+      }
+    }
+  };
+
+  const fetchSchedules = async () => {
+    setLoading(true);
+    const dayName = format(new Date(selectedDate), "eeeeee", { locale: ko });
+    const { data } = await supabase
+      .from("class_schedules")
+      .select("*")
+      .eq("day_of_week", dayName)
+      .eq("is_active", true)
+      .order("start_time", { ascending: true });
+    setSchedules((data as Schedule[]) || []);
+    setLoading(false);
+  };
+
+  const calculateAge = (birthDate?: string) => {
+    if (!birthDate || birthDate.length < 4) return 0;
+    const year = parseInt(birthDate.substring(0, 4));
+    return new Date().getFullYear() - year + 1;
+  };
+
+  const handleSelectClass = (item: Schedule) => {
+    const isSelected = cart.find((c) => c.id === item.id);
+    if (isSelected) {
+      setCart(cart.filter((c) => c.id !== item.id));
+    } else {
+      setCart([...cart, item]);
+    }
+  };
+
+  const handleStartBooking = () => {
+    if (allChildren.length > 1) setModalStep("child");
+    else checkPackagesForChild(allChildren[0]);
+  };
+
+  const checkPackagesForChild = async (child: Child) => {
+    setSelectedChild(child);
+    const { data: pkgs } = await supabase
+      .from("user_packages")
+      .select("id, package_name, remaining_count")
+      .eq("user_id", currentUser.id)
+      .eq("status", "active")
+      .gt("remaining_count", 0);
+    if (!pkgs || pkgs.length === 0) {
+      alert("사용 가능한 이용권이 없습니다.");
+      setModalStep("none");
+      return;
+    }
+    if (pkgs.length > 1) {
+      setAvailablePackages(pkgs as UserPackage[]);
+      setModalStep("package");
+    } else {
+      processFinalReservation(child, pkgs[0] as UserPackage);
+    }
+  };
+
+  const processFinalReservation = async (child: Child, pkg: UserPackage) => {
+    if (pkg.remaining_count < cart.length) {
+      alert(`잔여 횟수가 부족합니다. (현재 ${pkg.remaining_count}회)`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const reservationData: ReservationInsert[] = cart.map((item) => ({
+        branch_id: item.branch_id || currentUser.branch_id,
+        user_id: currentUser.id,
+        child_id: child.id,
+        child_name: child.child_name,
+        schedule_id: item.id,
+        package_id: pkg.id,
+        class_date: selectedDate,
+        status: "pending",
+        attendance_status: "yet",
+      }));
+
+      // 🚀 (supabase as any)를 통해 never 형식 에러 완벽 해결
+      const { error: insErr } = await (supabase as any)
+        .from("reservations")
+        .insert(reservationData);
+      if (insErr) throw insErr;
+
+      const { error: updErr } = await (supabase as any)
+        .from("user_packages")
+        .update({ remaining_count: pkg.remaining_count - cart.length })
+        .eq("id", pkg.id);
+      if (updErr) throw updErr;
+
+      router.push("/branch/siheung/reservation/success");
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || "예약 중 오류가 발생했습니다.");
+    } finally {
+      setIsSubmitting(false);
+      setModalStep("none");
+    }
+  };
+
+  const targetAge = calculateAge(
+    selectedChild?.child_birth || currentUser?.birth_date,
+  );
 
   return (
-    <div className="bg-[#f2efe9] text-[#1a3021] font-sans min-h-screen">
-      {/* --- 상단 타이틀 --- */}
-      <section className="pt-48 pb-16 px-[5%] md:px-[10%] text-center">
-        <div data-aos="fade-down">
-          <span className="text-[#d35400] font-black tracking-[0.4em] text-xs uppercase italic mb-6 block">
-            Training Program
-          </span>
-          <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.9] mb-8 text-[#1a3021]">
-            WEEKLY
-            <br />
-            <span className="text-[#d35400]">SCHEDULE</span>
-          </h1>
-          <p className="text-gray-500 font-bold text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
-            연령별, 수준별 체계적으로 짜여진 시흥 본점의{" "}
-            <br className="hidden md:block" />
-            최신 수업 시간표를 확인하세요.
-          </p>
-        </div>
-      </section>
-
-      {/* --- 시간표 이미지 섹션 (사용자 요청 사항) --- */}
-      <section className="px-[5%] md:px-[10%] pb-24 max-w-[1440px] mx-auto">
+    <div className="bg-[#f2efe9] text-[#1a3021] min-h-screen pt-32 pb-20 font-sans">
+      <div className="max-w-6xl mx-auto px-[5%]">
         <div
-          className="relative group cursor-pointer overflow-hidden rounded-[40px] shadow-2xl bg-white p-4 md:p-8 border border-black/5"
-          data-aos="zoom-in"
-          onClick={() => setIsZoomed(!isZoomed)}
+          className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6"
+          data-aos="fade-up"
         >
-          {/* 이미지 오버레이 (호버 시 안내) */}
-          <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
-            <div className="bg-white/90 backdrop-blur-md px-6 py-3 rounded-full flex items-center gap-2 font-black text-sm shadow-xl">
-              <Maximize2 size={18} className="text-[#d35400]" />
-              이미지 확대해서 보기
-            </div>
-          </div>
-
-          {/* 실제 시간표 이미지 */}
-          <img
-            src={scheduleImageUrl}
-            alt="시흥 본점 수업 시간표"
-            className={`w-full h-auto rounded-[20px] transition-transform duration-500 ${isZoomed ? "scale-110" : "scale-100"}`}
-          />
-
-          {/* 하단 툴바 */}
-          <div className="mt-8 flex flex-col md:flex-row justify-between items-center gap-6 border-t border-gray-100 pt-8">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-[#1a3021] rounded-2xl flex items-center justify-center text-white">
-                <Calendar size={24} />
-              </div>
-              <div>
-                <p className="text-xs text-gray-400 font-black uppercase tracking-widest">
-                  Last Updated
-                </p>
-                <p className="text-lg font-black text-[#1a3021]">
-                  2026. 04. 25 업데이트
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button className="flex items-center gap-2 px-6 py-3 bg-gray-100 rounded-2xl font-bold text-sm hover:bg-gray-200 transition-colors">
-                <Download size={18} /> 시간표 다운로드
-              </button>
-              <Link
-                href="/branch/siheung/reservation"
-                className="flex items-center gap-2 px-8 py-3 bg-[#d35400] text-white rounded-2xl font-black text-sm shadow-lg shadow-orange-900/20 hover:scale-105 transition-transform"
-              >
-                수업 신청하기 <ChevronRight size={18} />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* --- 수업 구성 안내 (추가 권장 섹션) --- */}
-      <section className="py-24 bg-[#1a3021] text-white rounded-t-[80px]">
-        <div className="px-[5%] md:px-[10%] max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-20 items-center">
-            <div data-aos="fade-right">
-              <div className="flex items-center gap-3 text-[#d35400] mb-6">
-                <Info size={24} />
-                <span className="font-black tracking-widest uppercase text-sm">
-                  Class Information
+          <div>
+            <span className="text-[#d35400] font-black tracking-widest text-xs uppercase italic mb-2 block">
+              Class Booking
+            </span>
+            <h1 className="text-5xl font-black tracking-tighter">
+              수업 예약하기
+            </h1>
+            <div className="mt-4 flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-black/5 shadow-sm">
+                <User size={16} className="text-[#d35400]" />
+                <span className="font-bold text-sm">
+                  {selectedChild?.child_name || "본인"} ({targetAge}세)
                 </span>
               </div>
-              <h2 className="text-4xl md:text-6xl font-black tracking-tighter mb-8 leading-tight">
-                모든 수업은
-                <br />
-                전담 코치제로
-                <br />
-                운영됩니다.
-              </h2>
-              <div className="space-y-6">
-                {[
-                  {
-                    t: "정원제 수업",
-                    d: "한 클래스당 최대 인원을 제한하여 밀착 코칭을 제공합니다.",
-                  },
-                  {
-                    t: "연령별 세분화",
-                    d: "아이들의 발달 단계에 맞춘 최적화된 훈련 프로그램을 적용합니다.",
-                  },
-                  {
-                    t: "실시간 피드백",
-                    d: "수업 후 학부모님께 당일 훈련 리포트를 전달해 드립니다.",
-                  },
-                ].map((item, i) => (
-                  <div key={i} className="flex gap-4 items-start">
-                    <CheckCircle2
-                      className="text-[#d35400] shrink-0 mt-1"
-                      size={20}
-                    />
-                    <div>
-                      <h4 className="text-xl font-black mb-1">{item.t}</h4>
-                      <p className="text-white/50 font-medium">{item.d}</p>
+            </div>
+          </div>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="bg-white border-none rounded-2xl px-6 py-4 font-black text-[#1a3021] shadow-xl focus:ring-2 focus:ring-[#d35400] outline-none cursor-pointer"
+          />
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-10">
+          <div className="lg:col-span-2 space-y-4">
+            {loading ? (
+              <div className="flex justify-center py-20">
+                <Loader2 className="animate-spin text-[#d35400]" size={40} />
+              </div>
+            ) : schedules.length === 0 ? (
+              <div className="bg-white rounded-[40px] p-20 text-center border border-black/5">
+                <p className="text-gray-400 font-black">
+                  해당 날짜에 개설된 수업이 없습니다.
+                </p>
+              </div>
+            ) : (
+              schedules.map((item) => {
+                const canReserve = selectedChild?.target_class
+                  ? selectedChild.target_class === item.target_class
+                  : targetAge >= item.min_age && targetAge <= item.max_age;
+                const isSelected = cart.find((c) => c.id === item.id);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => canReserve && handleSelectClass(item)}
+                    className={`group p-6 rounded-[30px] border-2 transition-all cursor-pointer flex items-center justify-between
+                      ${isSelected ? "bg-[#1a3021] border-[#1a3021] text-white shadow-xl scale-[1.02]" : canReserve ? "bg-white border-transparent hover:border-[#d35400] shadow-sm" : "bg-gray-100/50 border-transparent opacity-40 grayscale cursor-not-allowed"}
+                    `}
+                  >
+                    <div className="flex items-center gap-6">
+                      <div
+                        className={`p-4 rounded-2xl ${isSelected ? "bg-white/10" : "bg-[#f2efe9]"}`}
+                      >
+                        <Clock
+                          size={24}
+                          className={
+                            isSelected ? "text-white" : "text-[#1a3021]"
+                          }
+                        />
+                      </div>
+                      <div>
+                        <p className="text-lg font-black">
+                          {item.start_time.slice(0, 5)} -{" "}
+                          {item.end_time.slice(0, 5)}
+                        </p>
+                        <p className="text-sm font-bold opacity-60">
+                          {item.target_class} ({item.min_age}~{item.max_age}세)
+                        </p>
+                      </div>
                     </div>
+                    {isSelected && (
+                      <CheckCircle2 size={24} className="text-[#d35400]" />
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
+                );
+              })
+            )}
+          </div>
 
-            {/* 시각적 요소: 시간 아이콘 레이아웃 */}
-            <div className="grid grid-cols-2 gap-4" data-aos="zoom-in">
-              <div className="bg-white/5 backdrop-blur-md border border-white/10 p-10 rounded-[50px] aspect-square flex flex-col justify-center items-center text-center">
-                <Clock size={48} className="text-[#d35400] mb-4" />
-                <h5 className="text-2xl font-black">평일반</h5>
-                <p className="mt-2 text-white/40 text-sm font-medium">
-                  14:00 - 20:00
-                </p>
+          <aside className="sticky top-32 h-fit">
+            <div className="bg-[#1a3021] rounded-[40px] p-8 text-white shadow-2xl">
+              <h3 className="text-xl font-black mb-6 flex items-center gap-2 italic">
+                <CheckCircle2 className="text-[#d35400]" /> SELECTED
+              </h3>
+              <div className="space-y-4 mb-8">
+                {cart.length === 0 ? (
+                  <p className="text-white/30 text-center py-10">
+                    수업을 선택해주세요.
+                  </p>
+                ) : (
+                  cart.map((c) => (
+                    <div
+                      key={c.id}
+                      className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10"
+                    >
+                      <span className="font-black text-sm">
+                        {c.start_time.slice(0, 5)} 수업
+                      </span>
+                      <X
+                        size={16}
+                        className="cursor-pointer text-white/20 hover:text-red-400"
+                        onClick={() => handleSelectClass(c)}
+                      />
+                    </div>
+                  ))
+                )}
               </div>
-              <div className="bg-white/10 backdrop-blur-md border border-white/10 p-10 rounded-[50px] aspect-square flex flex-col justify-center items-center text-center transform translate-y-12">
-                <Calendar size={48} className="text-[#d35400] mb-4" />
-                <h5 className="text-2xl font-black">주말반</h5>
-                <p className="mt-2 text-white/40 text-sm font-medium">
-                  09:00 - 18:00
-                </p>
-              </div>
+              <button
+                disabled={cart.length === 0 || isSubmitting}
+                onClick={handleStartBooking}
+                className="w-full py-5 bg-[#d35400] text-white rounded-2xl font-black shadow-xl hover:scale-105 active:scale-95 disabled:opacity-20 flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  "예약 확정하기"
+                )}
+              </button>
             </div>
+          </aside>
+        </div>
+      </div>
+
+      {/* 모달: 자녀 선택 */}
+      {modalStep === "child" && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-6">
+          <div className="bg-white rounded-[40px] p-10 max-w-md w-full shadow-2xl animate-in zoom-in-95">
+            <h3 className="text-2xl font-black mb-8 tracking-tighter text-center">
+              누구의 수업을 예약할까요?
+            </h3>
+            <div className="space-y-3">
+              {allChildren.map((child) => (
+                <button
+                  key={child.id}
+                  onClick={() => checkPackagesForChild(child)}
+                  className="w-full p-6 bg-[#f8f6f2] rounded-2xl font-black text-lg hover:bg-[#1a3021] hover:text-white transition-all flex justify-between items-center group"
+                >
+                  {child.child_name}{" "}
+                  <ChevronRight className="text-[#d35400] group-hover:translate-x-1 transition-transform" />
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setModalStep("none")}
+              className="w-full mt-6 text-gray-400 font-bold text-sm"
+            >
+              취소하기
+            </button>
           </div>
         </div>
-      </section>
+      )}
 
-      {/* --- 상담 안내 --- */}
-      <section className="py-24 px-[5%] text-center">
-        <div
-          data-aos="fade-up"
-          className="max-w-3xl mx-auto bg-white p-16 rounded-[60px] shadow-xl"
-        >
-          <h3 className="text-2xl md:text-4xl font-black text-[#1a3021] mb-6 tracking-tighter">
-            원하는 시간이 없으신가요?
-          </h3>
-          <p className="text-gray-500 font-bold mb-10 text-lg">
-            개인 레슨 및 단체 대관은 별도로 문의해 주시면
-            <br />
-            조율 가능한 일정을 안내해 드립니다.
-          </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-4 font-black">
-            <Link
-              href="tel:031-123-4567"
-              className="px-10 py-5 bg-[#1a3021] text-white rounded-full hover:bg-[#d35400] transition-colors"
+      {/* 모달: 이용권 선택 */}
+      {modalStep === "package" && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-6">
+          <div className="bg-white rounded-[40px] p-10 max-w-md w-full shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center gap-3 mb-6 justify-center">
+              <Ticket className="text-[#d35400]" />
+              <h3 className="text-2xl font-black tracking-tighter">
+                이용권 선택
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {availablePackages.map((pkg) => (
+                <button
+                  key={pkg.id}
+                  onClick={() => processFinalReservation(selectedChild!, pkg)}
+                  className="w-full p-6 border-2 border-gray-100 rounded-2xl text-left hover:border-[#1a3021] transition-all group"
+                >
+                  <p className="font-black text-lg group-hover:text-[#d35400] transition-colors">
+                    {pkg.package_name}
+                  </p>
+                  <p className="text-sm font-bold text-gray-400 mt-1">
+                    잔여 횟수: {pkg.remaining_count}회
+                  </p>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setModalStep("none")}
+              className="w-full mt-8 text-gray-400 font-bold text-sm"
             >
-              전화 상담 : 031-123-4567
-            </Link>
-            <Link
-              href="https://pf.kakao.com"
-              className="px-10 py-5 border-2 border-[#1a3021] text-[#1a3021] rounded-full hover:bg-[#1a3021] hover:text-white transition-all"
-            >
-              카카오톡 문의하기
-            </Link>
+              취소하기
+            </button>
           </div>
         </div>
-      </section>
+      )}
     </div>
   );
 }

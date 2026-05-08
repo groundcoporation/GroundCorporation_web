@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase"; // 설정된 supabase client
+import { supabase } from "@/lib/supabaseClient"; // 설정된 supabase client
 import { User } from "@supabase/supabase-js";
 
 export function useAuth() {
