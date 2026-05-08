@@ -60,7 +60,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/");
+      router.push("/branch/siheung/main");
     } catch (error: any) {
       setErrorMsg("로그인 중 오류가 발생했습니다.");
     } finally {
@@ -73,13 +73,6 @@ export default function LoginPage() {
       <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 border border-black/5">
         {/* [UI] 상단 헤더 & 로고 */}
         <div className="text-center mb-10">
-          <Link href="/">
-            <img
-              src={`${getBasePath()}/resource/image/logo.png`}
-              alt="Logo"
-              className="h-10 mx-auto mb-6"
-            />
-          </Link>
           <h2 className="text-3xl font-black text-[#1a3021] italic uppercase tracking-tighter">
             Welcome Back
           </h2>

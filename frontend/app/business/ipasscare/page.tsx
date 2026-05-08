@@ -77,14 +77,14 @@ export default function IPassCarePage() {
             <div className="flex flex-wrap gap-4 mb-12 relative z-10">
               <Link href="#" className="hover:opacity-80 transition-opacity">
                 <img
-                  src="/GroundCoropration_web/resource/image/app_store_btn.png"
+                  src="/resource/image/app_store_btn.png"
                   alt="App Store"
                   className="h-[52px]"
                 />
               </Link>
               <Link href="#" className="hover:opacity-80 transition-opacity">
                 <img
-                  src="/GroundCoropration_web/resource/image/google_play_btn.png"
+                  src="/resource/image/google_play_btn.png"
                   alt="Google Play"
                   className="h-[52px]"
                 />
@@ -118,7 +118,7 @@ export default function IPassCarePage() {
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-7 bg-[#1a1c1e] rounded-b-3xl z-20" />
               <div className="w-full h-full rounded-[2.8rem] overflow-hidden bg-white relative">
                 <Image
-                  src="/GroundCoropration_web/resource/image/ipasscare_image.png"
+                  src="/resource/image/ipasscare_image.png"
                   alt="IPASSCARE App Interface"
                   fill
                   className="object-contain"
