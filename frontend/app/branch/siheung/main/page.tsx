@@ -110,7 +110,7 @@ export default function SiheungBranch() {
           <img
             src="/resource/image/logo.png"
             alt="Logo"
-            className="h-10 md:h-11"
+            className="h-40 md:h-50"
           />
         </Link>
 
