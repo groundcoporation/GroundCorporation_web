@@ -3,12 +3,10 @@
 import React, { useState } from "react";
 import { useAOS } from "@/hooks/useAOS";
 import {
-  Menu,
-  X,
   ArrowRight,
   ArrowLeft,
-  ShoppingBag,
   Target,
+  ShoppingBag,
   Users,
   ShieldCheck,
   Globe,
@@ -18,18 +16,18 @@ import {
   Award,
   Zap,
   HeartPulse,
-  ChevronDown,
+  GraduationCap,
 } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import Header from "@/components/Header"; // 분리된 헤더 임포트
 
 export default function HomePage() {
   useAOS();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
-  const businessUnits = [
+  // 슬라이더 전용 데이터 (Header와 별개로 슬라이더 로직 유지)
+  const allUnits = [
     {
       id: "shootingstar",
       title: "강인한 슛팅스타",
@@ -61,6 +59,15 @@ export default function HomePage() {
       icon: <Users className="text-blue-500" size={32} />,
     },
     {
+      id: "scholarship",
+      title: "장학사업",
+      description: "꿈꾸는 유망주들을 위한 후원 및 장학 시스템",
+      image:
+        "https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600",
+      link: "#",
+      icon: <GraduationCap className="text-blue-500" size={32} />,
+    },
+    {
       id: "ipasscare",
       title: "IPASSCARE",
       description: "스포츠 시설 전용 통합 관리 및 예약 솔루션",
@@ -71,237 +78,60 @@ export default function HomePage() {
     },
   ];
 
-  const toggleSidebar = (state: boolean) => {
-    setIsSidebarOpen(state);
-    if (typeof document !== "undefined") {
-      document.body.style.overflow = state ? "hidden" : "auto";
-    }
-  };
-
-  const handleBusinessClick = (idx: number) => {
-    const target = document.getElementById("business");
-    target?.scrollIntoView({ behavior: "smooth" });
-    setCurrentSlide(idx);
-    setActiveMenu(null);
-  };
-
   const nextSlide = () =>
-    setCurrentSlide((prev) => (prev + 1) % businessUnits.length);
+    setCurrentSlide((prev) => (prev + 1) % allUnits.length);
   const prevSlide = () =>
-    setCurrentSlide(
-      (prev) => (prev - 1 + businessUnits.length) % businessUnits.length,
-    );
+    setCurrentSlide((prev) => (prev - 1 + allUnits.length) % allUnits.length);
 
   return (
     <div className="bg-white text-[#050a14] overflow-x-hidden font-sans">
-      {/* 1. 헤더 (소개, 사업 드롭다운) */}
-      <header
-        className="fixed top-0 w-full h-[80px] flex justify-between items-center px-[5%] z-[1000] bg-white/90 backdrop-blur-md border-b border-gray-100"
-        onMouseLeave={() => setActiveMenu(null)}
-      >
-        <Link href="/">
-          <img
-            src="/GroundCoropration_web/resource/image/logo.png"
-            alt="Logo"
-            className="h-7"
-          />
-        </Link>
-
-        <nav className="hidden lg:flex gap-16 h-full items-center font-black text-[15px] uppercase tracking-tighter">
-          {/* 소개 드롭다운 */}
-          <div
-            className="relative h-full flex items-center"
-            onMouseEnter={() => setActiveMenu("about")}
-          >
-            <button
-              className={`flex items-center gap-1 transition-colors ${activeMenu === "about" ? "text-blue-600" : ""}`}
-            >
-              기업정보{" "}
-              <ChevronDown
-                size={14}
-                className={`transition-transform duration-300 ${activeMenu === "about" ? "rotate-180" : ""}`}
-              />
-            </button>
-            <AnimatePresence>
-              {activeMenu === "about" && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute top-[80px] left-1/2 -translate-x-1/2 w-[180px] bg-white border border-gray-100 shadow-2xl rounded-2xl p-2"
-                >
-                  <Link
-                    href="#about"
-                    onClick={() => setActiveMenu(null)}
-                    className="block p-4 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all font-bold"
-                  >
-                    기업 개요
-                  </Link>
-                  <Link
-                    href="#"
-                    onClick={() => setActiveMenu(null)}
-                    className="block p-4 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all font-bold"
-                  >
-                    조직도
-                  </Link>
-                  <Link
-                    href="#"
-                    onClick={() => setActiveMenu(null)}
-                    className="block p-4 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all font-bold"
-                  >
-                    인사말
-                  </Link>
-                  <Link
-                    href="#"
-                    onClick={() => setActiveMenu(null)}
-                    className="block p-4 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all font-bold"
-                  >
-                    연혁
-                  </Link>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* 사업 드롭다운 */}
-          <div
-            className="relative h-full flex items-center"
-            onMouseEnter={() => setActiveMenu("business")}
-          >
-            <button
-              className={`flex items-center gap-1 transition-colors ${activeMenu === "business" ? "text-blue-600" : ""}`}
-            >
-              사업분야{" "}
-              <ChevronDown
-                size={14}
-                className={`transition-transform duration-300 ${activeMenu === "business" ? "rotate-180" : ""}`}
-              />
-            </button>
-            <AnimatePresence>
-              {activeMenu === "business" && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute top-[80px] left-1/2 -translate-x-1/2 w-[260px] bg-white border border-gray-100 shadow-2xl rounded-2xl p-2"
-                >
-                  {businessUnits.map((unit, idx) => (
-                    <button
-                      key={unit.id}
-                      onClick={() => handleBusinessClick(idx)}
-                      className="w-full flex items-center justify-between p-4 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all group"
-                    >
-                      <span className="text-sm font-black tracking-tight">
-                        {unit.title}
-                      </span>
-                      <ArrowRight
-                        size={14}
-                        className="opacity-0 group-hover:opacity-100 transition-all"
-                      />
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </nav>
-
-        <button
-          onClick={() => toggleSidebar(true)}
-          className="p-2 hover:bg-gray-100 rounded-full transition-all"
-        >
-          <Menu size={26} />
-        </button>
-      </header>
-
-      {/* 2. 사이드바 (모바일) */}
-      <AnimatePresence>
-        {isSidebarOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => toggleSidebar(false)}
-              className="fixed inset-0 bg-black/60 z-[1500] backdrop-blur-sm"
-            />
-            <motion.aside
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 w-[80%] max-w-[350px] h-full bg-white z-[2000] p-10 shadow-2xl font-sans"
-            >
-              <button
-                onClick={() => toggleSidebar(false)}
-                className="absolute top-6 right-6 text-gray-400"
-              >
-                <X size={28} />
-              </button>
-              <h3 className="text-2xl font-black mb-10 text-blue-600 italic uppercase">
-                Navigation
-              </h3>
-              <nav className="space-y-8">
-                <Link
-                  href="#about"
-                  onClick={() => toggleSidebar(false)}
-                  className="block text-2xl font-black hover:text-blue-600 uppercase italic tracking-tighter"
-                >
-                  About Us
-                </Link>
-                <div className="space-y-4">
-                  <p className="text-xs font-black text-gray-300 uppercase tracking-widest">
-                    Business Units
-                  </p>
-                  {businessUnits.map((unit, idx) => (
-                    <button
-                      key={unit.id}
-                      onClick={() => {
-                        handleBusinessClick(idx);
-                        toggleSidebar(false);
-                      }}
-                      className="block text-xl font-bold hover:text-blue-600"
-                    >
-                      {unit.title}
-                    </button>
-                  ))}
-                </div>
-              </nav>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+      <Header />
 
       {/* 3. 히어로 섹션 */}
-      <section className="relative h-[85vh] flex items-center justify-center bg-[#050a14]">
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-30"
-        >
-          <source
-            src="https://assets.mixkit.co/videos/preview/mixkit-playing-soccer-in-the-stadium-14250-large.mp4"
-            type="video/mp4"
+      <section className="relative h-[85vh] flex items-center justify-center bg-[#050a14] overflow-hidden">
+        {/* 배경 이미지: 4갈래로 정렬된 역동적인 종합 스포츠 이미지 */}
+        <div className="absolute inset-0 w-full h-full opacity-50 scale-105">
+          <img
+            src="/GroundCoropration_web/resource/image/hero_section_image.png"
+            alt="Multi-Sports Action"
+            className="w-full h-full object-cover object-center"
           />
-        </video>
-        <div className="relative z-10 text-center text-white px-5">
+        </div>
+
+        {/* 다크 그라데이션 오버레이: 로고 시인성 확보 */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#050a14]/60 via-transparent to-[#050a14]" />
+        <div className="absolute inset-0 bg-black/20" />
+
+        <div className="relative z-10 text-center text-white px-5 w-full max-w-4xl mx-auto">
           <span
             data-aos="fade-up"
-            className="block text-blue-500 font-black tracking-[0.5em] mb-4 uppercase text-xs"
+            className="block text-blue-500 font-black tracking-[0.5em] mb-8 uppercase text-xs md:text-sm"
           >
-            Innovation in Sports
+            Infrastructure & Performance
           </span>
-          <h1
+
+          {/* 텍스트 대신 로고 이미지로 대체 */}
+          <div
             data-aos="fade-up"
             data-aos-delay="100"
-            className="text-6xl md:text-[7.5rem] font-black leading-none tracking-tighter mb-8 italic uppercase"
+            className="flex justify-center items-center"
           >
-            GROUND
-            <br />
-            <span className="text-blue-600 text-[0.85em]">CORPORATION</span>
-          </h1>
+            <img
+              src="/GroundCoropration_web/resource/image/logo.png"
+              alt="Ground Corporation Logo"
+              className="w-[80%] md:w-full max-w-[700px] h-auto object-contain brightness-0 invert"
+              /* brightness-0 invert: 로고가 어두운 색일 경우 흰색으로 반전시켜 히어로 섹션에서 돋보이게 함 */
+            />
+          </div>
+
+          {/* 하단 슬로건 (선택 사항) */}
+          <p
+            data-aos="fade-up"
+            data-aos-delay="200"
+            className="mt-8 text-white/60 text-sm md:text-lg font-medium tracking-widest uppercase italic"
+          >
+            Beyond the Limit, Create the Future
+          </p>
         </div>
       </section>
 
@@ -322,7 +152,7 @@ export default function HomePage() {
               <div className="space-y-6 text-gray-500 text-lg md:text-xl font-medium leading-relaxed max-w-xl">
                 <p>
                   그라운드 코퍼레이션은 현장에서 얻은 데이터를 기반으로 스포츠의
-                  미래를 설계하는 **인프라 혁신 기업**입니다.
+                  미래를 설계하는 <strong>인프라 혁신 기업</strong>입니다.
                 </p>
                 <p>
                   우리는 교육을 넘어 선수와 시설, 그리고 브랜드를 하나로 잇는
@@ -333,7 +163,6 @@ export default function HomePage() {
                 </p>
               </div>
             </div>
-
             <div className="grid sm:grid-cols-2 gap-6" data-aos="fade-left">
               {[
                 {
@@ -393,7 +222,7 @@ export default function HomePage() {
               className="absolute inset-0"
             >
               <img
-                src={businessUnits[currentSlide].image}
+                src={allUnits[currentSlide].image}
                 className="w-full h-full object-cover shadow-inner"
                 alt="bg"
               />
@@ -401,15 +230,13 @@ export default function HomePage() {
             </motion.div>
           </AnimatePresence>
         </div>
-
         <div className="relative z-10 h-full max-w-[1440px] mx-auto px-[5%] flex flex-col justify-center">
           <div className="mb-12">
-            <h2 className="text-white text-5xl md:text-8xl font-black italic uppercase tracking-tighter mb-4">
+            <h2 className="text-white text-5xl md:text-8xl font-black italic uppercase tracking-tighter mb-4 text-white">
               Our <span className="text-blue-600">Business</span>
             </h2>
             <div className="w-20 h-2 bg-blue-600" />
           </div>
-
           <div className="flex flex-col md:flex-row items-end justify-between gap-10">
             <motion.div
               key={currentSlide + "content"}
@@ -419,22 +246,21 @@ export default function HomePage() {
             >
               <div className="flex items-center gap-4 mb-6">
                 <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl text-white">
-                  {businessUnits[currentSlide].icon}
+                  {allUnits[currentSlide].icon}
                 </div>
                 <span className="text-blue-500 font-black tracking-widest uppercase text-xs">
                   Business Unit 0{currentSlide + 1}
                 </span>
               </div>
-              <h3 className="text-white text-6xl md:text-[5.5rem] font-black leading-none italic uppercase mb-8 tracking-tighter font-sans">
-                {businessUnits[currentSlide].title}
+              <h3 className="text-white text-6xl md:text-[5.5rem] font-black leading-none italic uppercase mb-8 tracking-tighter font-sans text-white">
+                {allUnits[currentSlide].title}
               </h3>
               <p className="text-white/60 text-xl md:text-2xl font-bold mb-10 leading-relaxed max-w-xl">
-                {businessUnits[currentSlide].description}
+                {allUnits[currentSlide].description}
               </p>
-
-              {businessUnits[currentSlide].id === "shootingstar" ? (
+              {allUnits[currentSlide].id === "shootingstar" ? (
                 <div className="flex flex-wrap gap-4">
-                  {businessUnits[currentSlide].branches?.map((branch) => (
+                  {allUnits[currentSlide].branches?.map((branch) => (
                     <Link
                       key={branch.name}
                       href={branch.link}
@@ -450,14 +276,13 @@ export default function HomePage() {
                 </div>
               ) : (
                 <Link
-                  href={businessUnits[currentSlide].link || "#"}
+                  href={allUnits[currentSlide].link || "#"}
                   className="inline-flex items-center gap-4 bg-white text-[#050a14] px-10 py-5 rounded-2xl font-black uppercase text-xs hover:bg-blue-600 hover:text-white transition-all shadow-2xl"
                 >
                   자세히 보기 <ArrowRight size={20} />
                 </Link>
               )}
             </motion.div>
-
             <div className="flex items-center gap-6">
               <button
                 onClick={prevSlide}
@@ -465,9 +290,9 @@ export default function HomePage() {
               >
                 <ArrowLeft size={30} />
               </button>
-              <div className="text-white font-black text-2xl italic tracking-tighter">
+              <div className="text-white font-black text-2xl italic tracking-tighter text-white">
                 <span className="text-blue-600">0{currentSlide + 1}</span> / 0
-                {businessUnits.length}
+                {allUnits.length}
               </div>
               <button
                 onClick={nextSlide}
@@ -480,17 +305,19 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. 푸터 */}
-      <footer className="bg-[#050a14] text-white px-[5%] py-24 font-sans">
+      {/* 푸터 */}
+      <footer className="bg-[#12151c] text-white px-[5%] py-24 font-sans border-t border-white/5">
         <div className="flex flex-col md:flex-row justify-between items-start gap-16 border-b border-white/10 pb-20">
           <div className="max-w-md text-left">
-            <h2 className="text-4xl font-black tracking-tighter mb-8 italic uppercase">
-              GROUND <span className="text-blue-600">CORP</span>
-            </h2>
-            <p className="text-white/40 font-medium leading-relaxed text-xs">
-              (주)그라운드 코퍼레이션 | 대표이사: OOO <br />
+            <img
+              src="/GroundCoropration_web/resource/image/logo.png"
+              alt="Logo"
+              className="h-40"
+            />
+            <p className="text-white/40 font-medium leading-relaxed text-xs text-white/40">
+              (주)그라운드코퍼레이션 | 대표이사: 김강태 <br />
               본사: 경기도 시흥시 배곧지구 내 프리미엄 센터 <br />
-              문의: contact@groundcorp.com
+              문의: groundcoporation@gmail.com
             </p>
           </div>
           <div className="flex gap-20">
@@ -499,10 +326,10 @@ export default function HomePage() {
                 Business
               </h4>
               <ul className="space-y-4 font-bold text-white/60 text-sm">
-                <li>슈팅스타 축구교실</li>
-                <li>V.O.G SPORTS</li>
-                <li>그라운드 에이전시</li>
-                <li>IPASSCARE</li>
+                <li>유소년 축구교실</li>
+                <li>스포츠 웨어</li>
+                <li>스포테인먼트</li>
+                <li>IT 솔루션</li>
               </ul>
             </div>
             <div>
@@ -512,13 +339,13 @@ export default function HomePage() {
               <div className="flex gap-4">
                 <a
                   href="#"
-                  className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center hover:bg-blue-600 transition-all"
+                  className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center hover:bg-blue-600 transition-all text-white"
                 >
                   <Camera size={18} />
                 </a>
                 <a
                   href="#"
-                  className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center hover:bg-red-600 transition-all"
+                  className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center hover:bg-red-600 transition-all text-white"
                 >
                   <Mail size={18} />
                 </a>
@@ -526,7 +353,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-        <div className="pt-10 text-center md:text-left text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">
+        <div className="pt-10 text-center md:text-left text-[10px] font-black text-white/20 uppercase tracking-[0.4em] text-white/20">
           © 2026 Ground Corporation. All Rights Reserved.
         </div>
       </footer>

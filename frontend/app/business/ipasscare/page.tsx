@@ -12,19 +12,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import Image from "next/image";
+// 분리한 Header 컴포넌트 임포트
+import Header from "@/components/Header";
 
 export default function IPassCarePage() {
   useAOS();
-  const [isScrolled, setIsScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      // 스크롤이 조금이라도 내려가면 배경색을 하얗게 만듭니다.
-      setIsScrolled(window.scrollY > 10);
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   const features = [
     {
@@ -51,34 +44,12 @@ export default function IPassCarePage() {
 
   return (
     <div className="bg-[#050a14] text-white overflow-x-hidden font-sans pt-[80px]">
-      {/* 1. 헤더 - 하얀색 배경으로 수정 */}
-      <header
-        className={`fixed top-0 w-full h-[80px] flex justify-between items-center px-[5%] z-[1000] transition-all duration-300 bg-white shadow-md border-b border-gray-100`}
-      >
-        <Link href="/">
-          <img
-            src="/resource/image/logo.png"
-            alt="Logo"
-            className="h-6 object-contain"
-            // 하얀 배경이므로 밝기 조절(brightness-200)을 제거합니다.
-            // 로고 자체가 어두운 색이어야 잘 보입니다.
-          />
-        </Link>
-        <div className="hidden md:flex gap-8 items-center">
-          <span className="text-blue-600 font-black tracking-tighter italic text-lg">
-            IPASSCARE SOLUTION
-          </span>
-          <Link
-            href="#contact"
-            className="bg-blue-600 text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-blue-700 transition-colors"
-          >
-            도입 문의
-          </Link>
-        </div>
-      </header>
+      {/* 1. 공통 헤더 적용 */}
+      <Header />
 
       {/* 2. 히어로 섹션 */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
+        {/* 배경 광원 효과 */}
         <div className="absolute top-1/4 -right-20 w-[500px] h-[500px] bg-blue-600/20 blur-[150px] rounded-full" />
 
         <div className="max-w-7xl mx-auto px-[5%] w-full grid lg:grid-cols-2 gap-16 items-center">
@@ -102,25 +73,25 @@ export default function IPassCarePage() {
               지금 바로 앱을 다운로드하고 스마트한 관리를 시작하세요.
             </p>
 
-            {/* 앱 스토어 버튼 링크 형식 */}
+            {/* 앱 스토어 버튼 */}
             <div className="flex flex-wrap gap-4 mb-12 relative z-10">
               <Link href="#" className="hover:opacity-80 transition-opacity">
                 <img
-                  src="/resource/image/app_store_btn.png"
+                  src="/GroundCoropration_web/resource/image/app_store_btn.png"
                   alt="App Store"
                   className="h-[52px]"
                 />
               </Link>
               <Link href="#" className="hover:opacity-80 transition-opacity">
                 <img
-                  src="/resource/image/google_play_btn.png"
+                  src="/GroundCoropration_web/resource/image/google_play_btn.png"
                   alt="Google Play"
                   className="h-[52px]"
                 />
               </Link>
             </div>
 
-            {/* QR 코드 다운로드 안내 */}
+            {/* QR 코드 영역 */}
             <div className="flex items-center gap-6 p-6 rounded-3xl bg-white/5 border border-white/10 w-fit relative z-10">
               <div className="bg-white p-2 rounded-xl">
                 <QrCode className="text-black" size={80} />
@@ -137,7 +108,7 @@ export default function IPassCarePage() {
             </div>
           </div>
 
-          {/* 앱 목업 이미지 */}
+          {/* 앱 목업 이미지 영역 */}
           <div className="relative flex justify-center z-10" data-aos="zoom-in">
             <motion.div
               animate={{ y: [0, -20, 0] }}
@@ -145,11 +116,13 @@ export default function IPassCarePage() {
               className="relative w-[300px] h-[600px] bg-[#1a1c1e] rounded-[3.5rem] p-3 shadow-[0_50px_100px_-20px_rgba(37,99,235,0.3)] border-[8px] border-[#333] z-10"
             >
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-7 bg-[#1a1c1e] rounded-b-3xl z-20" />
-              <div className="w-full h-full rounded-[2.8rem] overflow-hidden bg-white">
-                <img
-                  src="/resource/image/ipasscare_image.png"
+              <div className="w-full h-full rounded-[2.8rem] overflow-hidden bg-white relative">
+                <Image
+                  src="/GroundCoropration_web/resource/image/ipasscare_image.png"
                   alt="IPASSCARE App Interface"
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-contain"
+                  priority
                 />
               </div>
             </motion.div>
