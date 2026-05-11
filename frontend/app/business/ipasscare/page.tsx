@@ -15,6 +15,7 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 // 분리한 Header 컴포넌트 임포트
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 export default function IPassCarePage() {
   useAOS();
@@ -165,28 +166,7 @@ export default function IPassCarePage() {
       </section>
 
       {/* 4. 푸터 */}
-      <footer
-        id="contact"
-        className="bg-[#050a14] text-white px-[5%] py-24 border-t border-white/5"
-      >
-        <div className="flex flex-col md:flex-row justify-between items-start gap-16 border-b border-white/10 pb-20 max-w-7xl mx-auto">
-          <div className="max-w-md">
-            <h2 className="text-4xl font-black tracking-tighter mb-8 italic uppercase text-white">
-              GROUND <span className="text-blue-600">CORP</span>
-            </h2>
-            <p className="text-white/40 font-medium leading-relaxed text-xs underline underline-offset-4 tracking-wide">
-              (주)그라운드 코퍼레이션 | 대표이사: OOO <br />
-              본사: 경기도 시흥시 배곧지구 내 프리미엄 센터 <br />
-              문의: contact@groundcorp.com
-            </p>
-          </div>
-        </div>
-        <div className="pt-10 flex justify-between items-center max-w-7xl mx-auto">
-          <p className="text-white/20 text-[10px] font-bold uppercase tracking-widest">
-            © 2026 GROUND CORPORATION. All Rights Reserved.
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

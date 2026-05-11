@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 export default function AgencyPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -235,38 +236,7 @@ export default function AgencyPage() {
       </section>
 
       {/* --- 7. 푸터 (Footer) --- */}
-      <footer className="bg-[#050a14] text-white px-[5%] py-24">
-        <div className="flex flex-col md:flex-row justify-between items-start gap-16 border-b border-white/10 pb-20">
-          <div className="max-w-md">
-            <h2 className="text-4xl font-black tracking-tighter mb-8 italic uppercase">
-              GROUND <span className="text-blue-600 font-black">CORP</span>
-            </h2>
-            <p className="text-white/40 font-medium leading-relaxed">
-              (주)그라운드 코퍼레이션 | 대표이사: OOO <br />
-              본사: 경기도 시흥시 배곧지구 내 프리미엄 센터 <br />
-              문의: contact@groundcorp.com
-            </p>
-          </div>
-          <div className="flex gap-20">
-            <div>
-              <h4 className="text-blue-600 font-black uppercase mb-6 tracking-widest text-xs">
-                Social
-              </h4>
-              <div className="flex gap-4">
-                <div className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center hover:bg-blue-600 transition-all">
-                  <Camera size={18} />
-                </div>
-                <div className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center hover:bg-blue-600 transition-all">
-                  <Mail size={18} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="pt-10 text-center md:text-left text-[10px] font-black text-white/20 uppercase tracking-[0.4em]">
-          © 2026 Ground Corporation. All Rights Reserved.
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

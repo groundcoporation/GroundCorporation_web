@@ -17,24 +17,33 @@ import {
   Zap,
   HeartPulse,
   GraduationCap,
+  Trophy,
+  Database,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import Header from "@/components/Header"; // 분리된 헤더 임포트
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 export default function HomePage() {
   useAOS();
-  const [currentSlide, setCurrentSlide] = useState(0);
 
-  // 슬라이더 전용 데이터 (Header와 별개로 슬라이더 로직 유지)
-  const allUnits = [
+  // 상태 관리 (사업 영역 슬라이더용)
+  const [currentUnit, setCurrentUnit] = useState(0);
+
+  // 통합 6대 비즈니스 데이터
+  const businessUnits = [
     {
       id: "shootingstar",
-      title: "강인한 슛팅스타",
-      description: "데이터 기반 프리미엄 유소년 축구 교육 시스템",
+      category: "Sports Education",
+      title: "유소년 스포츠 프로그램",
+      description:
+        "데이터 기반 프리미엄 유소년 축구교실 '강인한 슛팅스타' 운영 및 체계적인 유망주 육성 시스템",
       image:
         "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1600",
-      icon: <Target className="text-blue-500" size={32} />,
+      icon: <Target size={28} />,
       branches: [
         { name: "시흥 배곧점", link: "/branch/siheung/main" },
         { name: "영종 국제도시점", link: "/branch/yeongjong/main" },
@@ -42,54 +51,74 @@ export default function HomePage() {
     },
     {
       id: "vogsports",
-      title: "V.O.G SPORTS",
-      description: "퍼포먼스를 위한 자체 설계 프리미엄 스포츠 브랜드",
+      category: "Sports Wear",
+      title: "온라인 쇼핑몰",
+      description:
+        "퍼포먼스 향상을 위한 자체 설계 프리미엄 스포츠 브랜드 'V.O.G SPORTS' 전개 및 용품 유통",
       image:
         "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=1600",
       link: "http://vog-sports.com/",
-      icon: <ShoppingBag className="text-blue-500" size={32} />,
+      icon: <ShoppingBag size={28} />,
     },
     {
       id: "agency",
-      title: "에이전시",
-      description: "유망주 발굴 및 엘리트 선수 전문 매니지먼트",
+      category: "Management",
+      title: "우수 선수 매니지먼트",
+      description:
+        "재능 있는 유망주 발굴부터 프로 구단 입단, 글로벌 무대 진출까지 책임지는 전문 매니지먼트",
       image:
         "https://images.unsplash.com/photo-1521737711867-e3b97375f902?q=80&w=1600",
       link: "/business/agency/",
-      icon: <Users className="text-blue-500" size={32} />,
+      icon: <Users size={28} />,
     },
     {
       id: "scholarship",
-      title: "장학사업",
-      description: "꿈꾸는 유망주들을 위한 후원 및 장학 시스템",
+      category: "CSR",
+      title: "우수 선수 장학사업",
+      description:
+        "미래의 별들이 환경의 제약 없이 꿈을 펼칠 수 있도록 돕는 체계적인 후원 및 장학금 지원",
       image:
         "https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600",
       link: "#",
-      icon: <GraduationCap className="text-blue-500" size={32} />,
+      icon: <GraduationCap size={28} />,
     },
     {
       id: "ipasscare",
-      title: "IPASSCARE",
-      description: "스포츠 시설 전용 통합 관리 및 예약 솔루션",
+      category: "IT Solution",
+      title: "스포츠 콘텐츠 & 솔루션",
+      description:
+        "스포츠 시설 전용 통합 관리 플랫폼 'IPASSCARE' 솔루션 및 데이터 기반 교육 콘텐츠 제공",
       image:
         "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1600",
       link: "/business/ipasscare/",
-      icon: <ShieldCheck className="text-blue-500" size={32} />,
+      icon: <Database size={28} />,
+    },
+    {
+      id: "club",
+      category: "Infrastructure",
+      title: "스포츠단 운영",
+      description:
+        "그라운드코퍼레이션만의 흔들림 없는 철학이 담긴 전문적인 스포츠팀 인프라 구축 및 클럽 운영",
+      image:
+        "https://images.unsplash.com/photo-1518605368461-1e1e38ce81ee?q=80&w=1600",
+      link: "#",
+      icon: <Trophy size={28} />,
     },
   ];
 
-  const nextSlide = () =>
-    setCurrentSlide((prev) => (prev + 1) % allUnits.length);
-  const prevSlide = () =>
-    setCurrentSlide((prev) => (prev - 1 + allUnits.length) % allUnits.length);
+  const handleNext = () =>
+    setCurrentUnit((prev) => (prev + 1) % businessUnits.length);
+  const handlePrev = () =>
+    setCurrentUnit(
+      (prev) => (prev - 1 + businessUnits.length) % businessUnits.length,
+    );
 
   return (
     <div className="bg-white text-[#050a14] overflow-x-hidden font-sans">
       <Header />
 
-      {/* 3. 히어로 섹션 */}
+      {/* 3. 히어로 섹션 (수정 불가 요청 사항 - 완벽 유지) */}
       <section className="relative h-[85vh] flex items-center justify-center bg-[#050a14] overflow-hidden">
-        {/* 배경 이미지: 4갈래로 정렬된 역동적인 종합 스포츠 이미지 */}
         <div className="absolute inset-0 w-full h-full opacity-50 scale-105">
           <img
             src="/resource/image/hero_section_image.png"
@@ -98,7 +127,6 @@ export default function HomePage() {
           />
         </div>
 
-        {/* 다크 그라데이션 오버레이: 로고 시인성 확보 */}
         <div className="absolute inset-0 bg-gradient-to-b from-[#050a14]/60 via-transparent to-[#050a14]" />
         <div className="absolute inset-0 bg-black/20" />
 
@@ -110,7 +138,6 @@ export default function HomePage() {
             Infrastructure & Performance
           </span>
 
-          {/* 텍스트 대신 로고 이미지로 대체 */}
           <div
             data-aos="fade-up"
             data-aos-delay="100"
@@ -120,11 +147,9 @@ export default function HomePage() {
               src="/resource/image/logo.png"
               alt="Ground Corporation Logo"
               className="w-[80%] md:w-full max-w-[700px] h-auto object-contain brightness-0 invert"
-              /* brightness-0 invert: 로고가 어두운 색일 경우 흰색으로 반전시켜 히어로 섹션에서 돋보이게 함 */
             />
           </div>
 
-          {/* 하단 슬로건 (선택 사항) */}
           <p
             data-aos="fade-up"
             data-aos-delay="200"
@@ -135,224 +160,239 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4. 기업 개요 (About) */}
-      <section id="about" className="py-32 md:py-48 px-[5%] bg-white">
+      {/* 4. 기업 개요 (About) - 애플/하이엔드 스타일의 미니멀 비주얼 레이아웃 */}
+      <section id="about" className="py-24 md:py-32 px-[5%] bg-white">
         <div className="max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-20 items-start">
-            <div data-aos="fade-right">
-              <div className="flex items-center gap-3 text-blue-600 font-black uppercase tracking-widest text-sm mb-6">
-                <Globe size={20} /> Corporate Overview
-              </div>
-              <h2 className="text-5xl md:text-7xl font-black mb-10 leading-[1.1] tracking-tighter uppercase italic">
-                Beyond Education,
-                <br />
-                Create New{" "}
-                <span className="text-blue-600 font-black">Ground</span>
+          {/* 타이포그래피 영역 */}
+          <div
+            className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16 md:mb-20"
+            data-aos="fade-up"
+          >
+            <div>
+              <span className="text-blue-600 font-bold uppercase tracking-widest text-xs mb-4 block">
+                Corporate Overview
+              </span>
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 tracking-tight leading-[1.3] break-keep">
+                현장의 노하우와 데이터의 결합, <br />
+                스포츠 비즈니스의 새로운 표준.
               </h2>
-              <div className="space-y-6 text-gray-500 text-lg md:text-xl font-medium leading-relaxed max-w-xl">
-                <p>
-                  그라운드 코퍼레이션은 현장에서 얻은 데이터를 기반으로 스포츠의
-                  미래를 설계하는 <strong>인프라 혁신 기업</strong>입니다.
-                </p>
-                <p>
-                  우리는 교육을 넘어 선수와 시설, 그리고 브랜드를 하나로 잇는
-                  글로벌 스포츠 에코시스템을 구축하고 있습니다.
-                </p>
-                <p className="text-blue-600 font-black italic uppercase tracking-tight">
-                  "우리의 모든 활동은 더 나은 스포츠 환경을 위해 존재합니다."
+            </div>
+            <div className="md:max-w-md">
+              <p className="text-gray-500 text-base md:text-lg font-medium leading-relaxed break-keep">
+                단순한 에이전시를 넘어 교육, 시설, 브랜드를 하나로 잇습니다.
+                그라운드코퍼레이션만의 독보적인 글로벌 에코시스템으로 선수의
+                성장을 지원합니다.
+              </p>
+            </div>
+          </div>
+
+          {/* 벤토 그리드 (시각 자료 위주) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 auto-rows-[280px] md:auto-rows-[360px]">
+            {/* Box 1: 통합 에코시스템 (메인 이미지) */}
+            <div
+              className="md:col-span-2 md:row-span-2 rounded-[2rem] overflow-hidden relative group shadow-sm"
+              data-aos="fade-up"
+            >
+              <img
+                src="https://images.unsplash.com/photo-1510074377623-8cf13fb86c08?q=80&w=1600"
+                alt="Global Ecosystem"
+                className="w-full h-full object-cover transition-transform duration-[2s] group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#050a14]/90 via-[#050a14]/20 to-transparent" />
+              <div className="absolute bottom-8 left-8 md:bottom-12 md:left-12">
+                <div className="flex items-center gap-3 mb-3">
+                  <Globe size={20} className="text-blue-500" />
+                  <span className="text-blue-500 font-bold tracking-widest text-xs uppercase">
+                    Global Ecosystem
+                  </span>
+                </div>
+                <h3 className="text-white text-3xl md:text-5xl font-bold tracking-tight mb-4">
+                  통합 인프라 네트워크
+                </h3>
+                <p className="text-white/80 text-base md:text-lg font-medium max-w-sm break-keep">
+                  유소년 아카데미부터 엘리트 매니지먼트, IT 솔루션까지 완벽하게
+                  이어지는 밸류체인.
                 </p>
               </div>
             </div>
-            <div className="grid sm:grid-cols-2 gap-6" data-aos="fade-left">
-              {[
-                {
-                  icon: <Zap size={40} />,
-                  title: "Innovation",
-                  desc: "데이터 기반의 체계적인 교육 솔루션",
-                },
-                {
-                  icon: <Award size={40} />,
-                  title: "Premium",
-                  desc: "타협하지 않는 최상의 퀄리티 브랜드",
-                },
-                {
-                  icon: <Users size={40} />,
-                  title: "Growth",
-                  desc: "선수와 함께 꿈꾸는 무한한 성장",
-                },
-                {
-                  icon: <HeartPulse size={40} />,
-                  title: "Care",
-                  desc: "투명하고 편리한 스마트 매니지먼트",
-                },
-              ].map((val, idx) => (
-                <div
-                  key={idx}
-                  className={`p-10 rounded-[2.5rem] bg-gray-50 hover:bg-blue-50 transition-colors border border-gray-100 group ${idx % 2 !== 0 ? "sm:mt-12" : ""}`}
+
+            {/* Box 2: 핵심 가치 - 혁신과 프리미엄 (이미지 추가됨) */}
+            <div
+              className="rounded-[2rem] overflow-hidden relative group shadow-sm"
+              data-aos="fade-left"
+              data-aos-delay="100"
+            >
+              <img
+                src="https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=800"
+                alt="Innovation & Premium"
+                className="w-full h-full object-cover transition-transform duration-[2s] group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-black/40 group-hover:bg-black/50 transition-colors" />
+              <div className="absolute bottom-8 left-8 md:bottom-10 md:left-10 pr-8">
+                <Zap size={28} className="text-white mb-4" />
+                <h3 className="text-white text-2xl font-bold tracking-tight mb-2">
+                  Innovation & Premium
+                </h3>
+                <p className="text-white/80 text-sm md:text-base font-medium break-keep">
+                  데이터 기반 혁신과 타협하지 않는 최상의 퀄리티.
+                </p>
+              </div>
+            </div>
+
+            {/* Box 3: 핵심 가치 - 성장과 케어 */}
+            <div
+              className="rounded-[2rem] overflow-hidden relative group shadow-sm"
+              data-aos="fade-left"
+              data-aos-delay="200"
+            >
+              <img
+                src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?q=80&w=800"
+                alt="Care & Growth"
+                className="w-full h-full object-cover transition-transform duration-[2s] group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-black/40 group-hover:bg-black/50 transition-colors" />
+              <div className="absolute bottom-8 left-8 md:bottom-10 md:left-10 pr-8">
+                <Users size={28} className="text-white mb-4" />
+                <h3 className="text-white text-2xl font-bold tracking-tight mb-2">
+                  Growth & Care
+                </h3>
+                <p className="text-white/80 text-sm md:text-base font-medium break-keep">
+                  선수들과 함께 나아가는 스마트 매니지먼트.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. 주요 사업 영역 (전체화면 배경 + 화이트 카드 UI - 유지) */}
+      <section
+        id="business"
+        className="relative h-screen min-h-[800px] flex items-center bg-gray-900 overflow-hidden"
+      >
+        <div className="absolute inset-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentUnit}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1, ease: "easeInOut" }}
+              className="absolute inset-0"
+            >
+              <img
+                src={businessUnits[currentUnit].image}
+                className="w-full h-full object-cover"
+                alt={businessUnits[currentUnit].title}
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        <div className="relative z-10 w-full max-w-[1440px] mx-auto px-[5%] h-full flex items-end md:items-center pb-24 md:pb-0">
+          <div className="w-full max-w-xl">
+            <div className="mb-8" data-aos="fade-up">
+              <span className="text-white shadow-sm font-bold uppercase tracking-widest text-sm mb-2 block">
+                Business Portfolio
+              </span>
+              <h2 className="text-4xl md:text-5xl font-bold text-white drop-shadow-md">
+                주요 사업 영역
+              </h2>
+            </div>
+
+            <div
+              data-aos="fade-up"
+              data-aos-delay="100"
+              className="bg-white rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden min-h-[380px]"
+            >
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentUnit + "content"}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.4 }}
+                  className="flex flex-col h-full justify-between"
                 >
-                  <div className="text-blue-600 mb-6 group-hover:scale-110 transition-transform">
-                    {val.icon}
+                  <div>
+                    <div className="text-blue-600 mb-6 bg-blue-50 w-14 h-14 flex items-center justify-center rounded-xl">
+                      {businessUnits[currentUnit].icon}
+                    </div>
+
+                    <span className="text-gray-400 font-bold uppercase tracking-widest text-xs mb-2 block">
+                      {businessUnits[currentUnit].category}
+                    </span>
+
+                    <h3 className="text-2xl md:text-3xl font-bold text-[#050a14] mb-4 break-keep">
+                      {businessUnits[currentUnit].title}
+                    </h3>
+
+                    <p className="text-gray-600 text-base md:text-lg leading-relaxed font-medium mb-8 break-keep">
+                      {businessUnits[currentUnit].description}
+                    </p>
                   </div>
-                  <h4 className="text-2xl font-black mb-4 uppercase italic tracking-tighter">
-                    {val.title}
-                  </h4>
-                  <p className="text-gray-400 font-bold leading-relaxed text-sm">
-                    {val.desc}
-                  </p>
-                </div>
+
+                  <div>
+                    {businessUnits[currentUnit].id === "shootingstar" ? (
+                      <div className="flex flex-wrap gap-2">
+                        {businessUnits[currentUnit].branches?.map((branch) => (
+                          <Link
+                            key={branch.name}
+                            href={branch.link}
+                            className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 text-gray-700 px-5 py-3 rounded-full font-bold text-sm hover:border-blue-600 hover:text-blue-600 transition-colors"
+                          >
+                            <MapPin size={16} /> {branch.name}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <Link
+                        href={businessUnits[currentUnit].link || "#"}
+                        className="inline-flex items-center gap-3 bg-[#050a14] text-white px-8 py-4 rounded-full font-bold text-sm hover:bg-blue-600 transition-colors"
+                      >
+                        자세히 보기 <ArrowRight size={18} />
+                      </Link>
+                    )}
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+
+              <div className="absolute bottom-8 right-8 md:bottom-12 md:right-12 flex gap-3 z-20">
+                <button
+                  onClick={handlePrev}
+                  className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-full text-gray-600 hover:bg-blue-600 hover:text-white transition-colors"
+                >
+                  <ChevronLeft size={24} />
+                </button>
+                <button
+                  onClick={handleNext}
+                  className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-full text-gray-600 hover:bg-blue-600 hover:text-white transition-colors"
+                >
+                  <ChevronRight size={24} />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-8 flex gap-2">
+              {businessUnits.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentUnit(idx)}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                    idx === currentUnit
+                      ? "w-8 bg-blue-500"
+                      : "w-2 bg-white/40 hover:bg-white/70"
+                  }`}
+                  aria-label={`Go to slide ${idx + 1}`}
+                />
               ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* 5. 사업 영역 (Business Slider) */}
-      <section
-        id="business"
-        className="relative h-screen bg-[#050a14] overflow-hidden"
-      >
-        <div className="absolute inset-0">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentSlide}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.4 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.8 }}
-              className="absolute inset-0"
-            >
-              <img
-                src={allUnits[currentSlide].image}
-                className="w-full h-full object-cover shadow-inner"
-                alt="bg"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#050a14] via-transparent to-[#050a14]" />
-            </motion.div>
-          </AnimatePresence>
-        </div>
-        <div className="relative z-10 h-full max-w-[1440px] mx-auto px-[5%] flex flex-col justify-center">
-          <div className="mb-12">
-            <h2 className="text-white text-5xl md:text-8xl font-black italic uppercase tracking-tighter mb-4 text-white">
-              Our <span className="text-blue-600">Business</span>
-            </h2>
-            <div className="w-20 h-2 bg-blue-600" />
-          </div>
-          <div className="flex flex-col md:flex-row items-end justify-between gap-10">
-            <motion.div
-              key={currentSlide + "content"}
-              initial={{ opacity: 0, x: -50 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="max-w-2xl"
-            >
-              <div className="flex items-center gap-4 mb-6">
-                <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl text-white">
-                  {allUnits[currentSlide].icon}
-                </div>
-                <span className="text-blue-500 font-black tracking-widest uppercase text-xs">
-                  Business Unit 0{currentSlide + 1}
-                </span>
-              </div>
-              <h3 className="text-white text-6xl md:text-[5.5rem] font-black leading-none italic uppercase mb-8 tracking-tighter font-sans text-white">
-                {allUnits[currentSlide].title}
-              </h3>
-              <p className="text-white/60 text-xl md:text-2xl font-bold mb-10 leading-relaxed max-w-xl">
-                {allUnits[currentSlide].description}
-              </p>
-              {allUnits[currentSlide].id === "shootingstar" ? (
-                <div className="flex flex-wrap gap-4">
-                  {allUnits[currentSlide].branches?.map((branch) => (
-                    <Link
-                      key={branch.name}
-                      href={branch.link}
-                      className="group flex items-center gap-3 bg-white text-[#050a14] px-8 py-5 rounded-2xl font-black uppercase text-xs hover:bg-blue-600 hover:text-white transition-all shadow-2xl"
-                    >
-                      <MapPin size={18} /> {branch.name}{" "}
-                      <ArrowRight
-                        size={16}
-                        className="group-hover:translate-x-1 transition-transform"
-                      />
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <Link
-                  href={allUnits[currentSlide].link || "#"}
-                  className="inline-flex items-center gap-4 bg-white text-[#050a14] px-10 py-5 rounded-2xl font-black uppercase text-xs hover:bg-blue-600 hover:text-white transition-all shadow-2xl"
-                >
-                  자세히 보기 <ArrowRight size={20} />
-                </Link>
-              )}
-            </motion.div>
-            <div className="flex items-center gap-6">
-              <button
-                onClick={prevSlide}
-                className="w-16 h-16 rounded-full border border-white/20 flex items-center justify-center text-white hover:bg-blue-600 transition-all"
-              >
-                <ArrowLeft size={30} />
-              </button>
-              <div className="text-white font-black text-2xl italic tracking-tighter text-white">
-                <span className="text-blue-600">0{currentSlide + 1}</span> / 0
-                {allUnits.length}
-              </div>
-              <button
-                onClick={nextSlide}
-                className="w-16 h-16 rounded-full border border-white/20 flex items-center justify-center text-white hover:bg-blue-600 transition-all"
-              >
-                <ArrowRight size={30} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 푸터 */}
-      <footer className="bg-[#12151c] text-white px-[5%] py-24 font-sans border-t border-white/5">
-        <div className="flex flex-col md:flex-row justify-between items-start gap-16 border-b border-white/10 pb-20">
-          <div className="max-w-md text-left">
-            <img src="/resource/image/logo.png" alt="Logo" className="h-40" />
-            <p className="text-white/40 font-medium leading-relaxed text-xs text-white/40">
-              (주)그라운드코퍼레이션 | 대표이사: 김강태 <br />
-              본사: 경기도 시흥시 배곧지구 내 프리미엄 센터 <br />
-              문의: groundcoporation@gmail.com
-            </p>
-          </div>
-          <div className="flex gap-20">
-            <div>
-              <h4 className="text-blue-600 font-black uppercase mb-6 tracking-widest text-xs">
-                Business
-              </h4>
-              <ul className="space-y-4 font-bold text-white/60 text-sm">
-                <li>유소년 축구교실</li>
-                <li>스포츠 웨어</li>
-                <li>스포테인먼트</li>
-                <li>IT 솔루션</li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-blue-600 font-black uppercase mb-6 tracking-widest text-xs">
-                SNS
-              </h4>
-              <div className="flex gap-4">
-                <a
-                  href="#"
-                  className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center hover:bg-blue-600 transition-all text-white"
-                >
-                  <Camera size={18} />
-                </a>
-                <a
-                  href="#"
-                  className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center hover:bg-red-600 transition-all text-white"
-                >
-                  <Mail size={18} />
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="pt-10 text-center md:text-left text-[10px] font-black text-white/20 uppercase tracking-[0.4em] text-white/20">
-          © 2026 Ground Corporation. All Rights Reserved.
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
