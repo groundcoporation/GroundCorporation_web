@@ -189,7 +189,7 @@ export default function YeongjongAbout() {
       <section className="py-32 px-[5%] md:px-[10%]">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-12 text-center">
           {[
-            { label: "구장 총 면적", value: "1,500평", icon: <MapPin /> },
+            { label: "구장 총 면적", value: "200평", icon: <MapPin /> },
             { label: "연간 수강생", value: "1,200+", icon: <Users /> },
             { label: "수석 코치진", value: "12명", icon: <CheckCircle2 /> },
             { label: "지역 연계팀", value: "8개", icon: <Trophy /> },

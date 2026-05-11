@@ -27,7 +27,7 @@ export const businessCategories = [
     category: "스포테인먼트",
     units: [
       { id: "agency", title: "에이전시", link: "/business/agency/" },
-      { id: "scholarship", title: "장학사업", link: "#" },
+      { id: "scholarship", title: "장학사업", link: "/business/scholarship/" },
     ],
   },
   {
@@ -36,6 +36,14 @@ export const businessCategories = [
       { id: "ipasscare", title: "IPASSCARE", link: "/business/ipasscare/" },
     ],
   },
+];
+
+// 💡 추가된 기업정보 메뉴 데이터 (경로는 실제 라우팅 구조에 맞게 변경하세요)
+export const aboutMenu = [
+  { title: "기업 개요", link: "/#about" },
+  { title: "조직도", link: "/about/organization" },
+  { title: "인사말", link: "/about/greeting" },
+  { title: "연혁", link: "/about/history" },
 ];
 
 export default function Header() {
@@ -82,14 +90,15 @@ export default function Header() {
                   exit={{ opacity: 0, y: 10 }}
                   className="absolute top-[80px] left-1/2 -translate-x-1/2 w-[160px] bg-white border border-gray-100 shadow-2xl rounded-2xl p-2"
                 >
-                  {["기업 개요", "조직도", "인사말", "연혁"].map((item) => (
+                  {/* 💡 배열 데이터를 매핑하여 각각의 링크로 이동하도록 수정 */}
+                  {aboutMenu.map((item) => (
                     <Link
-                      key={item}
-                      href="/#about"
+                      key={item.title}
+                      href={item.link}
                       onClick={() => setActiveMenu(null)}
                       className="block p-3 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all font-bold text-center"
                     >
-                      {item}
+                      {item.title}
                     </Link>
                   ))}
                 </motion.div>
@@ -167,7 +176,7 @@ export default function Header() {
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              className="fixed top-0 right-0 w-[80%] max-w-[350px] h-full bg-white z-[2000] p-10 shadow-2xl text-[#050a14]"
+              className="fixed top-0 right-0 w-[80%] max-w-[350px] h-full bg-white z-[2000] p-10 shadow-2xl text-[#050a14] overflow-y-auto"
             >
               <button
                 onClick={() => toggleSidebar(false)}
@@ -176,13 +185,23 @@ export default function Header() {
                 <X size={28} />
               </button>
               <nav className="space-y-8 mt-10">
-                <Link
-                  href="/#about"
-                  onClick={() => toggleSidebar(false)}
-                  className="block text-2xl font-black italic uppercase"
-                >
-                  About Us
-                </Link>
+                {/* 💡 모바일 환경에서도 각각의 기업정보 메뉴로 갈 수 있게 카테고리화 */}
+                <div className="space-y-4">
+                  <p className="text-xs font-black text-gray-300 uppercase tracking-widest">
+                    기업정보
+                  </p>
+                  {aboutMenu.map((item) => (
+                    <Link
+                      key={item.title}
+                      href={item.link}
+                      onClick={() => toggleSidebar(false)}
+                      className="block text-xl font-bold hover:text-blue-600"
+                    >
+                      {item.title}
+                    </Link>
+                  ))}
+                </div>
+
                 {businessCategories.map((cat) => (
                   <div key={cat.category} className="space-y-4">
                     <p className="text-xs font-black text-gray-300 uppercase tracking-widest">
