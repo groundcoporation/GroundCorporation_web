@@ -1,56 +1,61 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useAOS } from "@/hooks/useAOS";
 import {
   ShieldCheck,
-  Calendar,
+  Navigation, // 실시간 관제 아이콘
+  MapPin, // 위치 소통 아이콘
+  Heart, // 케어 아이콘
   CreditCard,
-  Bell,
-  Smartphone,
   QrCode,
+  Smartphone,
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import Image from "next/image";
-// 분리한 Header 컴포넌트 임포트
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 export default function IPassCarePage() {
   useAOS();
 
+  // 아이콘을 컴포넌트 자체로 전달하여 타입 에러 방지
   const features = [
     {
-      icon: <Calendar className="text-blue-500" size={32} />,
-      title: "실시간 통합 예약",
-      desc: "시설 이용 및 강습 예약을 단 몇 번의 터치로 간편하게 처리합니다.",
+      icon: ShieldCheck,
+      title: "실시간 안심 등하원",
+      desc: "아이가 시설에 입실하거나 퇴실하는 즉시 부모님께 푸시 알림을 전송하여 안전을 확인합니다.",
     },
     {
-      icon: <CreditCard className="text-blue-500" size={32} />,
-      title: "스마트 결제 관리",
-      desc: "이용권 구매부터 자동 결제까지 투명하고 안전한 정산 시스템을 제공합니다.",
+      icon: Navigation,
+      title: "라이브 위치 관제 시스템",
+      desc: "단순 위치 확인을 넘어 고정밀 GPS로 셔틀의 실시간 이동 경로를 3초 단위로 부모님께 공유합니다.",
     },
     {
-      icon: <Bell className="text-blue-500" size={32} />,
-      title: "맞춤형 알림 서비스",
-      desc: "수업 일정 및 예약 현황을 푸시 알림으로 실시간으로 받아보세요.",
+      icon: MapPin,
+      title: "고퀄리티 실시간 소통",
+      desc: "지도 위에서 확인하는 실시간 소통 채널로 아이의 상태를 기사님과 즉각적으로 묻고 답할 수 있습니다.",
     },
     {
-      icon: <Smartphone className="text-blue-500" size={32} />,
-      title: "모바일 디지털 패스",
-      desc: "종이 회원권 없이 앱 하나로 시설 출입과 인증이 가능합니다.",
+      icon: Heart,
+      title: "맞춤형 케어 리포트",
+      desc: "오늘의 활동 사진과 교육 내용을 앱으로 공유받아 아이의 성장을 실시간으로 함께 확인합니다.",
+    },
+    {
+      icon: CreditCard,
+      title: "비대면 스마트 결제",
+      desc: "직접 방문할 필요 없이 앱에서 교육비 수납을 안전하고 투명하게 처리할 수 있습니다.",
     },
   ];
 
   return (
     <div className="bg-[#050a14] text-white overflow-x-hidden font-sans pt-[80px]">
-      {/* 1. 공통 헤더 적용 */}
+      {/* 1. 공통 헤더 */}
       <Header />
 
       {/* 2. 히어로 섹션 */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
-        {/* 배경 광원 효과 */}
         <div className="absolute top-1/4 -right-20 w-[500px] h-[500px] bg-blue-600/20 blur-[150px] rounded-full" />
 
         <div className="max-w-7xl mx-auto px-[5%] w-full grid lg:grid-cols-2 gap-16 items-center">
@@ -74,7 +79,6 @@ export default function IPassCarePage() {
               지금 바로 앱을 다운로드하고 스마트한 관리를 시작하세요.
             </p>
 
-            {/* 앱 스토어 버튼 */}
             <div className="flex flex-wrap gap-4 mb-12 relative z-10">
               <Link href="#" className="hover:opacity-80 transition-opacity">
                 <img
@@ -92,7 +96,6 @@ export default function IPassCarePage() {
               </Link>
             </div>
 
-            {/* QR 코드 영역 */}
             <div className="flex items-center gap-6 p-6 rounded-3xl bg-white/5 border border-white/10 w-fit relative z-10">
               <div className="bg-white p-2 rounded-xl">
                 <QrCode className="text-black" size={80} />
@@ -109,7 +112,6 @@ export default function IPassCarePage() {
             </div>
           </div>
 
-          {/* 앱 목업 이미지 영역 */}
           <div className="relative flex justify-center z-10" data-aos="zoom-in">
             <motion.div
               animate={{ y: [0, -20, 0] }}
@@ -131,36 +133,49 @@ export default function IPassCarePage() {
         </div>
       </section>
 
-      {/* 3. 특장점 섹션 */}
+      {/* 3. 특장점 섹션 (안전 타이틀 강조 및 5개 레이아웃) */}
       <section className="py-32 bg-white text-[#050a14] rounded-t-[4rem]">
-        <div className="max-w-7xl mx-auto px-[5%]">
+        <div className="max-w-[1400px] mx-auto px-[5%]">
+          {" "}
+          {/* 전체 너비를 조금 더 넓게 설정 */}
           <div className="text-center mb-24" data-aos="fade-up">
-            <h2 className="text-4xl md:text-6xl font-black tracking-tighter italic uppercase mb-6 text-[#050a14]">
-              System <span className="text-blue-600">Features</span>
+            <h2 className="text-4xl md:text-6xl font-black tracking-tighter italic uppercase mb-8 text-[#050a14] leading-tight">
+              LESS WORK, <br className="md:hidden" />
+              <span className="text-blue-600">MORE SAFETY</span>
             </h2>
-            <p className="text-gray-600 text-lg font-medium">
-              관리 업무는 줄이고, 서비스 가치는 높입니다.
+            <p className="text-xl md:text-2xl font-bold text-gray-800 tracking-tight">
+              관리 업무는 줄이고,{" "}
+              <span className="text-blue-600 text-2xl md:text-3xl underline underline-offset-4 font-black">
+                학부모 아이 걱정은 더 줄이고.
+              </span>
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, idx) => (
-              <div
-                key={idx}
-                data-aos="fade-up"
-                data-aos-delay={idx * 100}
-                className="p-10 rounded-[2.5rem] bg-gray-50 border border-gray-100 hover:border-blue-200 transition-all group hover:shadow-xl hover:-translate-y-2 duration-300"
-              >
-                <div className="mb-8 p-4 bg-white rounded-2xl w-fit shadow-sm group-hover:scale-110 transition-transform">
-                  {feature.icon}
+          {/* lg:grid-cols-5 설정을 통해 가로 1열 배치 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {features.map((feature, idx) => {
+              const IconComponent = feature.icon;
+              return (
+                <div
+                  key={idx}
+                  data-aos="fade-up"
+                  data-aos-delay={idx * 100}
+                  className="p-6 rounded-[2rem] bg-gray-50 border border-gray-100 hover:border-blue-200 transition-all group hover:shadow-2xl hover:-translate-y-2 duration-300 flex flex-col items-start"
+                >
+                  <div className="mb-6 p-3 bg-white rounded-xl w-fit shadow-md group-hover:bg-blue-600 transition-all duration-300">
+                    <IconComponent
+                      size={28}
+                      className="text-blue-600 group-hover:text-white transition-colors duration-300"
+                    />
+                  </div>
+                  <h4 className="text-xl font-black mb-3 tracking-tight text-[#050a14] break-keep">
+                    {feature.title}
+                  </h4>
+                  <p className="text-gray-500 font-bold text-[13px] leading-relaxed break-keep">
+                    {feature.desc}
+                  </p>
                 </div>
-                <h4 className="text-2xl font-black mb-4 tracking-tight text-[#050a14]">
-                  {feature.title}
-                </h4>
-                <p className="text-gray-500 font-bold text-sm leading-relaxed">
-                  {feature.desc}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>

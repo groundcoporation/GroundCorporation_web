@@ -38,7 +38,7 @@ export default function HomePage() {
     {
       id: "shootingstar",
       category: "Sports Education",
-      title: "유소년 스포츠 프로그램",
+      title: "강인한 슛팅스타",
       description:
         "데이터 기반 프리미엄 유소년 축구교실 '강인한 슛팅스타' 운영 및 체계적인 유망주 육성 시스템",
       image:
