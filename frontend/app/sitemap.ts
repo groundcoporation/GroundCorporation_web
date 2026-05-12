@@ -1,26 +1,41 @@
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from 'next';
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  // 우리 사이트의 모든 주소 목록을 여기에 적습니다.
+/**
+ * [사이트맵 자동 생성 설정]
+ * 이 함수는 배포 시 /sitemap.xml 페이지를 자동으로 생성합니다.
+ * 네이버나 구글 같은 검색 엔진 로봇이 이 파일을 읽어 사이트의 모든 구조를 파악합니다.
+ */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // 실제 서비스되는 도메인 주소
+  const baseUrl = 'https://www.groundcorporation.com';
+
   return [
     {
-      url: 'https://www.groundcorporation.com', // 메인 홈페이지
+      url: baseUrl, // 메인 페이지
       lastModified: new Date(),
-      changeFrequency: 'weekly', // 얼마나 자주 업데이트되는지 (주 단위)
-      priority: 1, // 검색 엔진에게 알려주는 중요도 (1이 최고점)
+      changeFrequency: 'weekly',
+      priority: 1, // 가장 높은 중요도
     },
     {
-      url: 'https://www.groundcorporation.com/branch/siheung/main', // 시흥점
+      url: `${baseUrl}/branch/siheung/main/`, // 시흥점
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.8,
     },
     {
-      url: 'https://www.groundcorporation.com/branch/yeongjong/main', // 영종점
+      url: `${baseUrl}/branch/yeongjong/main/`, // 영종점
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.8,
     },
-    // 나중에 지점이 더 생기면 아래에 똑같은 형식으로 추가만 해주면 됩니다!
+    /**
+     * 나중에 새로운 지점이 추가되면 아래와 같은 형식으로 계속 추가해 주시면 됩니다.
+     * {
+     *   url: `${baseUrl}/branch/new-location/main/`,
+     *   lastModified: new Date(),
+     *   changeFrequency: 'monthly',
+     *   priority: 0.8,
+     * },
+     */
   ];
 }
