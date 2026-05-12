@@ -1,3 +1,5 @@
+//애니메이션 부분 코드. 네이버, 구글 노출위해서 분리
+
 "use client";
 
 import { useEffect } from "react";
