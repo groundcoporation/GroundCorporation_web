@@ -25,15 +25,18 @@ export const businessCategories = [
   },
   {
     category: "스포테인먼트",
-    units: [
-      { id: "agency", title: "에이전시", link: "/business/agency/" },
-      { id: "scholarship", title: "장학사업", link: "/business/scholarship/" },
-    ],
+    units: [{ id: "agency", title: "에이전시", link: "/business/agency/" }],
   },
   {
     category: "IT 솔루션",
     units: [
       { id: "ipasscare", title: "IPASSCARE", link: "/business/ipasscare/" },
+    ],
+  },
+  {
+    category: "장학 사업",
+    units: [
+      { id: "scholarship", title: "장학 사업", link: "/business/scholarship/" },
     ],
   },
 ];
