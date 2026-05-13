@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 // 공통 비즈니스 데이터
 export const businessCategories = [
   {
-    category: "유소년 축구교실",
+    category: "유소년 육성사업",
     units: [
       { id: "shootingstar", title: "강인한 슛팅스타", link: "/#business" },
     ],
