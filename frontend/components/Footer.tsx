@@ -24,7 +24,7 @@ export default function Footer() {
               Business
             </h4>
             <ul className="space-y-4 font-bold text-white/60 text-sm">
-              <li>유소년 축구교실</li>
+              <li>유소년 육성사업</li>
               <li>스포츠 웨어</li>
               <li>스포테인먼트</li>
               <li>IT 솔루션</li>
