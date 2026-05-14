@@ -35,7 +35,7 @@ serve(async (req) => {
 
     // 실제 결제 승인 요청 (sndStoreid에 DB에서 가져온 MID를 넣습니다)
     const response = await fetch(
-      "https://kspay.ksnet.co.kr/store/KSPayMobileV1.4/web_host/recv_post.jsp",
+      "https://kspay.ksnet.co.kr/store/KSPayWebV1.4/web_host/recv_post.jsp",
       {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
