@@ -160,7 +160,7 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
                     if (typeof requestPay === 'function') {
                       requestPay({
                         callbackfunction: 'window.kspayCallback',
-                        mid: '${paymentData.storeId || process.env.EXPO_PUBLIC_KSPAY_MID}',
+                        mid: '${paymentData.kspay_mid}',
                         paymethod: 'card',
                         ordernumb: 'ORD_${Date.now()}',
                         productname: '${paymentData.packageName}',

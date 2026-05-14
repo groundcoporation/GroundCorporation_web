@@ -65,19 +65,22 @@ export default function PassPurchaseScreen({ navigation }: any) {
   const [selectedMainId, setSelectedMainId] = useState<string | null>(null);
   const [selectedCountIndex, setSelectedCountIndex] = useState<number>(0);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  
+
+  // 🚀 [수정됨] 현재 지점의 모든 DB 정보(kspay_mid, 지점명 등)를 담는 상태가 추가되었습니다!
+  const [currentBranch, setCurrentBranch] = useState<any>(null);
+
   // 🚀 다자녀 처리를 위한 상태 추가
-  const [allChildren, setAllChildren] = useState<any[]>([]); 
+  const [allChildren, setAllChildren] = useState<any[]>([]);
   const [selectedChild, setSelectedChild] = useState<any>(null);
-  
+
   const [showOptionModal, setShowOptionModal] = useState(false);
   const [showKSPay, setShowKSPay] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // 🚀 스택형 장바구니 상태 관리
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartExpanded, setIsCartExpanded] = useState(false); // 장바구니 펼침 상태
-  
+
   const [isClassAssigned, setIsClassAssigned] = useState(false);
   const [showConsultModal, setShowConsultModal] = useState(false);
   const [branchContact, setBranchContact] = useState({ phone: "", kakao: "" });
@@ -125,12 +128,12 @@ export default function PassPurchaseScreen({ navigation }: any) {
         .eq("id", user.id)
         .single();
       setCurrentUser(profile);
-      
+
       const { data: children } = await supabase
         .from("children")
         .select("*")
         .eq("parent_id", user.id);
-        
+
       if (children) {
         setAllChildren(children);
         // 🚀 팀장님 결단: 구매 시점에서는 누굴 지정할 필요 없이 무조건 공용이므로 초기화!
@@ -150,27 +153,31 @@ export default function PassPurchaseScreen({ navigation }: any) {
   const fetchPackagesFromDB = async () => {
     setLoading(true);
     try {
+      // 🚀 [수정됨] 기존 "phone_number, kakao_link"만 가져오던 것을 "*"로 변경하여 kspay_mid, name 등 지점 전체 정보를 가져오게 수정되었습니다.
       const { data: branchData } = await supabase
         .from("branches")
-        .select("phone_number, kakao_link")
+        .select("*")
         .eq("id", selectedBranchId)
         .single();
+
       if (branchData) {
+        // 🚀 [수정됨] 지점 정보를 통째로 보관하여 나중에 결제창 띄울 때 하드코딩 없이 사용합니다.
+        setCurrentBranch(branchData);
         setBranchContact({
           phone: branchData.phone_number || "",
           kakao: branchData.kakao_link || "",
         });
       }
-      
+
       // 🚀 순서 문제 해결 1: nullsFirst=false 옵션으로 빈 값을 뒤로 보냄
       const { data, error } = await supabase
         .from("packages")
         .select(`*, package_options (*)`)
         .eq("branch_id", selectedBranchId)
         .order("display_order", { ascending: true, nullsFirst: false });
-      
+
       if (error) throw error;
-      
+
       // 🚀 순서 문제 해결 2: 자바스크립트 단에서 한 번 더 강력하게 정렬 (쐐기 박기)
       const sortedData = (data || []).sort((a, b) => {
         const orderA = a.display_order ?? 999; // 값이 없으면 맨 뒤(999)로
@@ -182,11 +189,11 @@ export default function PassPurchaseScreen({ navigation }: any) {
 
       // 🚀 is_option 상관없이 해당 카테고리 패키지면 모두 표시 (단품 구매 가능)
       const displayPackages = sortedData.filter(
-        (p) => p.category_id === activeCategory
+        (p) => p.category_id === activeCategory,
       );
-      
+
       setPackages(displayPackages);
-      
+
       if (displayPackages && displayPackages.length > 0) {
         setSelectedMainId(displayPackages[0].id);
         setSelectedCountIndex(0);
@@ -202,23 +209,30 @@ export default function PassPurchaseScreen({ navigation }: any) {
     setIsProcessing(true);
     try {
       const response = await fetch(
-        "https://pgdev.ksnet.co.kr/store/KSPayMobileV1.4/web_host/recv_jpost.jsp",
+        process.env.EXPO_PUBLIC_SERVER_AUTH_URL || "", // ✅ 우리가 설정한 .env 주소 사용
         {
           method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: `sndCommConId=${payKey}&sndAmount=${finalPrice}&sndActionType=1&sndCharSet=UTF-8`,
+          headers: { "Content-Type": "application/json" }, // ✅ JSON 통신
+          body: JSON.stringify({
+            payKey: payKey,
+            amount: finalPrice,
+            branch_id: selectedBranchId, // ✅ 본부장님이 강조하신 지점 아이디 전송!
+          }),
         },
       );
 
       if (response.ok) {
         // 🚀 다건(장바구니) 결제 DB 기록: 수량(quantity)만큼 DB에 개별 행으로 인서트
         const dbInserts: any[] = [];
-        
+
         cartItems.forEach((cartItem) => {
           const opt = cartItem.pkg.package_options?.[cartItem.optIndex];
-          const optionTotalCount = opt?.total_count || cartItem.pkg.total_count || 10;
+          const optionTotalCount =
+            opt?.total_count || cartItem.pkg.total_count || 10;
           const expiryDate = new Date();
-          expiryDate.setDate(expiryDate.getDate() + (cartItem.pkg.duration_in_days || 30));
+          expiryDate.setDate(
+            expiryDate.getDate() + (cartItem.pkg.duration_in_days || 30),
+          );
 
           // 수량만큼 반복해서 DB 삽입 배열에 넣습니다.
           for (let i = 0; i < cartItem.quantity; i++) {
@@ -238,7 +252,9 @@ export default function PassPurchaseScreen({ navigation }: any) {
           }
         });
 
-        const { error: dbError } = await supabase.from("user_packages").insert(dbInserts);
+        const { error: dbError } = await supabase
+          .from("user_packages")
+          .insert(dbInserts);
 
         if (dbError) throw dbError;
         navigation.replace("PurchaseSuccess");
@@ -299,7 +315,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
   // 🚀 장바구니에 아이템 담기 (중복 시 수량만 증가)
   const addToCart = (pkg: Package, optIndex: number) => {
     const existingIndex = cartItems.findIndex(
-      (c) => c.pkg.id === pkg.id && c.optIndex === optIndex
+      (c) => c.pkg.id === pkg.id && c.optIndex === optIndex,
     );
 
     if (existingIndex !== -1) {
@@ -311,7 +327,12 @@ export default function PassPurchaseScreen({ navigation }: any) {
       // 없으면 새로 추가
       setCartItems([
         ...cartItems,
-        { uniqueId: Date.now().toString() + Math.random(), pkg, optIndex, quantity: 1 }
+        {
+          uniqueId: Date.now().toString() + Math.random(),
+          pkg,
+          optIndex,
+          quantity: 1,
+        },
       ]);
     }
     setIsCartExpanded(true); // 담으면 장바구니 열기
@@ -340,19 +361,22 @@ export default function PassPurchaseScreen({ navigation }: any) {
 
   // 🚀 장바구니(cartItems) 수량 곱한 총 금액 계산
   const finalPrice = cartItems.reduce((sum, cartItem) => {
-    const p = cartItem.pkg.package_options?.[cartItem.optIndex]?.price || cartItem.pkg.price || 0;
-    return sum + (p * cartItem.quantity); // 수량 반영
+    const p =
+      cartItem.pkg.package_options?.[cartItem.optIndex]?.price ||
+      cartItem.pkg.price ||
+      0;
+    return sum + p * cartItem.quantity; // 수량 반영
   }, 0);
 
   // 🚀 장바구니에 들어있는 총 상품 개수
   const totalCartCount = cartItems.reduce((acc, c) => acc + c.quantity, 0);
 
   // 🚀 장바구니에 상담 전용 상품이 하나라도 들어있는지 확인
-  const hasConsult = cartItems.some(c => c.pkg.is_consult);
+  const hasConsult = cartItems.some((c) => c.pkg.is_consult);
 
   // 🚀 팝업 옵션 필터링: DB에서 is_option=true 이면서 장바구니(cartItems)에 안 담긴 놈만 팝업 표시
   const popupOptions = allPackages.filter(
-    (p) => p.is_option && !cartItems.some(cart => cart.pkg.id === p.id)
+    (p) => p.is_option && !cartItems.some((cart) => cart.pkg.id === p.id),
   );
 
   const handleOpenPayment = () => {
@@ -413,8 +437,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         // 🚀 하단 가림 완벽 방지: 장바구니가 열려있을 땐 여백을 400으로 팍 늘려주고, 닫히면 160으로 줍니다.
         contentContainerStyle={[
-          styles.scrollContent, 
-          { paddingBottom: isCartExpanded && cartItems.length > 0 ? 400 : 160 }
+          styles.scrollContent,
+          { paddingBottom: isCartExpanded && cartItems.length > 0 ? 400 : 160 },
         ]}
       >
         {/* 🚀 변경 포인트 5: DB 카테고리 데이터로 탭 렌더링 */}
@@ -463,8 +487,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
             packages.map((item) => {
               const isSelected = selectedMainId === item.id;
               // 🚀 장바구니에 들어있는지 확인하여 테두리 색상 처리용
-              const isInCart = cartItems.some(c => c.pkg.id === item.id);
-              
+              const isInCart = cartItems.some((c) => c.pkg.id === item.id);
+
               return (
                 <View
                   key={item.id}
@@ -492,7 +516,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
                       )}
                     </View>
                   </TouchableOpacity>
-                  
+
                   {/* 🚀 옵션이 열렸을 때 (선택된 카드일 때) */}
                   {isSelected && (
                     <View style={styles.optionContainer}>
@@ -504,7 +528,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
                                 key={opt.id}
                                 style={[
                                   styles.chip,
-                                  selectedCountIndex === idx && styles.activeChip,
+                                  selectedCountIndex === idx &&
+                                    styles.activeChip,
                                 ]}
                                 onPress={() => setSelectedCountIndex(idx)}
                               >
@@ -520,21 +545,26 @@ export default function PassPurchaseScreen({ navigation }: any) {
                               </TouchableOpacity>
                             ))}
                           </View>
-                          
+
                           {/* 🚀 담기 버튼 및 가격 명확히 분리 */}
                           <View style={styles.priceRow}>
                             <Text style={styles.priceValue}>
                               {formatCurrency(
-                                item.package_options[selectedCountIndex]?.price ||
+                                item.package_options[selectedCountIndex]
+                                  ?.price ||
                                   item.price ||
                                   0,
                               )}
                             </Text>
-                            <TouchableOpacity 
-                              style={styles.addCartBtn} 
-                              onPress={() => addToCart(item, selectedCountIndex)}
+                            <TouchableOpacity
+                              style={styles.addCartBtn}
+                              onPress={() =>
+                                addToCart(item, selectedCountIndex)
+                              }
                             >
-                              <Text style={styles.addCartBtnText}>장바구니 담기</Text>
+                              <Text style={styles.addCartBtnText}>
+                                장바구니 담기
+                              </Text>
                             </TouchableOpacity>
                           </View>
                         </>
@@ -542,8 +572,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
                         // 상담 전용 상품일 경우
                         <View style={styles.priceRow}>
                           <Text style={styles.priceValue}>상담 후 결제</Text>
-                          <TouchableOpacity 
-                            style={styles.addCartBtn} 
+                          <TouchableOpacity
+                            style={styles.addCartBtn}
                             onPress={() => addToCart(item, 0)}
                           >
                             <Text style={styles.addCartBtnText}>담기</Text>
@@ -580,25 +610,35 @@ export default function PassPurchaseScreen({ navigation }: any) {
 
       {/* 🚀 스택 장바구니 + 결제 푸터 일체형 패널 */}
       <View style={styles.integratedFooterWrapper}>
-        
         {/* 장바구니 헤더 (토글 버튼 역할) */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.cartToggleHeader}
-          onPress={() => cartItems.length > 0 && setIsCartExpanded(!isCartExpanded)}
+          onPress={() =>
+            cartItems.length > 0 && setIsCartExpanded(!isCartExpanded)
+          }
           activeOpacity={0.8}
         >
           <Text style={styles.cartToggleText}>
-            {cartItems.length > 0 ? `🛒 장바구니에 ${totalCartCount}개 담김` : '🛒 상품을 선택해주세요'}
+            {cartItems.length > 0
+              ? `🛒 장바구니에 ${totalCartCount}개 담김`
+              : "🛒 상품을 선택해주세요"}
           </Text>
           {cartItems.length > 0 && (
-            <Ionicons name={isCartExpanded ? "chevron-down" : "chevron-up"} size={20} color="#64748B" />
+            <Ionicons
+              name={isCartExpanded ? "chevron-down" : "chevron-up"}
+              size={20}
+              color="#64748B"
+            />
           )}
         </TouchableOpacity>
 
         {/* 🚀 펼쳐지는 장바구니 리스트 영역 */}
         {isCartExpanded && cartItems.length > 0 && (
           <View style={styles.cartListContainer}>
-            <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ maxHeight: 200 }}
+              showsVerticalScrollIndicator={false}
+            >
               {cartItems.map((cartItem) => {
                 const opt = cartItem.pkg.package_options?.[cartItem.optIndex];
                 const price = opt?.price || cartItem.pkg.price || 0;
@@ -608,22 +648,33 @@ export default function PassPurchaseScreen({ navigation }: any) {
                       <Text style={styles.cartItemName}>
                         {cartItem.pkg.name} {opt ? `(${opt.label})` : ""}
                       </Text>
-                      <Text style={styles.cartItemPrice}>{formatCurrency(price * cartItem.quantity)}</Text>
+                      <Text style={styles.cartItemPrice}>
+                        {formatCurrency(price * cartItem.quantity)}
+                      </Text>
                     </View>
-                    
+
                     {/* 🚀 수량 컨트롤러 (+, -) */}
                     <View style={styles.quantityController}>
-                      <TouchableOpacity onPress={() => updateQuantity(cartItem.uniqueId, -1)} style={styles.qtyBtn}>
+                      <TouchableOpacity
+                        onPress={() => updateQuantity(cartItem.uniqueId, -1)}
+                        style={styles.qtyBtn}
+                      >
                         <Ionicons name="remove" size={16} color="#64748B" />
                       </TouchableOpacity>
                       <Text style={styles.qtyText}>{cartItem.quantity}</Text>
-                      <TouchableOpacity onPress={() => updateQuantity(cartItem.uniqueId, 1)} style={styles.qtyBtn}>
+                      <TouchableOpacity
+                        onPress={() => updateQuantity(cartItem.uniqueId, 1)}
+                        style={styles.qtyBtn}
+                      >
                         <Ionicons name="add" size={16} color="#64748B" />
                       </TouchableOpacity>
                     </View>
-                    
+
                     {/* 삭제 버튼 */}
-                    <TouchableOpacity onPress={() => removeCartItem(cartItem.uniqueId)} style={styles.deleteBtn}>
+                    <TouchableOpacity
+                      onPress={() => removeCartItem(cartItem.uniqueId)}
+                      style={styles.deleteBtn}
+                    >
                       <Ionicons name="close" size={20} color="#CBD5E1" />
                     </TouchableOpacity>
                   </View>
@@ -637,21 +688,28 @@ export default function PassPurchaseScreen({ navigation }: any) {
         <View style={styles.payBar}>
           <View style={styles.payInfoBox}>
             <Text style={styles.payInfoLabel}>총 결제 금액</Text>
-            <Text style={styles.payInfoPrice}>{hasConsult ? "상담 대기" : formatCurrency(finalPrice)}</Text>
+            <Text style={styles.payInfoPrice}>
+              {hasConsult ? "상담 대기" : formatCurrency(finalPrice)}
+            </Text>
           </View>
           <TouchableOpacity
             style={[
               styles.mainActionBtn,
               hasConsult && styles.consultActionBtn,
-              cartItems.length === 0 && { backgroundColor: '#94A3B8' } // 비었을 때 회색 처리
+              cartItems.length === 0 && { backgroundColor: "#94A3B8" }, // 비었을 때 회색 처리
             ]}
             onPress={() => {
               if (cartItems.length === 0) {
-                Alert.alert("알림", "원하시는 상품에서 [담기] 버튼을 눌러주세요.");
+                Alert.alert(
+                  "알림",
+                  "원하시는 상품에서 [담기] 버튼을 눌러주세요.",
+                );
                 return;
               }
               if (hasConsult) {
-                Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`);
+                Linking.openURL(
+                  `tel:${branchContact.phone || "010-0000-0000"}`,
+                );
               } else if (!isClassAssigned) {
                 setShowConsultModal(true);
               } else if (popupOptions.length > 0) {
@@ -728,16 +786,19 @@ export default function PassPurchaseScreen({ navigation }: any) {
               {/* 🚀 팝업 옵션 리스트 렌더링 */}
               {popupOptions.map((opt) => {
                 // 팝업에서 담은 것도 즉시 장바구니로 들어갑니다!
-                const isChecked = cartItems.some(c => c.pkg.id === opt.id);
-                const optPrice = opt.package_options?.[0]?.price || opt.price || 0;
-                
+                const isChecked = cartItems.some((c) => c.pkg.id === opt.id);
+                const optPrice =
+                  opt.package_options?.[0]?.price || opt.price || 0;
+
                 return (
                   <TouchableOpacity
                     key={opt.id}
                     style={styles.optionItem}
                     onPress={() => {
                       if (isChecked) {
-                        setCartItems(cartItems.filter(c => c.pkg.id !== opt.id));
+                        setCartItems(
+                          cartItems.filter((c) => c.pkg.id !== opt.id),
+                        );
                       } else {
                         addToCart(opt, 0); // 팝업에서는 기본 옵션(0)으로 1개 담기
                       }
@@ -779,9 +840,10 @@ export default function PassPurchaseScreen({ navigation }: any) {
           paymentData={{
             amount: finalPrice,
             // 🚀 다건 결제명: 총 상품 개수에 따라 OOO 외 N건 표시
-            packageName: totalCartCount > 1 
-              ? `${cartItems[0].pkg.name} 외 ${totalCartCount - 1}건`
-              : `${cartItems[0].pkg.name} (${cartItems[0].pkg.package_options?.[cartItems[0].optIndex]?.label || "기본"})`,
+            packageName:
+              totalCartCount > 1
+                ? `${cartItems[0].pkg.name} 외 ${totalCartCount - 1}건`
+                : `${cartItems[0].pkg.name} (${cartItems[0].pkg.package_options?.[cartItems[0].optIndex]?.label || "기본"})`,
             userName: currentUser.name,
             userPhone: currentUser.phone || "01000000000",
             packageId: cartItems[0].pkg.id, // 대표 ID 하나만 전송
@@ -789,13 +851,18 @@ export default function PassPurchaseScreen({ navigation }: any) {
             childId: null, // 🚀 결제 단계에서는 자녀 정보를 넘기지 않음
             childName: "공용 이용권",
             // 💡 DB 컬럼명에 맞춰 totalCount라는 Key로 전송합니다.
-            totalCount: cartItems[0].pkg.package_options?.[cartItems[0].optIndex]?.total_count || 10,
+            totalCount:
+              cartItems[0].pkg.package_options?.[cartItems[0].optIndex]
+                ?.total_count || 10,
             durationInDays: cartItems[0].pkg.duration_in_days || 30,
             weeklyLimit: cartItems[0].pkg.weekly_limit || 2,
             branchId: selectedBranchId,
-            branchName:
-              selectedBranchId === "branch_1" ? "시흥본점" : "영종도점",
-            storeId: "2999199999",
+
+            // 🚀 [수정됨] 기존 하드코딩(selectedBranchId === "branch_1" ? "시흥본점" : "영종도점")을 제거하고 DB에서 가져온 이름을 씁니다.
+            branchName: currentBranch?.name || "지점",
+
+            // 🚀 [수정됨] 기존 테스트용 하드코딩("2999199999")을 완벽히 제거하고 DB의 kspay_mid를 사용하도록 수정되었습니다!
+            storeId: currentBranch?.kspay_mid,
           }}
         />
       )}
@@ -851,9 +918,9 @@ const styles = StyleSheet.create({
   activeTab: { borderBottomColor: "#6366F1" },
   tabText: { fontSize: 15, fontWeight: "600", color: "#94A3B8" },
   activeTabText: { color: "#111827", fontWeight: "800" },
-  
+
   // 🚀 통합 일체형 푸터가 화면 하단을 덮으므로 paddingBottom은 동적으로 위에서 관리함!
-  scrollContent: { }, 
+  scrollContent: {},
   mainPadding: { padding: 20 },
   eventBanner: {
     flexDirection: "row",
@@ -905,7 +972,7 @@ const styles = StyleSheet.create({
   activeChip: { backgroundColor: "#1E1B4B", borderColor: "#1E1B4B" },
   chipText: { fontSize: 13, color: "#64748B", fontWeight: "600" },
   activeChipText: { color: "#FFF" },
-  
+
   // 🚀 새로 추가한 [담기] 버튼 영역 스타일
   priceRow: {
     flexDirection: "row",
@@ -945,7 +1012,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   infoItem: { fontSize: 12, color: "#64748B", marginBottom: 6, lineHeight: 18 },
-  
+
   // 🚀 [디자인 개선] 배민 스타일 일체형 하단 푸터
   integratedFooterWrapper: {
     position: "absolute",
@@ -957,7 +1024,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20, // 아이폰 하단 홈바 대응
+    paddingBottom: Platform.OS === "ios" ? 34 : 20, // 아이폰 하단 홈바 대응
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
@@ -990,8 +1057,13 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F8FAFC",
   },
   cartItemName: { fontSize: 15, fontWeight: "700", color: "#1E293B" },
-  cartItemPrice: { fontSize: 14, color: "#6366F1", marginTop: 4, fontWeight: "700" },
-  
+  cartItemPrice: {
+    fontSize: 14,
+    color: "#6366F1",
+    marginTop: 4,
+    fontWeight: "700",
+  },
+
   // 🚀 수량 컨트롤러 스타일 (+, -)
   quantityController: {
     flexDirection: "row",
