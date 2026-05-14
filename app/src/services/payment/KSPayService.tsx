@@ -89,7 +89,7 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
           <WebView
             ref={webViewRef}
             source={{
-              uri: `https://pgdev.ksnet.co.kr/store/KSPayMobileV1.4/mall/app/sapp.jsp`,
+              uri: process.env.EXPO_PUBLIC_KSPAY_URL,
             }}
             originWhitelist={["*"]}
             javaScriptEnabled={true}
@@ -160,7 +160,7 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
                     if (typeof requestPay === 'function') {
                       requestPay({
                         callbackfunction: 'window.kspayCallback',
-                        mid: '${paymentData.storeId || "2999199999"}',
+                        mid: '${paymentData.storeId || process.env.EXPO_PUBLIC_KSPAY_MID}',
                         paymethod: 'card',
                         ordernumb: 'ORD_${Date.now()}',
                         productname: '${paymentData.packageName}',
