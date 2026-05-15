@@ -10,10 +10,14 @@ import {
   FlatList,
   Linking,
   ImageBackground,
+  ActivityIndicator, // 🚀 로딩 표시를 위해 추가
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
+
+// 🚀 [추가] 지점 정보를 가져오기 위해 useAuth 임포트
+import { useAuth } from "../../context/AuthContext";
 
 // 🚀 [팝업 관리자 임포트] 유니폼 및 공지사항 통제
 import PopupManager from "../../components/popups/PopupManager";
@@ -25,8 +29,10 @@ interface BizInfo {
   ceo: string;
   biz_no: string;
   address: string;
+  contact: string; // 👈 고객센터 연락처 추가
   tongshin_no: string;
   company_name: string;
+  
   terms_url?: string; // 👈 지점별 이용약관 링크 (선택형 폴백 처리)
   privacy_url?: string; // 👈 지점별 개인정보 처리방침 링크 (선택형 폴백 처리)
   escrow_no?: string;
@@ -35,6 +41,9 @@ interface BizInfo {
 const { width } = Dimensions.get("window");
 
 export default function HomeScreen({ navigation }: any) {
+  // 🚀 [추가] 전역 지점 ID 호출
+  const { branchId } = useAuth();
+
   const [userData, setUserData] = useState<any>(null);
   const [children, setChildren] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,12 +55,19 @@ export default function HomeScreen({ navigation }: any) {
   // 💡 지점별 사업자 정보를 저장할 상태 추가
   const [bizInfo, setBizInfo] = useState<BizInfo | null>(null);
 
+  // 🚀 [추가] 홈 화면에 표시할 공지사항 상태 (최신 2개)
+  const [homeNotices, setHomeNotices] = useState<any[]>([]);
+
+  // 🚀 [수정] branchId가 변경될 때마다 데이터를 다시 불러옵니다.
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (branchId) {
+      fetchData();
+    }
+  }, [branchId]);
 
   const fetchData = async () => {
     try {
+      setLoading(true);
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -65,8 +81,8 @@ export default function HomeScreen({ navigation }: any) {
         setUserData(userProfile);
 
         // 💡 1-2. 유저의 지점 ID를 기반으로 지점의 biz_info(사업자 정보) 로드
-        // 유저 정보에 지점이 없으면 기본 지점('main') 혹은 첫 지점을 바라보도록 폴백 처리
-        const targetBranchId = userProfile?.branch_id || "main";
+        // 🚀 [수정] 전역 branchId를 우선적으로 사용하도록 변경
+        const targetBranchId = branchId || userProfile?.branch_id || "main";
 
         let { data: branchData } = await supabase
           .from("branches")
@@ -124,6 +140,18 @@ export default function HomeScreen({ navigation }: any) {
         } else {
           setUpcomingReservation(null);
         }
+
+        // 🚀 [추가] 4. 홈 화면 공지사항 로드 (is_on_home이 true인 것 중 최신 2개)
+        const { data: notices } = await supabase
+          .from("notices")
+          .select("*")
+          .eq("is_on_home", true) // 홈 노출 설정된 것만
+          .or(`branch_id.eq.${branchId},branch_id.is.null`) // 내 지점이거나 전체공지
+          .order("is_important", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(2);
+        
+        setHomeNotices(notices || []);
       }
     } catch (e) {
       console.log("데이터 로드 에러:", e);
@@ -424,20 +452,32 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.moreText}>MORE</Text>
             </TouchableOpacity>
           </View>
+
+          {/* 공지사항 DB 연동 및 전체공지 분기 처리 */}
           <View style={styles.noticeBox}>
-            <TouchableOpacity style={styles.noticeRow}>
-              <Text style={styles.noticeTitle} numberOfLines={1}>
-                IPASSCARE 시스템 점검 안내
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
-            </TouchableOpacity>
-            <View style={styles.divider} />
-            <TouchableOpacity style={styles.noticeRow}>
-              <Text style={styles.noticeTitle} numberOfLines={1}>
-                신규 지점 오픈 및 이용권 혜택 안내
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
-            </TouchableOpacity>
+            {loading ? (
+              <ActivityIndicator size="small" color="#6366F1" style={{ margin: 20 }} />
+            ) : homeNotices.length > 0 ? (
+              homeNotices.map((notice, index) => (
+                <React.Fragment key={notice.id}>
+                  <TouchableOpacity 
+                    style={styles.noticeRow}
+                    onPress={() => navigation.navigate("NoticeDetail", { notice })}
+                  >
+                    <Text style={styles.noticeTitle} numberOfLines={1}>
+                      {notice.branch_id === null ? "[전체공지] " : ""}
+                      {notice.title}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
+                  </TouchableOpacity>
+                  {index < homeNotices.length - 1 && <View style={styles.divider} />}
+                </React.Fragment>
+              ))
+            ) : (
+              <View style={styles.noticeRow}>
+                <Text style={[styles.noticeTitle, { color: "#94A3B8" }]}>등록된 공지사항이 없습니다.</Text>
+              </View>
+            )}
           </View>
 
           {/* Footer */}
@@ -445,22 +485,31 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={styles.footerCompany}>
               {bizInfo?.company_name || "(주)그라운드코퍼레이션"}
             </Text>
+            
             <View style={styles.footerInfoRow}>
               <Text style={styles.footerText}>
-                대표 {bizInfo?.ceo || "김강태"}
+                대표자 : {bizInfo?.ceo || "김강태"}
               </Text>
               <Text style={styles.footerDivider}>|</Text>
               <Text style={styles.footerText}>
-                사업자 {bizInfo?.biz_no || "441-86-03857"}
+                사업자 등록번호 : {bizInfo?.biz_no || "441-86-03857"}
               </Text>
             </View>
+
             {bizInfo?.tongshin_no && (
               <Text style={styles.footerText}>
-                통신판매업신고번호: {bizInfo.tongshin_no}
+                통신판매업 신고번호 : {bizInfo.tongshin_no}
               </Text>
             )}
+
+            {/* 🚀 주소 앞에 '주소 :' 추가 및 DB 연동 */}
             <Text style={styles.footerText}>
               {bizInfo?.address || "경기도 시흥시 서울대학로278번길 61, 7층"}
+            </Text>
+
+            {/* 🚀 [추가] 고객센터 연락처 표시 구역 */}
+            <Text style={styles.footerText}>
+              고객센터 : {bizInfo?.contact || "010-0000-0000"}
             </Text>
 
             {/* 💡 [수정됨] 이용약관 및 개인정보 처리방침 DB 다이나믹 링크 구현 구역 */}
@@ -665,6 +714,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   noticeBox: {
+    marginHorizontal: 24, // 🚀 좌우 여백 추가하여 카드 형태 유지
     backgroundColor: "#F9FAFB",
     borderRadius: 12,
     paddingVertical: 4,

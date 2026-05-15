@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,8 +14,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase"; // 🚨 Supabase 연동 필수!
+import { Picker } from "@react-native-picker/picker"; // 🚀 지점 선택용 드롭다운
+
+// 🚀 [추가] 전역 상태에서 권한(role)과 내 지점(branchId) 가져오기
+import { useAuth } from "../../context/AuthContext";
 
 export default function NoticeEditScreen({ route, navigation }: any) {
+  // 🚀 [추가] 전역 정보 호출
+  const { branchId: myBranchId, role } = useAuth();
+
   // 이전 화면에서 notice 데이터를 넘겨받았다면 '수정' 모드
   const existingNotice = route.params?.notice;
   const isEditing = !!existingNotice;
@@ -24,7 +31,52 @@ export default function NoticeEditScreen({ route, navigation }: any) {
   const [content, setContent] = useState(existingNotice?.content || "");
   const [isImportant, setIsImportant] = useState(existingNotice?.is_important || false);
   const [isOnHome, setIsOnHome] = useState(existingNotice?.is_on_home || false); // 💡 새로 추가된 홈 노출 설정
+  
+  // 🚀 [추가] 공지가 올라갈 대상 지점 ID 상태
+  const [targetBranchId, setTargetBranchId] = useState<string | null>(
+    existingNotice ? existingNotice.branch_id : (role === "admin" ? null : myBranchId)
+  );
+
+  const [branches, setBranches] = useState<any[]>([]); // 지점 목록 (어드민용)
+  const [myBranchName, setMyBranchName] = useState(""); // 🚀 [추가] 코치용 지점 이름 상태
   const [loading, setLoading] = useState(false);
+
+  // 🚀 [수정] 화면 진입 시 지점 정보를 불러옵니다.
+  useEffect(() => {
+    if (role === "admin") {
+      fetchAllBranches();
+    } else {
+      fetchMyBranchName(); // 🚀 코치는 본인 지점 이름만 가져옴
+    }
+  }, [role, myBranchId]);
+
+  // 🚀 [수정] 어드민용: 모든 지점을 순서대로(display_order) 가져옵니다.
+  const fetchAllBranches = async () => {
+    try {
+      const { data } = await supabase
+        .from("branches")
+        .select("id, name")
+        .order("display_order", { ascending: true }); // 💡 여기서 순서 정렬!
+      if (data) setBranches(data);
+    } catch (e) {
+      console.log("지점 목록 로드 실패:", e);
+    }
+  };
+
+  // 🚀 [추가] 코치용: 본인 지점의 실제 이름을 가져옵니다.
+  const fetchMyBranchName = async () => {
+    if (!myBranchId) return;
+    try {
+      const { data } = await supabase
+        .from("branches")
+        .select("name")
+        .eq("id", myBranchId)
+        .single();
+      if (data) setMyBranchName(data.name);
+    } catch (e) {
+      console.log("지점명 로드 실패:", e);
+    }
+  };
 
   const handleSave = async () => {
     if (!title.trim() || !content.trim()) {
@@ -34,37 +86,28 @@ export default function NoticeEditScreen({ route, navigation }: any) {
 
     setLoading(true);
     try {
-      // 1. 현재 로그인한 사용자 정보 가져오기
       const { data: { user } } = await supabase.auth.getUser();
       
-      // 2. DB에 넣을 데이터 포맷팅
       const noticeData = {
         title,
         content,
         is_important: isImportant,
         is_on_home: isOnHome,
-        // 💡 아래 정보들은 나중에 users 테이블과 연동해서 동적으로 가져오면 더 좋습니다.
         author_id: user?.id || null, 
-        author_name: "관리자", // 임시 고정
-        author_badge: "대표",  // 임시 고정
-        branch_id: null,       // 일단 NULL을 넣어서 '전체 공지'로 처리
+        branch_id: targetBranchId, 
         updated_at: new Date().toISOString(),
       };
 
       if (isEditing) {
-        // [수정 로직]
         const { error } = await supabase
           .from("notices")
           .update(noticeData)
           .eq("id", existingNotice.id);
-          
         if (error) throw error;
       } else {
-        // [새 글 작성 로직]
         const { error } = await supabase
           .from("notices")
           .insert([noticeData]);
-          
         if (error) throw error;
       }
 
@@ -84,7 +127,6 @@ export default function NoticeEditScreen({ route, navigation }: any) {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       
-      {/* 헤더 */}
       <View style={styles.appBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} disabled={loading}>
           <Ionicons name="close" size={28} color="#111827" />
@@ -100,6 +142,36 @@ export default function NoticeEditScreen({ route, navigation }: any) {
       </View>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        
+        {/* 🚀 [수정] 지점 선택 영역 UI 개선 */}
+        <View style={styles.branchSelectSection}>
+          <Text style={styles.sectionLabel}>게시 대상 설정</Text>
+          {role === "admin" ? (
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={targetBranchId}
+                onValueChange={(itemValue) => setTargetBranchId(itemValue)}
+                style={styles.picker}
+              >
+                <Picker.Item label="🌐 전체 지점 통합 공지" value={null} />
+                {branches.map((b) => (
+                  <Picker.Item key={b.id} label={`📍 ${b.name}`} value={b.id} />
+                ))}
+              </Picker>
+            </View>
+          ) : (
+            <View style={styles.readOnlyBranch}>
+              <Ionicons name="location-sharp" size={16} color="#6366F1" />
+              {/* 🚀 [수정] 코치에게 실제 본인 지점 이름을 보여줍니다. */}
+              <Text style={styles.readOnlyBranchText}>
+                📍 {myBranchName || "로딩 중..."} 공지로 등록됩니다.
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.divider} />
+
         {/* 중요 공지 스위치 */}
         <View style={styles.switchRow}>
           <View>
@@ -116,7 +188,7 @@ export default function NoticeEditScreen({ route, navigation }: any) {
 
         <View style={styles.divider} />
 
-        {/* 💡 홈 화면 노출 스위치 (새로 추가됨) */}
+        {/* 홈 화면 노출 스위치 */}
         <View style={styles.switchRow}>
           <View>
             <Text style={styles.switchLabel}>홈 화면 노출</Text>
@@ -173,6 +245,14 @@ const styles = StyleSheet.create({
   appBarTitle: { fontSize: 18, fontWeight: "800", color: "#111827" },
   saveBtnText: { fontSize: 16, fontWeight: "700", color: "#4F46E5" },
   container: { flex: 1 },
+  
+  branchSelectSection: { padding: 20, backgroundColor: "#F8FAFC" },
+  sectionLabel: { fontSize: 13, fontWeight: "800", color: "#64748B", marginBottom: 10 },
+  pickerWrapper: { backgroundColor: "#FFF", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden" },
+  picker: { height: 50, width: "100%" },
+  readOnlyBranch: { flexDirection: "row", alignItems: "center", paddingVertical: 5 },
+  readOnlyBranchText: { marginLeft: 6, fontSize: 14, color: "#4F46E5", fontWeight: "700" },
+
   switchRow: {
     flexDirection: "row",
     justifyContent: "space-between",
