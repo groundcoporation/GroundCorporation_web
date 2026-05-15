@@ -17,6 +17,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import KSPayService from "../../services/payment/KSPayService";
 
+// 🚀 [추가] 전역 상태 보관소에서 useAuth 훅 임포트
+import { useAuth } from "../../context/AuthContext";
+
 // --- 인터페이스 정의 ---
 interface PackageOption {
   id: string;
@@ -51,10 +54,10 @@ const formatCurrency = (amount: number | null) => {
 };
 
 export default function PassPurchaseScreen({ navigation }: any) {
+  // 🚀 [수정] 기존에 수동으로 관리하던 selectedBranchId를 삭제하고 Context에서 가져옵니다.
+  const { branchId, role, setBranch } = useAuth();
+
   // --- 상태 관리 ---
-  const [selectedBranchId, setSelectedBranchId] = useState<
-    "branch_1" | "branch_2"
-  >("branch_1");
   const [categories, setCategories] = useState<any[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("regular");
   const [packages, setPackages] = useState<Package[]>([]);
@@ -76,15 +79,18 @@ export default function PassPurchaseScreen({ navigation }: any) {
 
   // --- 초기 데이터 로딩 ---
   useEffect(() => {
+    // 🚀 branchId가 없으면 로딩 대기
+    if (!branchId) return;
+    
     fetchInitialData();
     fetchCategoriesFromDB(true);
-  }, [selectedBranchId]);
+  }, [branchId]); // 🚀 의존성 배열에 branchId 적용
 
   useEffect(() => {
-    if (activeCategory) {
+    if (activeCategory && branchId) { // 🚀 branchId 추가
       fetchPackagesFromDB();
     }
-  }, [activeCategory, selectedBranchId]);
+  }, [activeCategory, branchId]); // 🚀 의존성 배열에 branchId 적용
 
   const fetchCategoriesFromDB = async (shouldReset: boolean) => {
     setLoading(true);
@@ -92,7 +98,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
       const { data, error } = await supabase
         .from("package_categories")
         .select("*")
-        .eq("branch_id", selectedBranchId)
+        .eq("branch_id", branchId) // 🚀 지점 갈라치기: 현재 접속한 지점의 카테고리만
         .order("display_order", { ascending: true });
 
       if (error) throw error;
@@ -140,7 +146,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
       const { data: branchData } = await supabase
         .from("branches")
         .select("*")
-        .eq("id", selectedBranchId)
+        .eq("id", branchId) // 🚀 지점 정보도 Context의 branchId로 가져오기
         .single();
 
       if (branchData) {
@@ -152,7 +158,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
       const { data, error } = await supabase
         .from("packages")
         .select(`*, package_options (*)`)
-        .eq("branch_id", selectedBranchId)
+        .eq("branch_id", branchId) // 🚀 지점 갈라치기: 현재 접속한 지점의 패키지만
         .order("display_order", { ascending: true, nullsFirst: false });
 
       if (error) throw error;
@@ -191,7 +197,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
       console.log("[Payment] 📤 서버로 보내는 데이터:", {
         payKey: payKey,
         amount: finalPrice,
-        branch_id: selectedBranchId,
+        branch_id: branchId, // 🚀 결제 승인 시 지점 ID 전송
       });
 
       console.log("[Payment] 🌐 서버 승인 API 호출 중...");
@@ -207,7 +213,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
         body: JSON.stringify({
           payKey: payKey,
           amount: finalPrice,
-          branch_id: selectedBranchId,
+          branch_id: branchId, // 🚀 결제 승인 바디에도 지점 ID
         }),
       });
 
@@ -229,7 +235,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
               item.pkg.package_options?.[item.optIndex]?.total_count || 10,
             remaining_count:
               item.pkg.package_options?.[item.optIndex]?.total_count || 10,
-            branch_id: selectedBranchId,
+            branch_id: branchId, // 🚀 DB 인서트 시에도 유저의 지점 ID로 기록
             child_id: null,
             child_name: "공용 이용권",
             price:
@@ -341,7 +347,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
     setShowKSPay(true);
   };
 
-  const isDeveloper = currentUser?.role === "admin";
+  // 🚀 [수정] 관리자 여부도 Context에서 받아온 role로 검증 가능 (본부장님이 스왑 가능하도록)
+  const isDeveloper = role === "admin" || currentUser?.role === "admin";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -353,14 +360,15 @@ export default function PassPurchaseScreen({ navigation }: any) {
         {isDeveloper ? (
           <TouchableOpacity
             style={styles.branchSwitcher}
+            // 🚀 [수정] 관리자가 지점을 누르면 전역 지점이 바뀝니다. (setBranch 함수 호출)
             onPress={() =>
-              setSelectedBranchId(
-                selectedBranchId === "branch_1" ? "branch_2" : "branch_1",
+              setBranch(
+                branchId === "branch_1" ? "branch_2" : "branch_1",
               )
             }
           >
             <Text style={styles.headerTitle}>
-              {selectedBranchId === "branch_1" ? "시흥본점" : "영종도점"} 이용권
+              {branchId === "branch_1" ? "시흥본점" : "영종도점"} 이용권
             </Text>
             <Ionicons
               name="swap-horizontal"
@@ -664,7 +672,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
                   if (currentUser)
                     await supabase.from("consultation_requests").insert({
                       user_id: currentUser.id,
-                      branch_id: selectedBranchId,
+                      branch_id: branchId, // 🚀 여기도 Context의 branchId로 수정
                       request_type: "KAKAO",
                       status: "PENDING",
                     });
@@ -687,7 +695,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
                   if (currentUser)
                     await supabase.from("consultation_requests").insert({
                       user_id: currentUser.id,
-                      branch_id: selectedBranchId,
+                      branch_id: branchId, // 🚀 여기도 Context의 branchId로 수정
                       request_type: "PHONE",
                       status: "PENDING",
                     });
@@ -787,7 +795,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
             userPhone: currentUser.phone || "01000000000",
             kspay_mid: branchMid,
             userId: currentUser.id,
-            branchId: selectedBranchId,
+            branchId: branchId, // 🚀 결제창 호출 시에도 Context의 지점 전달
             branchName: currentBranch?.name || "지점",
             storeId: currentBranch?.kspay_mid,
           }}

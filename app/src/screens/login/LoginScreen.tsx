@@ -12,6 +12,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 
+// 🚀 [추가됨] 방금 만든 전역 상태 보관소에서 useAuth 가져오기
+import { useAuth } from '../../context/AuthContext';
+
 export default function LoginScreen({ navigation }: any) {
   // 사용자가 입력하는 값 (아이디 또는 이메일)
   const [identifier, setIdentifier] = useState(''); 
@@ -20,6 +23,9 @@ export default function LoginScreen({ navigation }: any) {
   const [rememberId, setRememberId] = useState(false);
   const [autoLogin, setAutoLogin] = useState(false);
   const [showPassword, setShowPassword] = useState(false); // 💡 비밀번호 보이기 상태 추가
+
+  // 🚀 [추가됨] 전역 상태를 수동으로 새로고침하는 함수 꺼내기
+  const { refreshAuth } = useAuth();
 
   useEffect(() => {
     loadSavedCredentials();
@@ -99,6 +105,10 @@ export default function LoginScreen({ navigation }: any) {
         setIsLoading(false);
         return;
       }
+
+      // 🚀 [추가됨] 로그인 성공 직후, 지점 정보와 권한을 DB에서 가져와 전역 상태에 업데이트!
+      // 이 과정이 끝나야 완벽하게 현재 지점을 앱이 기억하게 됩니다.
+      await refreshAuth();
 
       // 3. 성공 시 처리
       await saveCredentials();
