@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, TextInput, Image, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView 
 } from 'react-native';
@@ -7,12 +7,56 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../../lib/supabase';
+import { Picker } from "@react-native-picker/picker"; // 🚀 지점 선택용 드롭다운 추가
+
+// 🚀 [추가] 권한(role)과 내 지점(branchId) 정보를 가져오기 위해 useAuth 임포트
+import { useAuth } from "../../context/AuthContext";
 
 export default function GalleryUploadScreen({ navigation }: any) {
+  // 🚀 [추가] 전역 권한 정보 호출
+  const { branchId: myBranchId, role } = useAuth();
+
   const [title, setTitle] = useState('');
   const [content, setContent] = useState(''); // 💡 상세 내용 상태 추가
   const [image, setImage] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  // 🚀 [추가] 게시 대상 지점 ID 상태
+  // 어드민은 기본값이 전체공유(null), 코치는 본인 지점(myBranchId)
+  const [targetBranchId, setTargetBranchId] = useState<string | null>(role === "admin" ? null : myBranchId);
+  const [branches, setBranches] = useState<any[]>([]); // 어드민용 지점 목록
+  const [myBranchName, setMyBranchName] = useState(""); // 코치용 지점 이름 표시용
+
+  // 🚀 [추가] 화면 진입 시 지점 정보 로드
+  useEffect(() => {
+    if (role === "admin") {
+      fetchBranches();
+    } else {
+      fetchMyBranchName();
+    }
+  }, [role, myBranchId]);
+
+  const fetchBranches = async () => {
+    try {
+      const { data } = await supabase
+        .from("branches")
+        .select("id, name")
+        .order("display_order", { ascending: true });
+      if (data) setBranches(data);
+    } catch (e) {
+      console.error("지점 목록 로드 실패:", e);
+    }
+  };
+
+  const fetchMyBranchName = async () => {
+    if (!myBranchId) return;
+    try {
+      const { data } = await supabase.from("branches").select("name").eq("id", myBranchId).single();
+      if (data) setMyBranchName(data.name);
+    } catch (e) {
+      console.error("지점명 로드 실패:", e);
+    }
+  };
 
   // 1️⃣ 스마트폰 갤러리 열기
   const pickImage = async () => {
@@ -74,7 +118,8 @@ export default function GalleryUploadScreen({ navigation }: any) {
           title: title,
           content: content, // 💡 상세 내용 추가
           image_url: publicUrl,
-          // branch_id: '...' // 💡 나중에 관리자가 소속된 지점 ID를 여기에 넣어줍니다!
+          // 🚀 [수정] 선택된 지점 또는 자동 지정된 지점 ID를 넣어줍니다!
+          branch_id: targetBranchId 
         });
 
       if (dbError) throw dbError;
@@ -107,6 +152,33 @@ export default function GalleryUploadScreen({ navigation }: any) {
 
         <ScrollView contentContainerStyle={styles.content}>
           
+          {/* 🚀 [추가] 지점 설정 영역 (권한별 차등 UI) */}
+          <View style={styles.branchSection}>
+            <Text style={styles.label}>게시 대상 설정</Text>
+            {role === "admin" ? (
+              <View style={styles.pickerWrapper}>
+                <Picker
+                  selectedValue={targetBranchId}
+                  onValueChange={(itemValue) => setTargetBranchId(itemValue)}
+                  style={styles.picker}
+                  enabled={!isUploading}
+                >
+                  <Picker.Item label="🌐 전체 지점 공용 사진" value={null} />
+                  {branches.map((b) => (
+                    <Picker.Item key={b.id} label={`📍 ${b.name}`} value={b.id} />
+                  ))}
+                </Picker>
+              </View>
+            ) : (
+              <View style={styles.readOnlyBranch}>
+                <Ionicons name="location-sharp" size={16} color="#4F46E5" />
+                <Text style={styles.readOnlyBranchText}>
+                  📍 {myBranchName || "로딩 중..."} 게시판에 등록됩니다.
+                </Text>
+              </View>
+            )}
+          </View>
+
           {/* 사진 선택 영역 */}
           <Text style={styles.label}>사진 등록</Text>
           <TouchableOpacity 
@@ -180,6 +252,13 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
   content: { padding: 24 },
   
+  /* 🚀 추가된 지점 설정 스타일 */
+  branchSection: { marginBottom: 24, padding: 15, backgroundColor: '#F8FAFC', borderRadius: 12 },
+  pickerWrapper: { backgroundColor: '#FFF', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' },
+  picker: { height: 50, width: "100%" },
+  readOnlyBranch: { flexDirection: "row", alignItems: "center" },
+  readOnlyBranchText: { marginLeft: 6, fontSize: 14, color: "#4F46E5", fontWeight: "700" },
+
   label: { fontSize: 15, fontWeight: '800', color: '#1E293B', marginBottom: 10 },
   
   imagePicker: { 

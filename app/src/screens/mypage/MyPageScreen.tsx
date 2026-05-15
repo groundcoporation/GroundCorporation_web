@@ -103,6 +103,12 @@ export default function MyPageScreen({ navigation }: any) {
     );
   }
 
+  // 🚀 [추가] 메뉴 권한 제어를 위한 변수 설정
+  const userRole = userData?.role;
+  const showAdminDash = userRole === 'admin' || userRole === 'coach';
+  const showDriverDash = userRole === 'admin' || userRole === 'coach' || userRole === 'driver';
+  const showStaffSection = showAdminDash || showDriverDash;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
@@ -214,14 +220,14 @@ export default function MyPageScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* 4. 관리자 전용 메뉴 */}
-        {userData?.role === 'admin' && (
+        {/* 4. 직원 전용 메뉴 (🚀 권한별 분기 처리) */}
+        {showStaffSection && (
           <View style={styles.sectionContainer}>
-            <Text style={[styles.sectionTitle, { color: '#EF4444' }]}>관리자 메뉴</Text>
+            <Text style={[styles.sectionTitle, { color: '#EF4444' }]}>직원 전용 메뉴</Text>
             <View style={styles.cardGroup}>
-              {renderMenuItem("shield-checkmark-outline", "관리자 대시보드", () => navigation.navigate("AdminHome"))}
-              <View style={styles.divider} />
-              {renderMenuItem("bus-outline", "차량 운행 대시보드", () => navigation.navigate("DriverDashboard"))}
+              {showAdminDash && renderMenuItem("shield-checkmark-outline", "관리자 대시보드", () => navigation.navigate("AdminHome"))}
+              {showAdminDash && showDriverDash && <View style={styles.divider} />}
+              {showDriverDash && renderMenuItem("bus-outline", "차량 운행 대시보드", () => navigation.navigate("DriverDashboard"))}
             </View>
           </View>
         )}

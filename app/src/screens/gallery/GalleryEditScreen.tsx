@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, TextInput, Image, Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform 
 } from 'react-native';
@@ -7,13 +7,56 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../../lib/supabase';
+import { Picker } from "@react-native-picker/picker"; // 🚀 지점 선택용 드롭다운 추가
+
+// 🚀 [추가] 권한(role)과 내 지점(branchId) 정보를 가져오기 위해 useAuth 임포트
+import { useAuth } from "../../context/AuthContext";
 
 export default function GalleryEditScreen({ route, navigation }: any) {
+  // 🚀 [추가] 전역 권한 정보 호출
+  const { branchId: myBranchId, role } = useAuth();
+
   const { post } = route.params; // 기존 데이터
   const [title, setTitle] = useState(post.title || '');
   const [content, setContent] = useState(post.content || ''); // 💡 상세 내용 상태 추가
   const [image, setImage] = useState<any>(null); // 새로 선택한 이미지
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // 🚀 [추가] 수정될 대상 지점 ID 상태 (기본값은 게시물의 기존 branch_id)
+  const [targetBranchId, setTargetBranchId] = useState<string | null>(post.branch_id);
+  const [branches, setBranches] = useState<any[]>([]); // 어드민용 지점 목록
+  const [myBranchName, setMyBranchName] = useState(""); // 코치용 지점 이름
+
+  // 🚀 [추가] 지점 정보 로드 (어드민은 전체 목록, 코치는 본인 지점명)
+  useEffect(() => {
+    if (role === "admin") {
+      fetchBranches();
+    } else {
+      fetchMyBranchName();
+    }
+  }, [role]);
+
+  const fetchBranches = async () => {
+    try {
+      const { data } = await supabase
+        .from("branches")
+        .select("id, name")
+        .order("display_order", { ascending: true });
+      if (data) setBranches(data);
+    } catch (e) {
+      console.error("지점 목록 로드 실패:", e);
+    }
+  };
+
+  const fetchMyBranchName = async () => {
+    if (!myBranchId) return;
+    try {
+      const { data } = await supabase.from("branches").select("name").eq("id", myBranchId).single();
+      if (data) setMyBranchName(data.name);
+    } catch (e) {
+      console.error("지점명 로드 실패:", e);
+    }
+  };
 
   // 1️⃣ 새 이미지 선택
   const pickImage = async () => {
@@ -59,13 +102,14 @@ export default function GalleryEditScreen({ route, navigation }: any) {
         finalImageUrl = publicUrl; // 새 URL로 교체
       }
 
-      // 3️⃣ DB 업데이트 (content 추가)
+      // 3️⃣ DB 업데이트 (content 및 branch_id 추가)
       const { error: dbError } = await supabase
         .from('gallery_posts')
         .update({ 
           title: title,
           content: content, // 💡 상세 내용 업데이트
-          image_url: finalImageUrl 
+          image_url: finalImageUrl,
+          branch_id: targetBranchId // 🚀 [추가] 수정된 지점 정보 반영
         })
         .eq('id', post.id);
 
@@ -97,6 +141,33 @@ export default function GalleryEditScreen({ route, navigation }: any) {
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
+          
+          {/* 🚀 [추가] 지점 설정 영역 (수정 시에도 어디 게시물인지 확인/변경 가능) */}
+          <View style={styles.branchSection}>
+            <Text style={styles.label}>게시 대상 설정</Text>
+            {role === "admin" ? (
+              <View style={styles.pickerWrapper}>
+                <Picker
+                  selectedValue={targetBranchId}
+                  onValueChange={(itemValue) => setTargetBranchId(itemValue)}
+                  style={styles.picker}
+                >
+                  <Picker.Item label="🌐 전체 지점 공용" value={null} />
+                  {branches.map((b) => (
+                    <Picker.Item key={b.id} label={`📍 ${b.name}`} value={b.id} />
+                  ))}
+                </Picker>
+              </View>
+            ) : (
+              <View style={styles.readOnlyBranch}>
+                <Ionicons name="location-sharp" size={16} color="#4F46E5" />
+                <Text style={styles.readOnlyBranchText}>
+                  📍 {myBranchName || "지점"} 게시물입니다.
+                </Text>
+              </View>
+            )}
+          </View>
+
           <Text style={styles.label}>사진 변경 (탭하여 선택)</Text>
           <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
             <Image 
@@ -144,6 +215,13 @@ const styles = StyleSheet.create({
   saveBtn: { fontSize: 16, fontWeight: '700', color: '#4F46E5' },
   content: { padding: 24 },
   
+  /* 🚀 추가된 지점 설정 스타일 */
+  branchSection: { marginBottom: 24, padding: 15, backgroundColor: '#F8FAFC', borderRadius: 12 },
+  pickerWrapper: { backgroundColor: '#FFF', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' },
+  picker: { height: 50, width: "100%" },
+  readOnlyBranch: { flexDirection: "row", alignItems: "center" },
+  readOnlyBranchText: { marginLeft: 6, fontSize: 14, color: "#4F46E5", fontWeight: "700" },
+
   imagePicker: { width: '100%', height: 250, borderRadius: 16, overflow: 'hidden', marginBottom: 24, backgroundColor: '#F1F5F9' },
   previewImage: { width: '100%', height: '100%' },
   cameraIconBadge: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', padding: 8, borderRadius: 20 },

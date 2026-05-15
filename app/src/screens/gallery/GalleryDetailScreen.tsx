@@ -4,7 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 
+// 🚀 [추가] 권한 확인을 위해 useAuth 임포트
+import { useAuth } from "../../context/AuthContext";
+
 export default function GalleryDetailScreen({ route, navigation }: any) {
+  // 🚀 [추가] 전역 상태에서 권한(role) 가져오기
+  const { role } = useAuth();
+
   const { post } = route.params; // List에서 넘어온 사진 데이터
 
   // 🗑️ 삭제 함수
@@ -43,18 +49,26 @@ export default function GalleryDetailScreen({ route, navigation }: any) {
         <Text style={styles.headerTitle}>게시물 보기</Text>
 
         <View style={styles.headerRight}>
-          {/* ✏️ 수정 버튼 */}
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('GalleryEdit', { post: post })}
-            style={styles.headerIconBtn}
-          >
-            <Ionicons name="create-outline" size={24} color="#4B5563" />
-          </TouchableOpacity>
+          {/* 🚀 [수정] 관리자나 코치에게만 수정/삭제 도구 모음을 보여줍니다. */}
+          {(role === "admin" || role === "coach") ? (
+            <>
+              {/* ✏️ 수정 버튼 */}
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('GalleryEdit', { post: post })}
+                style={styles.headerIconBtn}
+              >
+                <Ionicons name="create-outline" size={24} color="#4B5563" />
+              </TouchableOpacity>
 
-          {/* 🗑️ 삭제 버튼 */}
-          <TouchableOpacity onPress={handleDelete}>
-            <Ionicons name="trash-outline" size={24} color="#EF4444" />
-          </TouchableOpacity>
+              {/* 🗑️ 삭제 버튼 */}
+              <TouchableOpacity onPress={handleDelete}>
+                <Ionicons name="trash-outline" size={24} color="#EF4444" />
+              </TouchableOpacity>
+            </>
+          ) : (
+            /* 일반 유저에게는 균형을 위해 빈 공간 처리 */
+            <View style={{ width: 28 }} />
+          )}
         </View>
       </View>
 
@@ -111,7 +125,9 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    minWidth: 60, // 버튼 두 개가 들어갈 공간 확보
+    justifyContent: 'flex-end'
   },
   headerIconBtn: {
     marginRight: 15
