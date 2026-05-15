@@ -20,6 +20,18 @@ import PopupManager from "../../components/popups/PopupManager";
 // 🚀 [알림 종 임포트] 실시간 알림 및 모달 기능 추가
 import NotificationBell from "../../components/notification/NotificationBell";
 
+// 💡 biz_info 데이터 타입에 이용약관 및 개인정보 링크 추가
+interface BizInfo {
+  ceo: string;
+  biz_no: string;
+  address: string;
+  tongshin_no: string;
+  company_name: string;
+  terms_url?: string; // 👈 지점별 이용약관 링크 (선택형 폴백 처리)
+  privacy_url?: string; // 👈 지점별 개인정보 처리방침 링크 (선택형 폴백 처리)
+  escrow_no?: string;
+}
+
 const { width } = Dimensions.get("window");
 
 export default function HomeScreen({ navigation }: any) {
@@ -30,6 +42,9 @@ export default function HomeScreen({ navigation }: any) {
 
   // 💡 새로 추가된 상태: 가장 가까운 예약 데이터
   const [upcomingReservation, setUpcomingReservation] = useState<any>(null);
+
+  // 💡 지점별 사업자 정보를 저장할 상태 추가
+  const [bizInfo, setBizInfo] = useState<BizInfo | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -48,6 +63,30 @@ export default function HomeScreen({ navigation }: any) {
           .eq("id", user.id)
           .single();
         setUserData(userProfile);
+
+        // 💡 1-2. 유저의 지점 ID를 기반으로 지점의 biz_info(사업자 정보) 로드
+        // 유저 정보에 지점이 없으면 기본 지점('main') 혹은 첫 지점을 바라보도록 폴백 처리
+        const targetBranchId = userProfile?.branch_id || "main";
+
+        let { data: branchData } = await supabase
+          .from("branches")
+          .select("biz_info")
+          .eq("id", targetBranchId)
+          .single();
+
+        // 만약 해당 지점 ID로 데이터를 못 찾았다면 첫 번째 지점 정보 자동 로드
+        if (!branchData || !branchData.biz_info) {
+          const { data: fallbackBranch } = await supabase
+            .from("branches")
+            .select("biz_info")
+            .limit(1)
+            .maybeSingle();
+          branchData = fallbackBranch;
+        }
+
+        if (branchData && branchData.biz_info) {
+          setBizInfo(branchData.biz_info as BizInfo);
+        }
 
         // 2. 자녀 정보 로드
         const { data: childrenList } = await supabase
@@ -403,21 +442,34 @@ export default function HomeScreen({ navigation }: any) {
 
           {/* Footer */}
           <View style={styles.footer}>
-            <Text style={styles.footerCompany}>(주)그라운드코퍼레이션</Text>
+            <Text style={styles.footerCompany}>
+              {bizInfo?.company_name || "(주)그라운드코퍼레이션"}
+            </Text>
             <View style={styles.footerInfoRow}>
-              <Text style={styles.footerText}>대표 김강태</Text>
+              <Text style={styles.footerText}>
+                대표 {bizInfo?.ceo || "김강태"}
+              </Text>
               <Text style={styles.footerDivider}>|</Text>
-              <Text style={styles.footerText}>사업자 441-86-03857</Text>
+              <Text style={styles.footerText}>
+                사업자 {bizInfo?.biz_no || "441-86-03857"}
+              </Text>
             </View>
+            {bizInfo?.tongshin_no && (
+              <Text style={styles.footerText}>
+                통신판매업신고번호: {bizInfo.tongshin_no}
+              </Text>
+            )}
             <Text style={styles.footerText}>
-              경기도 시흥시 서울대학로278번길 61, 7층
+              {bizInfo?.address || "경기도 시흥시 서울대학로278번길 61, 7층"}
             </Text>
 
+            {/* 💡 [수정됨] 이용약관 및 개인정보 처리방침 DB 다이나믹 링크 구현 구역 */}
             <View style={styles.footerLinks}>
               <TouchableOpacity
                 onPress={() =>
                   Linking.openURL(
-                    "https://docs.google.com/document/d/1w8fZDkcwXM6GATj6cAqmPHRny08w8KikLdFSuogXpmw/edit?tab=t.0",
+                    bizInfo?.terms_url ||
+                      "링크가 설정되지 않았습니다. 지점 관리자에게 문의하세요.",
                   )
                 }
               >
@@ -426,10 +478,12 @@ export default function HomeScreen({ navigation }: any) {
               <TouchableOpacity
                 onPress={() =>
                   Linking.openURL(
-                    "https://docs.google.com/document/d/1plQT2VJIrK8nxG1m3huj3LuUsCKea-dl37HEEBOhnJw/edit?tab=t.0",
+                    bizInfo?.privacy_url ||
+                      "링크가 설정되지 않았습니다. 지점 관리자에게 문의하세요.",
                   )
                 }
               >
+                {/* 💡 기존 코드의 괄호 에러 수정: 스타일 배열 구조 변경 */}
                 <Text style={[styles.footerLink, { marginLeft: 16 }]}>
                   개인정보 처리방침
                 </Text>
@@ -470,8 +524,7 @@ const styles = StyleSheet.create({
   },
   logoBrandAccent: { color: "#4F46E5" },
   appBarActions: { flexDirection: "row", alignItems: "center" },
-  // 🚀 NotificationBell 내부에서 숫자가 포함된 배지를 직접 그리므로 HomeScreen의 badge 스타일은 더 이상 사용되지 않습니다.
-  iconCircle: { 
+  iconCircle: {
     position: "relative",
     width: 40,
     height: 40,
@@ -538,11 +591,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     marginBottom: 12,
   },
-  menuItem: {
-    alignItems: "center",
-    width: "25%",
-    marginBottom: 24,
-  },
+  menuItem: { alignItems: "center", width: "25%", marginBottom: 24 },
   menuIconBg: {
     width: 50,
     height: 50,
