@@ -4,6 +4,9 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// 🚀 [전역 상태 관리] 지점 및 권한 관리를 위한 Provider 임포트
+import { AuthProvider } from "./src/context/AuthContext";
+
 // 🚀 [인증 및 홈 화면]
 import LoginScreen from "./src/screens/login/LoginScreen";
 import SignUpScreen from "./src/screens/login/SignUpScreen";
@@ -32,7 +35,6 @@ import MyPageScreen from "./src/screens/mypage/MyPageScreen";
 import ProfileEditScreen from "./src/screens/mypage/ProfileEditScreen"; 
 import ChildManagementScreen from "./src/screens/mypage/ChildManagementScreen"; 
 import ReservationListScreen from "./src/screens/reservation/ReservationListScreen";
-
 
 // 📢 [공지사항 관련]
 import NoticeListScreen from "./src/screens/notice/NoticeListScreen";
@@ -102,78 +104,81 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName={initialRoute}
-        screenOptions={{
-          headerShown: false,
-          animation: "slide_from_right",
-        }}
-      >
-        {/* 1. 인증 및 메인 */}
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="SignUp" component={SignUpScreen} />
-        <Stack.Screen name="FindAuth" component={FindAuthScreen} />
-        <Stack.Screen name="Home" component={HomeScreen} />
-        
-        {/* 2. 이용권 및 결제 프로세스 */}
-        <Stack.Screen name="Pass" component={PassPurchaseScreen} />
-        <Stack.Screen name="MyPackage" component={MyPackageScreen} />
-        
-        {/* <Stack.Screen 
-          name="KSPay" 
-          component={KSPayService} 
-          options={{ 
-            animation: "slide_from_bottom", 
-            presentation: "modal" 
-          }} 
-        /> */}
-        
-        {/* 3. 예약 프로세스 */}
-        <Stack.Screen name="Reservation" component={ReservationScreen} /> 
-        <Stack.Screen name="ReservationSuccess" component={ReservationSuccessScreen} />
-        <Stack.Screen name="ReservationFail" component={ReservationFailScreen} /> 
+    // 💡 방금 만든 AuthProvider로 전체 앱을 감싸줍니다.
+    <AuthProvider>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName={initialRoute}
+          screenOptions={{
+            headerShown: false,
+            animation: "slide_from_right",
+          }}
+        >
+          {/* 1. 인증 및 메인 */}
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="SignUp" component={SignUpScreen} />
+          <Stack.Screen name="FindAuth" component={FindAuthScreen} />
+          <Stack.Screen name="Home" component={HomeScreen} />
+          
+          {/* 2. 이용권 및 결제 프로세스 */}
+          <Stack.Screen name="Pass" component={PassPurchaseScreen} />
+          <Stack.Screen name="MyPackage" component={MyPackageScreen} />
+          
+          {/* <Stack.Screen 
+            name="KSPay" 
+            component={KSPayService} 
+            options={{ 
+              animation: "slide_from_bottom", 
+              presentation: "modal" 
+            }} 
+          /> */}
+          
+          {/* 3. 예약 프로세스 */}
+          <Stack.Screen name="Reservation" component={ReservationScreen} /> 
+          <Stack.Screen name="ReservationSuccess" component={ReservationSuccessScreen} />
+          <Stack.Screen name="ReservationFail" component={ReservationFailScreen} /> 
 
-        {/* 이용권 구매 관련  */}
-        <Stack.Screen name="PurchaseSuccess" component={PurchaseSuccessScreen} />
-        <Stack.Screen name="PurchaseFail" component={PurchaseFailScreen} />
+          {/* 이용권 구매 관련  */}
+          <Stack.Screen name="PurchaseSuccess" component={PurchaseSuccessScreen} />
+          <Stack.Screen name="PurchaseFail" component={PurchaseFailScreen} />
 
-        {/* 4. 마이페이지 프로세스 */}
-        <Stack.Screen name="MyPage" component={MyPageScreen} />
-        <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
-        <Stack.Screen name="ChildManagement" component={ChildManagementScreen} />
-        <Stack.Screen name="ReservationList" component={ReservationListScreen} />
+          {/* 4. 마이페이지 프로세스 */}
+          <Stack.Screen name="MyPage" component={MyPageScreen} />
+          <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
+          <Stack.Screen name="ChildManagement" component={ChildManagementScreen} />
+          <Stack.Screen name="ReservationList" component={ReservationListScreen} />
 
-        {/* 5. 공지사항 프로세스 */}
-        <Stack.Screen name="NoticeList" component={NoticeListScreen} />
-        <Stack.Screen name="NoticeDetail" component={NoticeDetailScreen} />
-        <Stack.Screen name="NoticeEdit" component={NoticeEditScreen} />
+          {/* 5. 공지사항 프로세스 */}
+          <Stack.Screen name="NoticeList" component={NoticeListScreen} />
+          <Stack.Screen name="NoticeDetail" component={NoticeDetailScreen} />
+          <Stack.Screen name="NoticeEdit" component={NoticeEditScreen} />
 
-        {/* 6. 출석 및 픽업 프로세스 (부모님용) */}
-        <Stack.Screen name="Attendance" component={AttendanceScreen} />
-        <Stack.Screen name="PickupMain" component={PickupMainScreen} />
-        <Stack.Screen name="PickupApply" component={PickupApplyScreen} />
-        <Stack.Screen name="RealtimeMap" component={RealtimeMapScreen} />
+          {/* 6. 출석 및 픽업 프로세스 (부모님용) */}
+          <Stack.Screen name="Attendance" component={AttendanceScreen} />
+          <Stack.Screen name="PickupMain" component={PickupMainScreen} />
+          <Stack.Screen name="PickupApply" component={PickupApplyScreen} />
+          <Stack.Screen name="RealtimeMap" component={RealtimeMapScreen} />
 
-        {/* 7. 차량운행 관리 프로세스 (기사님/관리자용) 👈 추가된 부분! */}
-        <Stack.Screen name="DriverDashboard" component={DriverDashboardScreen} />
+          {/* 7. 차량운행 관리 프로세스 (기사님/관리자용) 👈 추가된 부분! */}
+          <Stack.Screen name="DriverDashboard" component={DriverDashboardScreen} />
 
-        {/* 8. 갤러리(사진첩) 프로세스 */}
-        <Stack.Screen name="GalleryList" component={GalleryListScreen} />
-        <Stack.Screen name="GalleryUpload" component={GalleryUploadScreen} />
-        <Stack.Screen name="GalleryDetail" component={GalleryDetailScreen} />
-        <Stack.Screen name="GalleryEdit" component={GalleryEditScreen} />
+          {/* 8. 갤러리(사진첩) 프로세스 */}
+          <Stack.Screen name="GalleryList" component={GalleryListScreen} />
+          <Stack.Screen name="GalleryUpload" component={GalleryUploadScreen} />
+          <Stack.Screen name="GalleryDetail" component={GalleryDetailScreen} />
+          <Stack.Screen name="GalleryEdit" component={GalleryEditScreen} />
 
-        {/* 9. 관리자 대시보드 프로세스 (코치/원장용) */}
-        <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
-        <Stack.Screen name="AdminConsultation" component={AdminConsultationScreen} />
-        <Stack.Screen name="AdminMember" component={AdminMemberScreen} />
-        <Stack.Screen name="AdminSchedule" component={AdminScheduleScreen} />
-        <Stack.Screen name="AdminSetting" component={AdminSettingScreen} />
-        <Stack.Screen name="AdminMemberDetail" component={AdminMemberDetailScreen} />
+          {/* 9. 관리자 대시보드 프로세스 (코치/원장용) */}
+          <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
+          <Stack.Screen name="AdminConsultation" component={AdminConsultationScreen} />
+          <Stack.Screen name="AdminMember" component={AdminMemberScreen} />
+          <Stack.Screen name="AdminSchedule" component={AdminScheduleScreen} />
+          <Stack.Screen name="AdminSetting" component={AdminSettingScreen} />
+          <Stack.Screen name="AdminMemberDetail" component={AdminMemberDetailScreen} />
 
-      </Stack.Navigator>
-    </NavigationContainer>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </AuthProvider>
   );
 }
 

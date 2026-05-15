@@ -15,6 +15,9 @@ import { Calendar, LocaleConfig } from "react-native-calendars";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 
+// 🚀 [추가] 전역 상태 보관소에서 지점 정보 가져오기
+import { useAuth } from "../../context/AuthContext";
+
 // 한국어 설정
 LocaleConfig.locales["ko"] = {
   monthNames: [
@@ -30,6 +33,9 @@ LocaleConfig.locales["ko"] = {
 LocaleConfig.defaultLocale = "ko";
 
 export default function ReservationScreen({ navigation }: any) {
+  // 🚀 [추가] 전역 지점 ID 호출
+  const { branchId } = useAuth();
+
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0],
   );
@@ -44,6 +50,9 @@ export default function ReservationScreen({ navigation }: any) {
   const [selectedChild, setSelectedChild] = useState<any>(null);
   const [availablePackages, setAvailablePackages] = useState<any[]>([]); // 🚀 사용 가능 이용권 목록
 
+  // 🚀 [추가] 현재 화면에 표시할 지점 이름 상태
+  const [displayBranchName, setDisplayBranchName] = useState("");
+
   // 🚀 모달 및 장바구니 제어 상태
   const [childModalVisible, setChildModalVisible] = useState(false);
   const [packageModalVisible, setPackageModalVisible] = useState(false);
@@ -53,9 +62,30 @@ export default function ReservationScreen({ navigation }: any) {
     fetchInitialData();
   }, []);
 
+  // 🚀 [수정] selectedDate뿐만 아니라 branchId가 바뀔 때도 데이터와 지점명을 다시 불러옵니다.
   useEffect(() => {
-    fetchSchedules();
-  }, [selectedDate]);
+    if (branchId) {
+      fetchSchedules();
+      fetchBranchName(); // 🚀 지점 이름 가져오기 함수 호출
+    }
+  }, [selectedDate, branchId]);
+
+  // 🚀 [추가] DB에서 현재 branchId에 해당하는 실제 지점명을 가져오는 함수
+  const fetchBranchName = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("branches")
+        .select("name")
+        .eq("id", branchId)
+        .single();
+
+      if (data) {
+        setDisplayBranchName(data.name);
+      }
+    } catch (e) {
+      console.log("지점명 로드 실패:", e);
+    }
+  };
 
   // 1. 로그인 유저 정보 및 자녀 정보 가져오기
   const fetchInitialData = async () => {
@@ -90,6 +120,8 @@ export default function ReservationScreen({ navigation }: any) {
 
   // 2. 선택 날짜의 시간표 조회
   const fetchSchedules = async () => {
+    if (!branchId) return; // 🚀 지점 정보가 없으면 조회를 멈춤
+    
     setLoading(true);
     const dayName = ["일", "월", "화", "수", "목", "금", "토"][
       new Date(selectedDate).getDay()
@@ -97,6 +129,7 @@ export default function ReservationScreen({ navigation }: any) {
     const { data } = await supabase
       .from("class_schedules")
       .select("*")
+      .eq("branch_id", branchId) // 🚀 [핵심 필터] 현재 지점의 시간표만 불러옵니다.
       .eq("day_of_week", dayName)
       .eq("is_active", true)
       .order("start_time", { ascending: true });
@@ -206,7 +239,8 @@ export default function ReservationScreen({ navigation }: any) {
     try {
       // 💡 1. 예약 데이터 생성
       const reservationsToInsert = cart.map((item) => ({
-        branch_id: item.branch_id || currentUser.branch_id, 
+        // 🚀 [수정] 혹시 모를 오류 방지를 위해 무조건 현재 활성화된 전역 branchId로 예약을 꽂아 넣습니다.
+        branch_id: branchId, 
         user_id: currentUser.id,
         child_id: child ? child.id : null,
         child_name: child ? child.child_name : currentUser.name,
@@ -276,7 +310,8 @@ export default function ReservationScreen({ navigation }: any) {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.topHeader}>
         <View>
-          <Text style={styles.branchName}>{currentUser?.branch_name || "시흥본점"}</Text>
+          {/* 🚀 [수정] 하드코딩된 '시흥본점' 대신 DB에서 실시간으로 가져온 지점명을 보여줍니다. */}
+          <Text style={styles.branchName}>{displayBranchName || "지점 정보 로딩 중..."}</Text>
           <Text style={styles.childBadge}>
             현재 선택: {targetInfo.name} (
             {targetAge > 0 ? `${targetAge}세` : "정보 없음"})
