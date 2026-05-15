@@ -10,7 +10,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+// 🚀 [추가] 학부모가 수정 버튼을 못 누르게 권한을 확인하기 위해 useAuth 임포트
+import { useAuth } from "../../context/AuthContext";
+
 export default function NoticeDetailScreen({ route, navigation }: any) {
+  // 🚀 [추가] 전역 상태에서 권한(role) 가져오기
+  const { role } = useAuth();
+
   // 이전 화면(NoticeListScreen)에서 넘겨준 공지사항 데이터를 받습니다.
   const { notice } = route.params; 
 
@@ -32,9 +38,14 @@ export default function NoticeDetailScreen({ route, navigation }: any) {
         <Text style={styles.appBarTitle}>공지사항</Text>
         
         {/* 💡 기존의 빈 View를 지우고, [수정] 버튼으로 교체했습니다! */}
-        <TouchableOpacity onPress={() => navigation.navigate("NoticeEdit", { notice })}>
-          <Ionicons name="create-outline" size={26} color="#111827" />
-        </TouchableOpacity>
+        {/* 🚀 [수정] 관리자(admin)나 코치(coach)일 때만 수정 버튼이 보이도록 권한 체크 */}
+        {(role === "admin" || role === "coach") ? (
+          <TouchableOpacity onPress={() => navigation.navigate("NoticeEdit", { notice })}>
+            <Ionicons name="create-outline" size={26} color="#111827" />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 26 }} /> /* 레이아웃 균형을 위한 빈 공간 */
+        )}
       </View>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>

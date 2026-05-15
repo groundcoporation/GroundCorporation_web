@@ -10,7 +10,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-// import { supabase } from "../../../lib/supabase"; // 💡 나중에 DB 붙일 때 경로 확인!
+import { supabase } from "../../lib/supabase"; // 🚀 경로 확인 완료!
+import { Picker } from "@react-native-picker/picker"; // 🚀 어드민 필터용
+
+// 🚀 [추가] 전역 상태에서 branchId와 role 가져오기
+import { useAuth } from "../../context/AuthContext";
 
 interface Notice {
   id: string;
@@ -18,56 +22,88 @@ interface Notice {
   content: string;
   created_at: string;
   is_important: boolean;
+  branch_id?: string | null;
 }
 
 export default function NoticeListScreen({ navigation }: any) {
+  // 🚀 [추가] 전역 권한 및 지점 정보 호출
+  const { branchId, role } = useAuth();
+
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 🚀 [추가] 어드민 전용 지점 필터 상태 (기본값은 'all' 또는 현재 지점)
+  const [selectedFilterBranch, setSelectedFilterBranch] = useState<string>("all");
+  const [branches, setBranches] = useState<any[]>([]); // 지점 목록 저장
+
+  useEffect(() => {
+    if (role === "admin") {
+      fetchBranches();
+    }
+  }, [role]);
+
   useEffect(() => {
     fetchNotices();
-  }, []);
+  }, [branchId, selectedFilterBranch]); // 🚀 지점이나 필터가 바뀔 때마다 다시 로드
+
+  // 🚀 [추가] 어드민용 지점 목록 가져오기
+  const fetchBranches = async () => {
+    try {
+      const { data } = await supabase.from("branches").select("id, name");
+      if (data) setBranches(data);
+    } catch (e) {
+      console.log("지점 목록 로드 실패:", e);
+    }
+  };
 
   const fetchNotices = async () => {
     try {
       setLoading(true);
-      // 💡 나중에 supabase 연동할 때 주석 해제하세요
-      /*
-      const { data, error } = await supabase
-        .from("notices")
-        .select("*")
+      
+      // 💡 [핵심] 권한 및 필터에 따른 쿼리 구성
+      let query = supabase.from("notices").select("*");
+
+      if (role === "admin") {
+        // 어드민: 필터가 'all'이 아니면 해당 지점만, 'all'이면 전체 조회
+        if (selectedFilterBranch !== "all") {
+          query = query.eq("branch_id", selectedFilterBranch);
+        }
+      } else {
+        // 학부모/코치: 본인 지점 데이터이거나 전체공지(null)인 것만 가져옴
+        query = query.or(`branch_id.eq.${branchId},branch_id.is.null`);
+      }
+
+      const { data, error } = await query
         .order("is_important", { ascending: false })
         .order("created_at", { ascending: false });
       
+      if (error) throw error;
       if (data) setNotices(data);
-      */
 
-      // 테스트용 가짜 데이터 (UI 확인용)
-      setNotices([
-        {
-          id: "1",
-          title: "[필독] IPASSCARE 시스템 점검 안내 (5/10 새벽 2시)",
-          content: "원활한 서비스 제공을 위해 시스템 점검을 진행합니다. 점검 시간 동안은 앱 접속이 제한되니 학부모님들의 많은 양해 부탁드립니다.",
-          created_at: "2026-05-02T10:00:00Z",
-          is_important: true,
-        },
-        {
-          id: "2",
-          title: "신규 지점 오픈 및 이용권 혜택 안내",
-          content: "시흥 배곧점이 새롭게 오픈했습니다! 오픈 기념으로 기존 회원님들께도 추가 혜택을 드립니다.",
-          created_at: "2026-04-28T14:30:00Z",
-          is_important: false,
-        },
-        {
-          id: "3",
-          title: "여름방학 특강 사전 예약 안내",
-          content: "다가오는 여름방학을 맞이하여 집중 특강을 준비했습니다. 인기 강좌는 조기 마감될 수 있으니 서둘러 주세요.",
-          created_at: "2026-04-20T09:15:00Z",
-          is_important: false,
-        },
-      ]);
     } catch (error) {
       console.log("공지사항 로드 에러:", error);
+      
+      // 🚀 실데이터가 없을 경우를 대비한 테스트용 가짜 데이터 (UI 확인용)
+      if (notices.length === 0) {
+        setNotices([
+          {
+            id: "1",
+            title: "[필독] IPASSCARE 시스템 점검 안내 (5/10 새벽 2시)",
+            content: "원활한 서비스 제공을 위해 시스템 점검을 진행합니다.",
+            created_at: "2026-05-02T10:00:00Z",
+            is_important: true,
+            branch_id: null,
+          },
+          {
+            id: "2",
+            title: "지점 전용 공지 테스트",
+            content: "해당 지점 학부모님들께만 보이는 공지입니다.",
+            created_at: "2026-04-28T14:30:00Z",
+            is_important: false,
+            branch_id: branchId,
+          },
+        ]);
+      }
     } finally {
       setLoading(false);
     }
@@ -78,25 +114,37 @@ export default function NoticeListScreen({ navigation }: any) {
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
   };
 
-  const renderItem = ({ item }: { item: Notice }) => (
-    <TouchableOpacity 
-      style={styles.noticeCard}
-      // 💡 여기서 상세 페이지로 데이터(item)를 싸들고 넘어갑니다!
-      onPress={() => navigation.navigate("NoticeDetail", { notice: item })}
-      activeOpacity={0.7}
-    >
-      <View style={styles.cardHeader}>
-        {item.is_important && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>중요</Text>
+  const renderItem = ({ item }: { item: Notice }) => {
+    const isGlobal = item.branch_id === null;
+
+    return (
+      <TouchableOpacity 
+        style={styles.noticeCard}
+        // 💡 여기서 상세 페이지로 데이터(item)를 싸들고 넘어갑니다!
+        onPress={() => navigation.navigate("NoticeDetail", { notice: item })}
+        activeOpacity={0.7}
+      >
+        <View style={styles.cardHeader}>
+          <View style={{flexDirection: "row", alignItems: "center"}}>
+            {item.is_important && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>중요</Text>
+              </View>
+            )}
+            {/* 🚀 전체 공지 배지 추가 */}
+            {isGlobal && (
+              <View style={[styles.badge, { backgroundColor: "#FEF3C7", marginLeft: 6 }]}>
+                <Text style={[styles.badgeText, { color: "#D97706" }]}>전체공지</Text>
+              </View>
+            )}
           </View>
-        )}
-        <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
-      </View>
-      <Text style={styles.titleText} numberOfLines={2}>{item.title}</Text>
-      <Text style={styles.previewText} numberOfLines={1}>{item.content}</Text>
-    </TouchableOpacity>
-  );
+          <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
+        </View>
+        <Text style={styles.titleText} numberOfLines={2}>{item.title}</Text>
+        <Text style={styles.previewText} numberOfLines={1}>{item.content}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -104,11 +152,29 @@ export default function NoticeListScreen({ navigation }: any) {
       
       {/* 헤더 */}
       <View style={styles.appBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={28} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.appBarTitle}>공지사항</Text>
-        <View style={{ width: 28 }} />
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={28} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.appBarTitle}>공지사항</Text>
+        </View>
+
+        {/* 🚀 [추가] 어드민일 때만 보이는 지점 필터 드롭다운 */}
+        {role === "admin" && (
+          <View style={styles.filterContainer}>
+            <Picker
+              selectedValue={selectedFilterBranch}
+              onValueChange={(itemValue) => setSelectedFilterBranch(itemValue)}
+              style={styles.picker}
+              dropdownIconColor="#6366F1"
+            >
+              <Picker.Item label="전체 보기" value="all" />
+              {branches.map((b) => (
+                <Picker.Item key={b.id} label={b.name} value={b.id} />
+              ))}
+            </Picker>
+          </View>
+        )}
       </View>
 
       {/* 리스트 */}
@@ -130,14 +196,16 @@ export default function NoticeListScreen({ navigation }: any) {
         />
       )}
 
-      {/* 💡 우측 하단 플로팅 글쓰기 버튼 (나중에 권한에 따라 숨김 처리 필요) */}
-      <TouchableOpacity 
-        style={styles.fab}
-        onPress={() => navigation.navigate("NoticeEdit")}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="pencil" size={24} color="#FFFFFF" />
-      </TouchableOpacity>
+      {/* 💡 [수정] admin이나 coach 권한이 있을 때만 글쓰기 버튼이 보입니다. */}
+      {(role === "admin" || role === "coach") && (
+        <TouchableOpacity 
+          style={styles.fab}
+          onPress={() => navigation.navigate("NoticeEdit")}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="pencil" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }
@@ -149,12 +217,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 10,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
-  appBarTitle: { fontSize: 18, fontWeight: "800", color: "#111827" },
+  headerLeft: { flexDirection: "row", alignItems: "center" },
+  appBarTitle: { fontSize: 18, fontWeight: "800", color: "#111827", marginLeft: 10 },
+  
+  /* 🚀 추가된 필터 스타일 */
+  filterContainer: {
+    width: 140,
+    height: 40,
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  picker: {
+    width: "100%",
+    color: "#1E293B",
+  },
+
   loader: { flex: 1, justifyContent: "center" },
   listContent: { padding: 20, paddingBottom: 100 }, // 버튼에 안 가려지도록 하단 여백 추가
   
