@@ -8,8 +8,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from "../../context/AuthContext";
 
 export default function GalleryDetailScreen({ route, navigation }: any) {
-  // 🚀 [추가] 전역 상태에서 권한(role) 가져오기
-  const { role } = useAuth();
+  // 🚀 [리팩토링 완료] 전역 상태에서 직원 확인용 스위치(isStaff) 가져오기!
+  const { isStaff } = useAuth();
 
   const { post } = route.params; // List에서 넘어온 사진 데이터
 
@@ -49,8 +49,8 @@ export default function GalleryDetailScreen({ route, navigation }: any) {
         <Text style={styles.headerTitle}>게시물 보기</Text>
 
         <View style={styles.headerRight}>
-          {/* 🚀 [수정] 관리자나 코치에게만 수정/삭제 도구 모음을 보여줍니다. */}
-          {(role === "admin" || role === "coach") ? (
+          {/* 🚀 [적용] 직원(isStaff)일 때만 수정/삭제 도구 모음을 보여줍니다. */}
+          {isStaff ? (
             <>
               {/* ✏️ 수정 버튼 */}
               <TouchableOpacity 

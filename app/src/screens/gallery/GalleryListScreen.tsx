@@ -7,12 +7,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Picker } from "@react-native-picker/picker"; // 🚀 관리자 지점 필터용
 
-// 🚀 [추가] 권한 및 소속 지점 확인을 위해 useAuth 임포트
+// 🚀 [완벽 적용됨] 권한 스위치 및 소속 지점 확인을 위해 useAuth 임포트
 import { useAuth } from "../../context/AuthContext";
 
 export default function GalleryListScreen({ navigation }: any) {
-  // 🚀 [추가] 전역 권한 및 지점 정보 호출
-  const { branchId, role } = useAuth();
+  // 🚀 [리팩토링 완료] 전역 권한 스위치(isAdmin, isStaff) 및 지점 정보 호출
+  const { branchId, isAdmin, isStaff } = useAuth();
 
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,12 +21,12 @@ export default function GalleryListScreen({ navigation }: any) {
   const [selectedFilterBranch, setSelectedFilterBranch] = useState<string>("all");
   const [branches, setBranches] = useState<any[]>([]);
 
-  // 🚀 [추가] 관리자일 때만 지점 목록 불러오기
+  // 🚀 [적용] 관리자(isAdmin)일 때만 지점 목록 불러오기
   useEffect(() => {
-    if (role === "admin") {
+    if (isAdmin) {
       fetchBranches();
     }
-  }, [role]);
+  }, [isAdmin]);
 
   const fetchBranches = async () => {
     try {
@@ -56,7 +56,8 @@ export default function GalleryListScreen({ navigation }: any) {
       // 🚀 [핵심 수정] 권한 및 필터에 따른 쿼리 동적 생성
       let query = supabase.from('gallery_posts').select('*');
 
-      if (role === "admin") {
+      // 💡 [적용] role === "admin" 대신 isAdmin 스위치 사용!
+      if (isAdmin) {
         // 관리자: 필터가 'all'이 아니면 해당 지점만, 'all'이면 전체 조회
         if (selectedFilterBranch !== "all") {
           query = query.eq("branch_id", selectedFilterBranch);
@@ -92,8 +93,8 @@ export default function GalleryListScreen({ navigation }: any) {
       <Image source={{ uri: item.image_url }} style={styles.image} />
       <View style={styles.textContainer}>
         <Text style={styles.title} numberOfLines={1}>
-          {/* 🚀 전체 공용 사진일 경우 머리말 표시 */}
-          {item.branch_id === null && role === "admin" ? "[전체] " : ""}
+          {/* 🚀 전체 공용 사진일 경우 머리말 표시 (isAdmin 스위치 적용) */}
+          {item.branch_id === null && isAdmin ? "[전체] " : ""}
           {item.title}
         </Text>
         <Text style={styles.date}>{formatDate(item.created_at)}</Text>
@@ -113,8 +114,8 @@ export default function GalleryListScreen({ navigation }: any) {
         </View>
         
         <View style={styles.headerRight}>
-          {/* 🚀 [추가] 관리자일 때만 보이는 지점 필터 드롭다운 */}
-          {role === "admin" && (
+          {/* 🚀 [적용] 관리자(isAdmin)일 때만 보이는 지점 필터 드롭다운 */}
+          {isAdmin && (
             <View style={styles.filterContainer}>
               <Picker
                 selectedValue={selectedFilterBranch}
@@ -131,8 +132,8 @@ export default function GalleryListScreen({ navigation }: any) {
           )}
 
           {/* 💡 바로 이 버튼을 누르면 아까 만든 업로드 화면으로 넘어갑니다! */}
-          {/* 🚀 [수정] 관리자나 코치일 때만 업로드 버튼이 보입니다. 일반 학부모는 숨김 처리 */}
-          {(role === "admin" || role === "coach") ? (
+          {/* 🚀 [적용] 직원(isStaff)일 때만 업로드 버튼이 보입니다. 일반 학부모는 숨김 처리 */}
+          {isStaff ? (
             <TouchableOpacity 
               onPress={() => navigation.navigate('GalleryUpload')}
               style={{ marginLeft: 12 }}

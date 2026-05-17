@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase"; // 🚀 경로 확인 완료!
 import { Picker } from "@react-native-picker/picker"; // 🚀 어드민 필터용
 
-// 🚀 [추가] 전역 상태에서 branchId와 role 가져오기
+// 🚀 [완벽 적용됨] 전역 상태에서 branchId와 권한 스위치 가져오기
 import { useAuth } from "../../context/AuthContext";
 
 interface Notice {
@@ -26,8 +26,8 @@ interface Notice {
 }
 
 export default function NoticeListScreen({ navigation }: any) {
-  // 🚀 [추가] 전역 권한 및 지점 정보 호출
-  const { branchId, role } = useAuth();
+  // 🚀 [리팩토링 완료] 하드코딩된 role 대신 깔끔한 스위치(isAdmin, isStaff)를 꺼내옵니다!
+  const { branchId, isAdmin, isStaff } = useAuth();
 
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,10 +37,11 @@ export default function NoticeListScreen({ navigation }: any) {
   const [branches, setBranches] = useState<any[]>([]); // 지점 목록 저장
 
   useEffect(() => {
-    if (role === "admin") {
+    // 💡 [적용] role === "admin" 대신 isAdmin 스위치 사용!
+    if (isAdmin) {
       fetchBranches();
     }
-  }, [role]);
+  }, [isAdmin]);
 
   useEffect(() => {
     fetchNotices();
@@ -60,10 +61,11 @@ export default function NoticeListScreen({ navigation }: any) {
     try {
       setLoading(true);
       
-      // 💡 [핵심] 권한 및 필터에 따른 쿼리 구성
+      // 💡 [핵심] 권한 및 필터에 따른 쿼리 구성 (완벽합니다!)
       let query = supabase.from("notices").select("*");
 
-      if (role === "admin") {
+      // 💡 [적용] role === "admin" 대신 isAdmin 스위치 사용!
+      if (isAdmin) {
         // 어드민: 필터가 'all'이 아니면 해당 지점만, 'all'이면 전체 조회
         if (selectedFilterBranch !== "all") {
           query = query.eq("branch_id", selectedFilterBranch);
@@ -159,8 +161,8 @@ export default function NoticeListScreen({ navigation }: any) {
           <Text style={styles.appBarTitle}>공지사항</Text>
         </View>
 
-        {/* 🚀 [추가] 어드민일 때만 보이는 지점 필터 드롭다운 */}
-        {role === "admin" && (
+        {/* 🚀 [적용] 어드민일 때만 보이는 지점 필터 드롭다운 */}
+        {isAdmin && (
           <View style={styles.filterContainer}>
             <Picker
               selectedValue={selectedFilterBranch}
@@ -196,8 +198,8 @@ export default function NoticeListScreen({ navigation }: any) {
         />
       )}
 
-      {/* 💡 [수정] admin이나 coach 권한이 있을 때만 글쓰기 버튼이 보입니다. */}
-      {(role === "admin" || role === "coach") && (
+      {/* 💡 [핵심 정답] 직원이면(admin 또는 coach) 글쓰기 버튼이 보입니다. */}
+      {isStaff && (
         <TouchableOpacity 
           style={styles.fab}
           onPress={() => navigation.navigate("NoticeEdit")}

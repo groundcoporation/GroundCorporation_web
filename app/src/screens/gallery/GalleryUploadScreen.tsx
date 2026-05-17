@@ -9,32 +9,32 @@ import { decode } from 'base64-arraybuffer';
 import { supabase } from '../../lib/supabase';
 import { Picker } from "@react-native-picker/picker"; // 🚀 지점 선택용 드롭다운 추가
 
-// 🚀 [추가] 권한(role)과 내 지점(branchId) 정보를 가져오기 위해 useAuth 임포트
+// 🚀 [추가] 권한 스위치와 내 지점(branchId) 정보를 가져오기 위해 useAuth 임포트
 import { useAuth } from "../../context/AuthContext";
 
 export default function GalleryUploadScreen({ navigation }: any) {
-  // 🚀 [추가] 전역 권한 정보 호출
-  const { branchId: myBranchId, role } = useAuth();
+  // 🚀 [리팩토링 완료] role 대신 명품 스위치 isAdmin을 가져옵니다!
+  const { branchId: myBranchId, isAdmin } = useAuth();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState(''); // 💡 상세 내용 상태 추가
   const [image, setImage] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // 🚀 [추가] 게시 대상 지점 ID 상태
-  // 어드민은 기본값이 전체공유(null), 코치는 본인 지점(myBranchId)
-  const [targetBranchId, setTargetBranchId] = useState<string | null>(role === "admin" ? null : myBranchId);
+  // 🚀 [수정] 게시 대상 지점 ID 상태
+  // 어드민은 기본값이 전체공유(null), 직원은 본인 지점(myBranchId)
+  const [targetBranchId, setTargetBranchId] = useState<string | null>(isAdmin ? null : myBranchId);
   const [branches, setBranches] = useState<any[]>([]); // 어드민용 지점 목록
   const [myBranchName, setMyBranchName] = useState(""); // 코치용 지점 이름 표시용
 
-  // 🚀 [추가] 화면 진입 시 지점 정보 로드
+  // 🚀 [수정] 화면 진입 시 지점 정보 로드 (isAdmin 스위치 적용)
   useEffect(() => {
-    if (role === "admin") {
+    if (isAdmin) {
       fetchBranches();
     } else {
       fetchMyBranchName();
     }
-  }, [role, myBranchId]);
+  }, [isAdmin, myBranchId]);
 
   const fetchBranches = async () => {
     try {
@@ -152,10 +152,10 @@ export default function GalleryUploadScreen({ navigation }: any) {
 
         <ScrollView contentContainerStyle={styles.content}>
           
-          {/* 🚀 [추가] 지점 설정 영역 (권한별 차등 UI) */}
+          {/* 🚀 [수정] 지점 설정 영역 (isAdmin 스위치 적용) */}
           <View style={styles.branchSection}>
             <Text style={styles.label}>게시 대상 설정</Text>
-            {role === "admin" ? (
+            {isAdmin ? (
               <View style={styles.pickerWrapper}>
                 <Picker
                   selectedValue={targetBranchId}
