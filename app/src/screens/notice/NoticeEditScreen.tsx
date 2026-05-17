@@ -16,12 +16,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase"; // 🚨 Supabase 연동 필수!
 import { Picker } from "@react-native-picker/picker"; // 🚀 지점 선택용 드롭다운
 
-// 🚀 [추가] 전역 상태에서 권한(role)과 내 지점(branchId) 가져오기
+// 🚀 [추가] 전역 상태에서 권한 스위치와 내 지점(branchId) 가져오기
 import { useAuth } from "../../context/AuthContext";
 
 export default function NoticeEditScreen({ route, navigation }: any) {
-  // 🚀 [추가] 전역 정보 호출
-  const { branchId: myBranchId, role } = useAuth();
+  // 🚀 [리팩토링 완료] role 대신 명품 스위치 isAdmin을 가져옵니다!
+  const { branchId: myBranchId, isAdmin } = useAuth();
 
   // 이전 화면에서 notice 데이터를 넘겨받았다면 '수정' 모드
   const existingNotice = route.params?.notice;
@@ -32,23 +32,23 @@ export default function NoticeEditScreen({ route, navigation }: any) {
   const [isImportant, setIsImportant] = useState(existingNotice?.is_important || false);
   const [isOnHome, setIsOnHome] = useState(existingNotice?.is_on_home || false); // 💡 새로 추가된 홈 노출 설정
   
-  // 🚀 [추가] 공지가 올라갈 대상 지점 ID 상태
+  // 🚀 [수정] 어드민이면 기본값이 전체공유(null), 직원이면 본인 지점(myBranchId)
   const [targetBranchId, setTargetBranchId] = useState<string | null>(
-    existingNotice ? existingNotice.branch_id : (role === "admin" ? null : myBranchId)
+    existingNotice ? existingNotice.branch_id : (isAdmin ? null : myBranchId)
   );
 
   const [branches, setBranches] = useState<any[]>([]); // 지점 목록 (어드민용)
   const [myBranchName, setMyBranchName] = useState(""); // 🚀 [추가] 코치용 지점 이름 상태
   const [loading, setLoading] = useState(false);
 
-  // 🚀 [수정] 화면 진입 시 지점 정보를 불러옵니다.
+  // 🚀 [수정] 화면 진입 시 지점 정보를 불러옵니다. (isAdmin 스위치 적용)
   useEffect(() => {
-    if (role === "admin") {
+    if (isAdmin) {
       fetchAllBranches();
     } else {
       fetchMyBranchName(); // 🚀 코치는 본인 지점 이름만 가져옴
     }
-  }, [role, myBranchId]);
+  }, [isAdmin, myBranchId]);
 
   // 🚀 [수정] 어드민용: 모든 지점을 순서대로(display_order) 가져옵니다.
   const fetchAllBranches = async () => {
@@ -143,10 +143,10 @@ export default function NoticeEditScreen({ route, navigation }: any) {
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         
-        {/* 🚀 [수정] 지점 선택 영역 UI 개선 */}
+        {/* 🚀 [수정] 지점 선택 영역 UI 개선 (isAdmin 스위치 적용) */}
         <View style={styles.branchSelectSection}>
           <Text style={styles.sectionLabel}>게시 대상 설정</Text>
-          {role === "admin" ? (
+          {isAdmin ? (
             <View style={styles.pickerWrapper}>
               <Picker
                 selectedValue={targetBranchId}

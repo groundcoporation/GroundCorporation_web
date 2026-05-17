@@ -15,7 +15,13 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// 🚀 [완벽 적용됨] 권한 확인을 위해 useAuth 임포트
+import { useAuth } from "../../context/AuthContext";
+
 export default function MyPageScreen({ navigation }: any) {
+  // 🚀 [리팩토링 완료] 전역 권한 스위치를 가져옵니다!
+  const { isAdmin, isStaff, isDriver } = useAuth();
+
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isPushEnabled, setIsPushEnabled] = useState(true); // 💡 알림 설정 상태
@@ -28,6 +34,7 @@ export default function MyPageScreen({ navigation }: any) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        // 💡 권한(role)은 이미 전역으로 관리하므로, 여기서는 이름/전화번호 같은 '표시용 데이터'만 가져옵니다.
         const { data: userProfile } = await supabase
           .from("users")
           .select("*")
@@ -103,10 +110,15 @@ export default function MyPageScreen({ navigation }: any) {
     );
   }
 
-  // 🚀 [추가] 메뉴 권한 제어를 위한 변수 설정
-  const userRole = userData?.role;
-  const showAdminDash = userRole === 'admin' || userRole === 'coach';
-  const showDriverDash = userRole === 'admin' || userRole === 'coach' || userRole === 'driver';
+  // 🚀 [추가] 뱃지 이름을 스위치에 따라 다르게 보여주기!
+  let displayRole = "학부모";
+  if (isAdmin) displayRole = "최고 관리자";
+  else if (isStaff) displayRole = "코치";
+  else if (isDriver) displayRole = "기사님";
+
+  // 🚀 [리팩토링 완료] 메뉴 권한 제어를 하드코딩 대신 스위치로 변경!
+  const showAdminDash = isStaff; // 어드민이거나 코치면 대시보드 보임
+  const showDriverDash = isStaff || isDriver; // 어드민, 코치, 기사님이면 차량운행 보임
   const showStaffSection = showAdminDash || showDriverDash;
 
   return (
@@ -137,8 +149,9 @@ export default function MyPageScreen({ navigation }: any) {
           <View style={styles.profileInfo}>
             <View style={styles.profileNameRow}>
               <Text style={styles.profileName}>{userData?.name || "회원"}님</Text>
-              <View style={styles.roleBadge}>
-                <Text style={styles.roleBadgeText}>학부모</Text>
+              <View style={[styles.roleBadge, isAdmin && { backgroundColor: '#FEE2E2' }]}>
+                {/* 🚀 스위치로 판별한 동적 권한 뱃지 적용 */}
+                <Text style={[styles.roleBadgeText, isAdmin && { color: '#EF4444' }]}>{displayRole}</Text>
               </View>
             </View>
             <Text style={styles.profileSubText}>{userData?.phone || "010-0000-0000"}</Text>

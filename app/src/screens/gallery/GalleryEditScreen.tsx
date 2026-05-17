@@ -9,12 +9,12 @@ import { decode } from 'base64-arraybuffer';
 import { supabase } from '../../lib/supabase';
 import { Picker } from "@react-native-picker/picker"; // 🚀 지점 선택용 드롭다운 추가
 
-// 🚀 [추가] 권한(role)과 내 지점(branchId) 정보를 가져오기 위해 useAuth 임포트
+// 🚀 [추가] 권한 스위치와 내 지점(branchId) 정보를 가져오기 위해 useAuth 임포트
 import { useAuth } from "../../context/AuthContext";
 
 export default function GalleryEditScreen({ route, navigation }: any) {
-  // 🚀 [추가] 전역 권한 정보 호출
-  const { branchId: myBranchId, role } = useAuth();
+  // 🚀 [리팩토링 완료] role 대신 명품 스위치 isAdmin을 가져옵니다!
+  const { branchId: myBranchId, isAdmin } = useAuth();
 
   const { post } = route.params; // 기존 데이터
   const [title, setTitle] = useState(post.title || '');
@@ -27,14 +27,14 @@ export default function GalleryEditScreen({ route, navigation }: any) {
   const [branches, setBranches] = useState<any[]>([]); // 어드민용 지점 목록
   const [myBranchName, setMyBranchName] = useState(""); // 코치용 지점 이름
 
-  // 🚀 [추가] 지점 정보 로드 (어드민은 전체 목록, 코치는 본인 지점명)
+  // 🚀 [수정] 지점 정보 로드 (isAdmin 스위치 적용)
   useEffect(() => {
-    if (role === "admin") {
+    if (isAdmin) {
       fetchBranches();
     } else {
       fetchMyBranchName();
     }
-  }, [role]);
+  }, [isAdmin]);
 
   const fetchBranches = async () => {
     try {
@@ -145,7 +145,8 @@ export default function GalleryEditScreen({ route, navigation }: any) {
           {/* 🚀 [추가] 지점 설정 영역 (수정 시에도 어디 게시물인지 확인/변경 가능) */}
           <View style={styles.branchSection}>
             <Text style={styles.label}>게시 대상 설정</Text>
-            {role === "admin" ? (
+            {/* 🚀 [적용] isAdmin 스위치 사용! */}
+            {isAdmin ? (
               <View style={styles.pickerWrapper}>
                 <Picker
                   selectedValue={targetBranchId}

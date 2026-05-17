@@ -14,8 +14,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
 
 export default function NoticeDetailScreen({ route, navigation }: any) {
-  // 🚀 [추가] 전역 상태에서 권한(role) 가져오기
-  const { role } = useAuth();
+  // 🚀 [리팩토링 완료] 전역 상태에서 직원(isStaff) 확인 스위치 가져오기!
+  const { isStaff } = useAuth();
 
   // 이전 화면(NoticeListScreen)에서 넘겨준 공지사항 데이터를 받습니다.
   const { notice } = route.params; 
@@ -38,8 +38,8 @@ export default function NoticeDetailScreen({ route, navigation }: any) {
         <Text style={styles.appBarTitle}>공지사항</Text>
         
         {/* 💡 기존의 빈 View를 지우고, [수정] 버튼으로 교체했습니다! */}
-        {/* 🚀 [수정] 관리자(admin)나 코치(coach)일 때만 수정 버튼이 보이도록 권한 체크 */}
-        {(role === "admin" || role === "coach") ? (
+        {/* 🚀 [적용] 직원(isStaff) 스위치가 켜진 경우(admin 또는 coach)에만 수정 버튼 노출! */}
+        {isStaff ? (
           <TouchableOpacity onPress={() => navigation.navigate("NoticeEdit", { notice })}>
             <Ionicons name="create-outline" size={26} color="#111827" />
           </TouchableOpacity>
