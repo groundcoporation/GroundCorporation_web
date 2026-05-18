@@ -13,6 +13,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase"; // 🚀 경로 확인 완료!
 import { Picker } from "@react-native-picker/picker"; // 🚀 어드민 필터용
 
+// 🚀 [추가] 화면이 유저 눈에 보일 때마다 공지사항을 즉시 리로드하기 위해 useIsFocused 임포트
+import { useIsFocused } from "@react-navigation/native";
+
 // 🚀 [완벽 적용됨] 전역 상태에서 branchId와 권한 스위치 가져오기
 import { useAuth } from "../../context/AuthContext";
 
@@ -29,6 +32,9 @@ export default function NoticeListScreen({ navigation }: any) {
   // 🚀 [리팩토링 완료] 하드코딩된 role 대신 깔끔한 스위치(isAdmin, isStaff)를 꺼내옵니다!
   const { branchId, isAdmin, isStaff } = useAuth();
 
+  // 🚀 [추가] 현재 화면의 포커스 상태(유저가 이 스크린을 보고 있는지 여부)를 실시간 감시하는 센서 선언
+  const isFocused = useIsFocused();
+
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,8 +50,12 @@ export default function NoticeListScreen({ navigation }: any) {
   }, [isAdmin]);
 
   useEffect(() => {
-    fetchNotices();
-  }, [branchId, selectedFilterBranch]); // 🚀 지점이나 필터가 바뀔 때마다 다시 로드
+    // 🚀 [수정] 지점 필터가 바뀔 때는 물론이고, 유저가 글쓰기를 마치고 이 목록 화면으로 '리턴(포커스)'하는 순간 즉시 새로고침을 실행합니다!
+    if (isFocused) {
+      console.log("📢 [포커스 감지] 공지사항 목록 화면이 노출되어 최신 데이터를 실시간 리로드합니다.");
+      fetchNotices();
+    }
+  }, [branchId, selectedFilterBranch, isFocused]); // 🚀 감시 대상에 isFocused 센서 바인딩 추가!
 
   // 🚀 [추가] 어드민용 지점 목록 가져오기
   const fetchBranches = async () => {

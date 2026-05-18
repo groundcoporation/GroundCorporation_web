@@ -32,6 +32,9 @@ export default function NoticeEditScreen({ route, navigation }: any) {
   const [isImportant, setIsImportant] = useState(existingNotice?.is_important || false);
   const [isOnHome, setIsOnHome] = useState(existingNotice?.is_on_home || false); // 💡 새로 추가된 홈 노출 설정
   
+  // 🚀 [추가] 푸시 알림 발송 여부를 결정하는 스위치 상태 (신규 작성 시에만 활성화)
+  const [isSendNotification, setIsSendNotification] = useState(false);
+
   // 🚀 [수정] 어드민이면 기본값이 전체공유(null), 직원이면 본인 지점(myBranchId)
   const [targetBranchId, setTargetBranchId] = useState<string | null>(
     existingNotice ? existingNotice.branch_id : (isAdmin ? null : myBranchId)
@@ -88,15 +91,31 @@ export default function NoticeEditScreen({ route, navigation }: any) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
+      // 🚀 [추가] public.users 테이블에서 이 유저의 '진짜 이름' 동적 조회하기
+      let realName = "사용자";
+      if (user) {
+        const { data: profileData } = await supabase
+          .from("users")
+          .select("name")
+          .eq("id", user.id)
+          .maybeSingle();
+        
+        realName = profileData?.name || user.user_metadata?.name || user.email?.split('@')[0] || "사용자";
+      }
+      
       const noticeData = {
         title,
         content,
         is_important: isImportant,
         is_on_home: isOnHome,
+        author_name: realName,
         author_id: user?.id || null, 
         branch_id: targetBranchId, 
         updated_at: new Date().toISOString(),
       };
+
+      // 🚀 알림 연동을 위해 생성된 공지글의 결과 데이터를 담을 변수
+      let savedNotice = existingNotice;
 
       if (isEditing) {
         const { error } = await supabase
@@ -105,10 +124,59 @@ export default function NoticeEditScreen({ route, navigation }: any) {
           .eq("id", existingNotice.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        // 🚀 [수정] .select()를 붙여서 DB에 저장된 진짜 공지글 데이터(ID 포함)를 돌려받습니다!
+        const { data, error } = await supabase
           .from("notices")
-          .insert([noticeData]);
+          .insert([noticeData])
+          .select()
+          .single();
         if (error) throw error;
+        savedNotice = data; // 방금 생성된 진짜 공지글 데이터 안착
+      }
+
+      // 🚀 [기능 연동] 새 공지사항 등록이면서 알림 발송 스위치가 켜진 경우 알림 데이터 일괄 주입
+      // 🚀 [기능 연동] 새 공지사항 등록이면서 알림 발송 스위치가 켜진 경우 알림 데이터 일괄 주입
+      if (!isEditing && isSendNotification) {
+        // 💡 [본부장님 최적화 기획 적용] 유저를 긁어올 때부터 토큰 없는 유령 회원은 아예 배제합니다!
+        let query = supabase.from("users").select("id");
+        
+        if (targetBranchId) {
+          query = query.eq("branch_id", targetBranchId);
+        }
+
+        // 🎯 [핵심 추가] 푸시 토큰이 존재하는 사람(=앱 설치 및 로그인 유저)만 필터링!
+        // (※ 주의: 'push_token' 부분은 본부장님 users 테이블의 실제 푸시 토큰 컬럼 이름으로 맞춰주세요. 예: expo_push_token 등)
+        query = query.not("push_token", "is", null);
+
+        let { data: targetUsers, error: userError } = await query;
+        if (!targetUsers) targetUsers = [];
+
+        // 🎯 [안전망] 테스트를 진행하는 나 자신(어드민/코치)은 무조건 포함
+        if (user && !targetUsers.some((u) => u.id === user.id)) {
+          targetUsers.push({ id: user.id });
+        }
+
+        if (!userError && targetUsers.length > 0) {
+          const notificationRows = targetUsers.map((u) => ({
+            user_id: u.id,
+            title: `📢 신규 공지: ${title.trim()}`,
+            message: content.trim().substring(0, 50),
+            type: "notice", 
+            notice_id: savedNotice?.id || null, 
+            is_read: false,
+            created_at: new Date().toISOString(),
+          }));
+
+          const { error: notiError } = await supabase
+            .from("notifications")
+            .insert(notificationRows);
+
+          if (notiError) {
+            console.log("🚨 알림 내역 생성 실패:", notiError.message);
+          } else {
+            console.log("🎉 [연동 성공] 앱을 설치한 진성 유저들에게 최적화 알림 발송 완료!");
+          }
+        }
       }
 
       setLoading(false);
@@ -203,6 +271,25 @@ export default function NoticeEditScreen({ route, navigation }: any) {
         </View>
 
         <View style={styles.divider} />
+
+        {/* 🚀 [추가] 푸시 알림 발송 스위치 (새 글을 추가할 때만 노출) */}
+        {!isEditing && (
+          <>
+            <View style={styles.switchRow}>
+              <View>
+                <Text style={[styles.switchLabel, { color: "#4F46E5" }]}>Push 알림 발송</Text>
+                <Text style={styles.switchSub}>등록과 동시에 대상 학부모들에게 알림을 보냅니다.</Text>
+              </View>
+              <Switch
+                value={isSendNotification}
+                onValueChange={setIsSendNotification}
+                trackColor={{ false: "#E2E8F0", true: "#4F46E5" }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+            <View style={styles.divider} />
+          </>
+        )}
 
         {/* 제목 입력 */}
         <TextInput
