@@ -14,10 +14,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
+import { useNavigation } from "@react-navigation/native"; // 🚀 [추가] 상세페이지 이동을 위한 네비게이션 훅 임포트
 
 const { width } = Dimensions.get("window");
 
 export default function NotificationBell() {
+  const navigation = useNavigation<any>(); // 🚀 [추가] 네비게이션 사용 선언
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -29,12 +31,16 @@ export default function NotificationBell() {
     
     // 🚀 실시간 알림 구독
     const channel = supabase
-      .channel('realtime_notifications')
+      .channel('bell_realtime_channel')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications' },
         () => {
+          console.log("🔔 [알림 종 실시간 감지] 배지 카운트와 리스트를 즉시 동기화합니다.");
           fetchUnreadCount(); 
+          if (modalVisible) {
+            reloadNotificationsOnly();
+          }
         }
       )
       .subscribe();
@@ -42,7 +48,7 @@ export default function NotificationBell() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [currentUserId, modalVisible]);
 
   const getUserIdAndInit = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -92,7 +98,20 @@ export default function NotificationBell() {
       .limit(20);
 
     if (!error) setNotifications(data || []);
-    setLoading(false);
+    setLoading(false); // 🚀 [🔥 복구 완료] loading || setLoading(false) 로직을 깔끔하게 정상 복구했습니다.
+  };
+
+  // 🚀 [추가] 실시간 백그라운드 갱신 전용 함수 (화면이 깜빡거리는 로딩 가림창 없이 리스트 데이터만 자연스럽게 밀어 넣어 줍니다)
+  const reloadNotificationsOnly = async () => {
+    if (!currentUserId) return;
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", currentUserId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (!error) setNotifications(data || []);
   };
 
   const deleteNotification = async (id: string) => {
@@ -107,6 +126,20 @@ export default function NotificationBell() {
     }
   };
 
+  // 🚀 [추가] 알림 개별 클릭 시 읽음 처리 기능 추가
+  const markAsRead = async (id: string) => {
+    const { error } = await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("id", id);
+    
+    if (!error) {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+      fetchUnreadCount();
+    }
+  };
+
+  // 🚀 [전체 삭제 기능 원상복구]
   const deleteAllNotifications = async () => {
     if (!currentUserId) return;
     
@@ -130,6 +163,7 @@ export default function NotificationBell() {
     ]);
   };
 
+  // 🚀 [🔥 버그 수정] 모두 읽음 시 데이터가 증발하던 동기화 로직 전면 수정
   const markAllAsRead = async () => {
     if (!currentUserId) return;
     
@@ -141,7 +175,8 @@ export default function NotificationBell() {
 
     if (!error) {
       setUnreadCount(0);
-      setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+      // 기존 내역을 지우지 않고, 배열 내 모든 아이템들의 읽음 여부(is_read)만 true로 완벽 변환하여 유지시킵니다!
+      setNotifications(prevNotis => prevNotis.map(n => ({ ...n, is_read: true })));
     }
   };
 
@@ -160,6 +195,7 @@ export default function NotificationBell() {
         <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
+              {/* 🚀 [오타 수정 완료] styles.dropdownContainer 로 정상 지정 */}
               <View style={styles.dropdownContainer}>
                 {/* 🚀 삼각형 위치: 58에서 62로 수정하여 살짝 더 왼쪽으로 이동 */}
                 <View style={styles.triangle} />
@@ -186,7 +222,53 @@ export default function NotificationBell() {
                 ) : (
                   <ScrollView style={{ maxHeight: 350 }} showsVerticalScrollIndicator={false}>
                     {notifications.map((item) => (
-                      <View key={item.id} style={[styles.notiItem, !item.is_read && styles.unreadNoti]}>
+                      /* 🚀 [수정] 단순 View였던 알림 행을 터치 가능한 TouchableOpacity로 변경하고 경우의 수 분기 처리! */
+                      <TouchableOpacity 
+                        key={item.id} 
+                        style={[styles.notiItem, !item.is_read && styles.unreadNoti]}
+                        activeOpacity={0.7}
+                        onPress={async () => {
+                          setModalVisible(false); // 1. 모달 팝업 닫기
+                          markAsRead(item.id);    // 2. 알림 읽음 처리
+
+                          // =======================================================================================
+                          // 💡 [본부장님 기획구역 주석 보강] 알림 종류(type)에 따라 원하는 전역 스크린 화면으로 네비게이션 전환 처리!
+                          // =======================================================================================
+                          if (item.type === "notice" && item.notice_id) {
+                            // 📢 [공지사항 알림 터치 시]
+                            // 🚀 [수정] SQL로 새로 생성한 notice_id 방의 값을 꺼내어 notices 테이블에서 진짜 원본 공지글을 1건 실시간 조회합니다.
+                            try {
+                              const { data: realNotice } = await supabase
+                                .from("notices")
+                                .select("*")
+                                .eq("id", item.notice_id)
+                                .single();
+
+                              if (realNotice) {
+                                // 가져온 진짜 공지글 데이터 덩어리(realNotice)를 파라미터로 실어 상세 화면("NoticeDetail")으로 완벽히 점프시킵니다.
+                                navigation.navigate("NoticeDetail", { notice: realNotice }); 
+                                return;
+                              }
+                            } catch (err) {
+                              console.log("공지글 상세 데이터 조회 실패:", err);
+                            }
+                            
+                            // 💡 안전용 백업 폴백: 글 데이터 호출에 실패한 경우 공지 리스트로 안전하게 안내합니다.
+                            navigation.navigate("NoticeList");
+
+                          } else if (item.type === "payment") {
+                            // 💳 [결제 관련 알림 터치 시]
+                            // 결제 영수증이나 청구 확인 내역으로 즉시 보낼 수 있도록 마이페이지("MyPage")로 라우팅을 넘깁니다.
+                            navigation.navigate("MyPage"); 
+
+                          } else if (item.type === "attendance") {
+                            // 🚌 [출결 및 등하원 알림 터치 시]
+                            // 등하원 픽업 버스 상태를 부모가 확인할 수 있도록 출석확인 스크린("Attendance")으로 네비게이션을 넘깁니다.
+                            navigation.navigate("Attendance"); 
+                          }
+                          // =======================================================================================
+                        }}
+                      >
                         <View style={styles.notiContent}>
                           <Text style={styles.notiTitle}>{item.title}</Text>
                           <Text style={styles.notiMessage} numberOfLines={2}>{item.message}</Text>
@@ -200,7 +282,7 @@ export default function NotificationBell() {
                         >
                           <Ionicons name="trash-outline" size={16} color="#D1D5DB" />
                         </TouchableOpacity>
-                      </View>
+                      </TouchableOpacity>
                     ))}
                   </ScrollView>
                 )}
@@ -249,7 +331,6 @@ const styles = StyleSheet.create({
   triangle: {
     position: "absolute",
     top: -8,
-    // 🚀 삼각형 위치: 팀장님 요청대로 살짝 더 왼쪽(62)으로 수정
     right: 67, 
     width: 0,
     height: 0,

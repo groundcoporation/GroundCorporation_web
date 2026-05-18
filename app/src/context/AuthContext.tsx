@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
+// 🚀 [추가] 푸시 알림 토큰 수집을 위한 패키지 임포트
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
+
 // 보관소에 담길 데이터의 타입 정의
 interface AuthContextType {
   // --- 👤 기본 유저 정보 ---
@@ -29,6 +34,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [branchId, setBranchId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // --- 🔔 푸시 알림 (Push Token) 관련 ---
+  // 💡 앱 진입 시 기기의 푸시 토큰을 발급받아 Supabase에 저장하는 함수
+  const registerAndSavePushToken = async (userId: string) => {
+    // 1. 시뮬레이터가 아닌 실제 기기인지 확인
+    if (!Device.isDevice) {
+      console.log('푸시 알림은 실제 스마트폰에서만 작동합니다.');
+      return;
+    }
+
+    // 2. 안드로이드 알림 채널 설정 (안드로이드 필수 규격)
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+
+    // 3. 알림 권한 확인 및 요청
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    // 권한 거부 시 종료 (학부모가 알림 거부한 경우)
+    if (finalStatus !== 'granted') {
+      console.log('푸시 알림 권한이 거부되었습니다.');
+      return;
+    }
+
+    // 4. 토큰 발급 및 DB 저장
+    try {
+      // Expo 고유 푸시 토큰 발급
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      const token = tokenData.data;
+      console.log("📲 [발급된 푸시 토큰]:", token);
+
+      // Supabase users 테이블의 push_token 칸에 업데이트!
+      const { error } = await supabase
+        .from('users')
+        .update({ push_token: token })
+        .eq('id', userId);
+
+      if (error) throw error;
+      console.log("✅ [DB 저장 성공] 푸시 토큰이 업데이트되었습니다.");
+
+    } catch (error) {
+      console.error("푸시 토큰 발급/저장 에러:", error);
+    }
+  };
+  // ------------------------------------
+
   // 세션 정보와 DB 정보를 동기화하는 핵심 함수
   const initializeAuth = async () => {
     try {
@@ -49,6 +109,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setRole(profile.role);
           setBranchId(profile.branch_id);
         }
+
+        // 🚀 [추가] 로그인이 성공적으로 확인되었으므로 푸시 토큰을 수집하여 DB에 저장합니다!
+        registerAndSavePushToken(session.user.id);
+
       } else {
         setUser(null);
         setRole(null);

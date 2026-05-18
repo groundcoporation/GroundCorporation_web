@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from 'expo-notifications'; // 🔔 전역 푸시 핸들링을 위해 추가
 
 // 🚀 [전역 상태 관리] 지점 및 권한 관리를 위한 Provider 임포트
 import { AuthProvider } from "./src/context/AuthContext";
@@ -66,34 +67,81 @@ import AdminMemberDetailScreen from "./src/screens/admin/AdminMemberDetailScreen
 
 const Stack = createNativeStackNavigator();
 
+// 🔔 [알림 전역 제어 전용] 화면이 뜨기 전 컴포넌트 밖에서도 네비게이션을 컨트롤할 수 있는 마법의 참조키 생성
+const navigationRef = createNavigationContainerRef<any>();
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [initialRoute, setInitialRoute] = useState<"Login" | "Home">("Login");
 
   useEffect(() => {
-  async function initializeAuth() {
-    try {
-      // 1. 자동 로그인 설정값 확인
-      const autoLoginEnabled = await AsyncStorage.getItem("auto_login");
-      
-      // 2. 💡 [핵심] Supabase에 실제 로그인된 세션이 있는지 확인
-      const { data: { session } } = await supabase.auth.getSession();
+    async function initializeAuth() {
+      try {
+        // 1. 자동 로그인 설정값 확인
+        const autoLoginEnabled = await AsyncStorage.getItem("auto_login");
+        
+        // 2. 💡 [핵심] Supabase에 실제 로그인된 세션이 있는지 확인
+        const { data: { session } } = await supabase.auth.getSession();
 
-      // 자동로그인이 켜져있고 + 실제로 세션도 살아있어야만 Home으로 보냄
-      if (autoLoginEnabled === "true" && session) {
-        setInitialRoute("Home");
-      } else {
+        // 자동로그인이 켜져있고 + 실제로 세션도 살아있어야만 Home으로 보냄
+        if (autoLoginEnabled === "true" && session) {
+          setInitialRoute("Home");
+        } else {
+          setInitialRoute("Login");
+        }
+      } catch (error) {
+        console.error("인증 초기화 중 에러:", error);
         setInitialRoute("Login");
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("인증 초기화 중 에러:", error);
-      setInitialRoute("Login");
-    } finally {
-      setIsLoading(false);
     }
-  }
-  initializeAuth();
-}, []);
+    initializeAuth();
+  }, []);
+
+  // =========================================================================
+  // 🔔 [전역 알림 수신 및 교통정리 시스템] - 나중에 화면 이동만 수정할 수 있게 완전 격리 완료!
+  // =========================================================================
+  useEffect(() => {
+    // 1. 앱이 켜져 있을 때 진짜 알림이 오면 반응하는 센서
+    const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
+      console.log('📲 앱이 켜진 상태에서 실시간 알림 수신됨:', notification);
+    });
+
+    // 2. 학부모가 스마트폰 상단바 알림을 '클릭(터치)'해서 앱에 들어올 때 반응하는 핵심 센서
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+      // Supabase에서 쏠 때 심어둔 데이터(type, notice_id 등)를 안전하게 꺼냅니다.
+      const data = response.notification.request.content.data;
+      
+      if (!data) return;
+      
+      const type = data.type;
+      console.log(`🎯 알림 클릭됨! 감지된 카테고리 타입: [${type}]`);
+
+      // 네비게이션이 완전히 준비되었는지 확인 후 교통정리 시작
+      if (navigationRef.isReady()) {
+        // 💡 [나중에 수정할 곳] 본부장님 기획에 맞춰 목적지 화면 이름만 싹 바꿔주시면 됩니다!
+        if (type === "notice") {
+          // 공지사항 타입이면 공지 상세 보기 화면으로 하이패스 점프!
+          navigationRef.navigate("NoticeDetail", { notice: data.noticeData }); 
+        } else if (type === "payment") {
+          // 나중에 결제 알림이면 마이페이지 혹은 전용 화면으로 슥 이동
+          navigationRef.navigate("MyPage");
+        } else if (type === "attendance") {
+          // 출결 알림이면 출석 화면으로 슥 이동
+          navigationRef.navigate("Attendance");
+        }
+      }
+    });
+
+    return () => {
+      foregroundSubscription.remove();
+      responseSubscription.remove();
+    };
+  }, []);
+  // =========================================================================
+  // 🔔 [전역 알림 시스템 영역 끝]
+  // =========================================================================
 
   if (isLoading) {
     return (
@@ -106,7 +154,8 @@ export default function App() {
   return (
     // 💡 방금 만든 AuthProvider로 전체 앱을 감싸줍니다.
     <AuthProvider>
-      <NavigationContainer>
+      {/* 🔔 알림에서 스크린을 강제 핸들링할 수 있도록 navigationRef를 연결해줍니다. */}
+      <NavigationContainer ref={navigationRef}>
         <Stack.Navigator
           initialRouteName={initialRoute}
           screenOptions={{

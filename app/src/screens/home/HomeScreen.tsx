@@ -19,6 +19,9 @@ import { supabase } from "../../lib/supabase";
 // 🚀 [추가] 지점 정보를 가져오기 위해 useAuth 임포트
 import { useAuth } from "../../context/AuthContext";
 
+// 🚀 [추가] 화면이 유저 눈에 보일 때마다 자동 새로고침을 수행하기 위해 useIsFocused 임포트
+import { useIsFocused } from "@react-navigation/native";
+
 // 🚀 [팝업 관리자 임포트] 유니폼 및 공지사항 통제
 import PopupManager from "../../components/popups/PopupManager";
 // 🚀 [알림 종 임포트] 실시간 알림 및 모달 기능 추가
@@ -43,6 +46,9 @@ const { width } = Dimensions.get("window");
 export default function HomeScreen({ navigation }: any) {
   // 🚀 [추가] 전역 지점 ID 호출
   const { branchId } = useAuth();
+  
+  // 🚀 [추가] 화면 포커스 여부 감시 센서 선언 (유저 눈에 홈 화면이 띄워져 있는지 감지)
+  const isFocused = useIsFocused();
 
   const [userData, setUserData] = useState<any>(null);
   const [children, setChildren] = useState<any[]>([]);
@@ -58,12 +64,13 @@ export default function HomeScreen({ navigation }: any) {
   // 🚀 [추가] 홈 화면에 표시할 공지사항 상태 (최신 2개)
   const [homeNotices, setHomeNotices] = useState<any[]>([]);
 
-  // 🚀 [수정] branchId가 변경될 때마다 데이터를 다시 불러옵니다.
+  // 🚀 [수정] branchId가 변경되거나 화면이 유저 눈앞에 다시 포커스될 때마다 데이터를 실시간 갱신합니다.
   useEffect(() => {
-    if (branchId) {
+    if (branchId && isFocused) {
+      console.log("🏠 [포커스 감지] 홈 화면 진입 또는 리턴이 확인되어 최신 데이터를 새로고침합니다.");
       fetchData();
     }
-  }, [branchId]);
+  }, [branchId, isFocused]);
 
   const fetchData = async () => {
     try {
@@ -455,9 +462,7 @@ export default function HomeScreen({ navigation }: any) {
 
           {/* 공지사항 DB 연동 및 전체공지 분기 처리 */}
           <View style={styles.noticeBox}>
-            {loading ? (
-              <ActivityIndicator size="small" color="#6366F1" style={{ margin: 20 }} />
-            ) : homeNotices.length > 0 ? (
+            {homeNotices.length > 0 ? (
               homeNotices.map((notice, index) => (
                 <React.Fragment key={notice.id}>
                   <TouchableOpacity 

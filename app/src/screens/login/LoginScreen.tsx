@@ -110,6 +110,26 @@ export default function LoginScreen({ navigation }: any) {
       // 이 과정이 끝나야 완벽하게 현재 지점을 앱이 기억하게 됩니다.
       await refreshAuth();
 
+      // =========================================================================
+      // 🚨🚨🚨 [임시 우회 알림 테스트 코드] 알림 빌드 성공하면 이 구간만 통째로 삭제!! 🚨🚨🚨
+      // =========================================================================
+      if (data?.user?.id) {
+        const fakeToken = "ExponentPushToken[FakeTokenForTesting123]"; // 가짜 토큰 생성
+        
+        const { error: tokenError } = await supabase
+          .from('users')
+          .update({ push_token: fakeToken }) // 👈 본부장님 DB의 실제 푸시토큰 컬럼명
+          .eq('id', data.user.id);
+
+        if (tokenError) {
+          console.log('🚨 Supabase 가짜 토큰 저장 실패:', tokenError.message);
+        } else {
+          console.log('🎉 [대성공] 가짜 토큰이 무선 인터넷을 타고 Supabase에 저장되었습니다!');
+        }
+      }
+      // =========================================================================
+      // 🚨🚨🚨 [임시 우회 알림 테스트 코드 끝] 🚨🚨🚨
+
       // 3. 성공 시 처리
       await saveCredentials();
       navigation.reset({
