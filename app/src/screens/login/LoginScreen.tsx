@@ -12,6 +12,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 
+// 🚀 [추가] 진짜 토큰 발급을 위한 엑스포 라이브러리 임포트
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+
 // 🚀 [추가됨] 방금 만든 전역 상태 보관소에서 useAuth 가져오기
 import { useAuth } from '../../context/AuthContext';
 
@@ -110,25 +114,55 @@ export default function LoginScreen({ navigation }: any) {
       // 이 과정이 끝나야 완벽하게 현재 지점을 앱이 기억하게 됩니다.
       await refreshAuth();
 
+      // // =========================================================================
+      // // 🚨🚨🚨 [임시 우회 알림 테스트 코드] 알림 빌드 성공하면 이 구간만 통째로 삭제!! 🚨🚨🚨
+      // // =========================================================================
+      // // if (data?.user?.id) {
+      // //   const fakeToken = "ExponentPushToken[FakeTokenForTesting123]"; // 가짜 토큰 생성
+        
+      // //   const { error: tokenError } = await supabase
+      // //     .from('users')
+      // //     .update({ push_token: fakeToken }) // 👈 본부장님 DB의 실제 푸시토큰 컬럼명
+      // //     .eq('id', data.user.id);
+
+      // //   if (tokenError) {
+      // //     console.log('🚨 Supabase 가짜 토큰 저장 실패:', tokenError.message);
+      // //   } else {
+      // //     console.log('🎉 [대성공] 가짜 토큰이 무선 인터넷을 타고 Supabase에 저장되었습니다!');
+      // //   }
+      // // }
+      // // =========================================================================
+      // // 🚨🚨🚨 [임시 우회 알림 테스트 코드 끝] 🚨🚨🚨
+
+
       // =========================================================================
-      // 🚨🚨🚨 [임시 우회 알림 테스트 코드] 알림 빌드 성공하면 이 구간만 통째로 삭제!! 🚨🚨🚨
+      // 🚀 [정상 루트] 로그인 성공 시 진짜 푸시 토큰 발급 및 DB 저장
       // =========================================================================
       if (data?.user?.id) {
-        const fakeToken = "ExponentPushToken[FakeTokenForTesting123]"; // 가짜 토큰 생성
-        
-        const { error: tokenError } = await supabase
-          .from('users')
-          .update({ push_token: fakeToken }) // 👈 본부장님 DB의 실제 푸시토큰 컬럼명
-          .eq('id', data.user.id);
+        try {
+          // 1. 기기에서 진짜 Expo 푸시 토큰을 발급받습니다.
+          const tokenResponse = await Notifications.getExpoPushTokenAsync({
+            projectId: Constants.expoConfig?.extra?.eas?.projectId, // app.json의 projectId 자동 참조
+          });
+          const realToken = tokenResponse.data;
 
-        if (tokenError) {
-          console.log('🚨 Supabase 가짜 토큰 저장 실패:', tokenError.message);
-        } else {
-          console.log('🎉 [대성공] 가짜 토큰이 무선 인터넷을 타고 Supabase에 저장되었습니다!');
+          // 2. 발급받은 진짜 토큰을 Supabase DB의 내 계정에 쏙 집어넣습니다.
+          const { error: realTokenError } = await supabase
+            .from('users')
+            .update({ push_token: realToken }) 
+            .eq('id', data.user.id);
+
+          if (realTokenError) {
+            console.log('🚨 Supabase 진짜 토큰 저장 실패:', realTokenError.message);
+          } else {
+            console.log('🎉 [대성공] 진짜 토큰 발급 및 저장 완료! 팝업 쏠 준비 끝! 👉', realToken);
+          }
+        } catch (tokenFetchError) {
+          console.log('🚨 진짜 토큰 발급 중 에러 발생:', tokenFetchError);
         }
       }
       // =========================================================================
-      // 🚨🚨🚨 [임시 우회 알림 테스트 코드 끝] 🚨🚨🚨
+
 
       // 3. 성공 시 처리
       await saveCredentials();

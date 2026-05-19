@@ -19,6 +19,9 @@ import { Picker } from "@react-native-picker/picker"; // 🚀 지점 선택용 �
 // 🚀 [추가] 전역 상태에서 권한 스위치와 내 지점(branchId) 가져오기
 import { useAuth } from "../../context/AuthContext";
 
+// 🚀 [신규 연동] src/services/ 폴더에 만든 전역 알림 배달부 함수 가져오기!
+import { sendGlobalPushNotification } from "../../services/notificationService";
+
 export default function NoticeEditScreen({ route, navigation }: any) {
   // 🚀 [리팩토링 완료] role 대신 명품 스위치 isAdmin을 가져옵니다!
   const { branchId: myBranchId, isAdmin } = useAuth();
@@ -134,49 +137,18 @@ export default function NoticeEditScreen({ route, navigation }: any) {
         savedNotice = data; // 방금 생성된 진짜 공지글 데이터 안착
       }
 
-      // 🚀 [기능 연동] 새 공지사항 등록이면서 알림 발송 스위치가 켜진 경우 알림 데이터 일괄 주입
-      // 🚀 [기능 연동] 새 공지사항 등록이면서 알림 발송 스위치가 켜진 경우 알림 데이터 일괄 주입
+      // =========================================================================
+      // 🚀 [기능 연동 완료] 전역 알림 배달부 함수를 호출하여 DB 저장 + 상단바 팝업을 한 방에 해결!
+      // 복잡했던 기존 하드코딩 구역을 지우고, 깔끔하게 전역 배달부 한 줄로 세팅을 마쳤습니다.
+      // =========================================================================
       if (!isEditing && isSendNotification) {
-        // 💡 [본부장님 최적화 기획 적용] 유저를 긁어올 때부터 토큰 없는 유령 회원은 아예 배제합니다!
-        let query = supabase.from("users").select("id");
-        
-        if (targetBranchId) {
-          query = query.eq("branch_id", targetBranchId);
-        }
-
-        // 🎯 [핵심 추가] 푸시 토큰이 존재하는 사람(=앱 설치 및 로그인 유저)만 필터링!
-        // (※ 주의: 'push_token' 부분은 본부장님 users 테이블의 실제 푸시 토큰 컬럼 이름으로 맞춰주세요. 예: expo_push_token 등)
-        query = query.not("push_token", "is", null);
-
-        let { data: targetUsers, error: userError } = await query;
-        if (!targetUsers) targetUsers = [];
-
-        // 🎯 [안전망] 테스트를 진행하는 나 자신(어드민/코치)은 무조건 포함
-        if (user && !targetUsers.some((u) => u.id === user.id)) {
-          targetUsers.push({ id: user.id });
-        }
-
-        if (!userError && targetUsers.length > 0) {
-          const notificationRows = targetUsers.map((u) => ({
-            user_id: u.id,
-            title: `📢 신규 공지: ${title.trim()}`,
-            message: content.trim().substring(0, 50),
-            type: "notice", 
-            notice_id: savedNotice?.id || null, 
-            is_read: false,
-            created_at: new Date().toISOString(),
-          }));
-
-          const { error: notiError } = await supabase
-            .from("notifications")
-            .insert(notificationRows);
-
-          if (notiError) {
-            console.log("🚨 알림 내역 생성 실패:", notiError.message);
-          } else {
-            console.log("🎉 [연동 성공] 앱을 설치한 진성 유저들에게 최적화 알림 발송 완료!");
-          }
-        }
+        await sendGlobalPushNotification({
+          targetBranchId: targetBranchId,
+          title: `📢 신규 공지: ${title.trim()}`,
+          body: content.trim(),
+          type: "notice",
+          relatedId: savedNotice?.id || null,
+        });
       }
 
       setLoading(false);

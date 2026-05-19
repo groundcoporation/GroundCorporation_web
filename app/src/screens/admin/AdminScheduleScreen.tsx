@@ -9,6 +9,21 @@ import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker'; 
 
+// 🚀 [신규 연동] 콕 집어서 학부모에게 알림을 쏴줄 전역 배달부 임포트!
+import { sendGlobalPushNotification } from '../../services/notificationService'; 
+
+
+import dayjs from 'dayjs';
+import 'dayjs/locale/ko'; // 한국어 설정
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+// dayjs 설정
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault("Asia/Seoul");
+dayjs.locale('ko');
+
 export default function AdminScheduleScreen() {
   // --- 데이터 상태 ---
   const [branches, setBranches] = useState<any[]>([]); // DB 지점 목록
@@ -69,24 +84,45 @@ export default function AdminScheduleScreen() {
   }, [selectedBranch, currentDate, selectedDay, activeTab]);
 
   // [Status 탭] 세로형 타임라인 데이터 (수업 + 예약자)
+  const getKoreaDayName = (date: Date) => {
+    // 1. 날짜를 YYYY-MM-DD 문자열로 변환
+    const dateString = date.toISOString().split('T')[0];
+    
+    // 2. 해당 날짜로 강제 생성 (타임존 오차 제거)
+    const [y, m, d] = dateString.split('-').map(Number);
+    const dateFixed = new Date(y, m - 1, d);
+    
+    // 3. 정확한 요일 반환
+    return days[dateFixed.getDay()];
+  };
+
   const fetchStatusData = async () => {
     setLoading(true);
     try {
       const dateString = currentDate.toISOString().split('T')[0];
-      const dayName = days[currentDate.getDay()];
+      const dayName = getKoreaDayName(currentDate); // 🚀 [필수] 정확한 요일 추출
       
-      const { data: scheduleData } = await supabase
+      // 1. 지점 + 요일 필터 적용 (이제 18시, 21시 목요일 수업이 다 뜹니다)
+      const { data: scheduleData, error: schedError } = await supabase
         .from('class_schedules')
         .select('*')
         .eq('branch_id', selectedBranch)
-        .eq('day_of_week', dayName)
+        .eq('day_of_week', dayName) // 💡 21일(목)이면 '목'만 가져옴
+        .eq('is_active', true)
         .order('start_time', { ascending: true });
-      
-      const { data: resData } = await supabase
+
+      if (schedError) throw schedError;
+
+      // 2. 예약 데이터는 오늘 날짜인 것만 가져옴
+      const { data: resData, error: resError } = await supabase
         .from('reservations')
         .select('*')
-        .eq('class_date', dateString);
+        .eq('class_date', dateString)
+        .eq('branch_id', selectedBranch);
 
+      if (resError) throw resError;
+
+      // 3. 통합 매칭
       const formatted = (scheduleData || []).map(sched => ({
         ...sched,
         reservations: (resData || []).filter(r => r.schedule_id === sched.id)
@@ -113,8 +149,9 @@ export default function AdminScheduleScreen() {
     setLoading(false);
   };
 
-  // 🚀 3. [핵심수정] 출결 핸들러 (등원, 하원, 결석, 보강 -> 한글로 DB 저장)
-  const handleAttendance = async (resId: string, attStatus: string, isMakeup: boolean = false) => {
+  // 🚀 3. [핵심수정] 출결 핸들러 (등원, 하원 시 개별 학부모에게 푸시 팝업 발송!)
+  // 💡 기존 resId만 받던 구조에서, 알림 발송을 위해 이름과 부모ID가 있는 res 전체 객체를 받도록 수정했습니다.
+  const handleAttendance = async (res: any, attStatus: string, isMakeup: boolean = false) => {
     const updateData: any = { attendance_status: attStatus };
     
     // 보강 버튼 클릭 시 status 컬럼을 makeup으로 강제 지정
@@ -126,13 +163,31 @@ export default function AdminScheduleScreen() {
     const { error } = await supabase
       .from('reservations')
       .update(updateData)
-      .eq('id', resId);
+      .eq('id', res.id); // 💡 파라미터 변경에 따른 속성 접근
     
-    if (!error) fetchStatusData();
-    else Alert.alert("오류", "업데이트 실패");
+    if (!error) {
+      fetchStatusData(); // 화면 즉시 새로고침
+
+      // =========================================================================
+      // 🔔 [알림 발송] 코치님이 '등원' 또는 '하원'을 눌렀을 때만 해당 학부모에게 팝업 전송!
+      // =========================================================================
+      if (attStatus === '등원' || attStatus === '하원') {
+        await sendGlobalPushNotification({
+          targetBranchId: null, // 지점 전체 ❌
+          targetUserId: res.user_id, // 💡 해당 아이의 학부모 1명에게만 전송 ⭕
+          title: `🔔 출결 안내`,
+          body: `${res.child_name} 학생이 안전하게 ${attStatus} 완료하였습니다.`,
+          type: "attendance", // 클릭 시 AttendanceScreen으로 점프
+          relatedId: res.id
+        });
+      }
+
+    } else {
+      Alert.alert("오류", "업데이트 실패");
+    }
   };
 
-  // 🚀 4. [신규 추가] 취소 승인 및 수강권 자동 복구 핸들러
+  // 🚀 4. 취소 승인 및 수강권 자동 복구 핸들러
   const handleApproveCancel = async (reservation: any) => {
     Alert.alert("취소 승인", "해당 예약을 취소 승인하고 수강권을 1회 복구하시겠습니까?", [
       { text: "아니오" },
@@ -182,7 +237,7 @@ export default function AdminScheduleScreen() {
     }
   };
 
-  // 💡 [추가] 날짜를 하루씩 앞뒤로 이동하는 함수
+  // 💡 날짜를 하루씩 앞뒤로 이동하는 함수
   const changeDate = (offset: number) => {
     const newDate = new Date(currentDate);
     newDate.setDate(currentDate.getDate() + offset);
@@ -301,8 +356,8 @@ export default function AdminScheduleScreen() {
                 <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateCenterBtn}>
                   <Ionicons name="calendar-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
                   <Text style={styles.statusDateText}>
-                    {currentDate.toISOString().split('T')[0]} ({days[currentDate.getDay()]})
-                  </Text>
+  {dayjs(currentDate).tz("Asia/Seoul").format('YYYY-MM-DD')} ({dayjs(currentDate).tz("Asia/Seoul").format('ddd')})
+</Text>
                   <Ionicons name="chevron-down" size={16} color="#94A3B8" style={{ marginLeft: 4 }} />
                 </TouchableOpacity>
 
@@ -370,26 +425,27 @@ export default function AdminScheduleScreen() {
                             </TouchableOpacity>
                           ) : (
                             <>
+                              {/* 💡 onPress 파라미터를 res 전체 객체로 변경했습니다! */}
                               <TouchableOpacity 
-                                onPress={() => handleAttendance(res.id, '등원')}
+                                onPress={() => handleAttendance(res, '등원')}
                                 style={[styles.statusSmallBtn, res.attendance_status === '등원' && styles.active등원]}
                               >
                                 <Text style={[styles.statusSmallBtnText, res.attendance_status === '등원' && styles.textWhite]}>등원</Text>
                               </TouchableOpacity>
                               <TouchableOpacity 
-                                onPress={() => handleAttendance(res.id, '하원')}
+                                onPress={() => handleAttendance(res, '하원')}
                                 style={[styles.statusSmallBtn, res.attendance_status === '하원' && styles.active하원]}
                               >
                                 <Text style={[styles.statusSmallBtnText, res.attendance_status === '하원' && styles.textWhite]}>하원</Text>
                               </TouchableOpacity>
                               <TouchableOpacity 
-                                onPress={() => handleAttendance(res.id, '결석')}
+                                onPress={() => handleAttendance(res, '결석')}
                                 style={[styles.statusSmallBtn, res.attendance_status === '결석' && styles.active결석]}
                               >
                                 <Text style={[styles.statusSmallBtnText, res.attendance_status === '결석' && styles.textWhite]}>결석</Text>
                               </TouchableOpacity>
                               <TouchableOpacity 
-                                onPress={() => handleAttendance(res.id, '보강', true)}
+                                onPress={() => handleAttendance(res, '보강', true)}
                                 style={[styles.statusSmallBtn, (res.status === 'makeup' || res.attendance_status === '보강') && styles.active보강]}
                               >
                                 <Text style={[styles.statusSmallBtnText, (res.status === 'makeup' || res.attendance_status === '보강') && styles.textWhite]}>보강</Text>
