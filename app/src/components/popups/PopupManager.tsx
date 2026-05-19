@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // 💡 '오늘 하루 보지 않기' 기록용
-import { supabase } from '../../lib/supabase';
-import UniformPopup from './UniformPopup';
-import NoticePopup from './NoticePopup'; // 💡 공지 팝업 임포트
+import React, { useState, useEffect } from "react";
+import { View, StyleSheet } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage"; // 💡 '오늘 하루 보지 않기' 기록용
+import { supabase } from "../../lib/supabase";
+import UniformPopup from "./UniformPopup";
+import NoticePopup from "./NoticePopup"; // 💡 공지 팝업 임포트
 
 export default function PopupManager() {
   const [showUniform, setShowUniform] = useState(false);
   const [showNotice, setShowNotice] = useState(false); // 공지 팝업 상태
   const [targetChild, setTargetChild] = useState<any>(null);
+  const [pendingChildren, setPendingChildren] = useState<any[]>([]); // 🚀 유니폼 대기 자녀 목록
 
   useEffect(() => {
     startPopupFlow();
@@ -18,7 +19,7 @@ export default function PopupManager() {
   const startPopupFlow = async () => {
     // 1단계: 유니폼 신청 대상자 체크
     const hasUniformTarget = await checkUniformRequired();
-    
+
     // 💡 만약 유니폼 팝업 대상이 아니라면, 바로 공지사항 체크로 넘어감
     if (!hasUniformTarget) {
       await checkNoticePopup();
@@ -28,14 +29,22 @@ export default function PopupManager() {
   // 📋 [유니폼 로직]
   const checkUniformRequired = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return false;
 
-      const { data: children } = await supabase.from('children').select('*').eq('parent_id', user.id);
-      const needsUniformChild = children?.find(c => c.target_class && !c.uniform_size);
+      const { data: children } = await supabase
+        .from("children")
+        .select("*")
+        .eq("parent_id", user.id);
 
-      if (needsUniformChild) {
-        setTargetChild(needsUniformChild);
+      const needsUniformChildren =
+        children?.filter((c) => c.target_class && !c.uniform_size) || [];
+
+      if (needsUniformChildren.length > 0) {
+        setPendingChildren(needsUniformChildren);
+        setTargetChild(needsUniformChildren[0]);
         setShowUniform(true);
         return true; // 대상자 있음
       }
@@ -50,17 +59,17 @@ export default function PopupManager() {
 
   const checkNoticePopup = async () => {
     try {
-      const hideUntil = await AsyncStorage.getItem('hide_notice_until');
+      const hideUntil = await AsyncStorage.getItem("hide_notice_until");
       const now = new Date().getTime();
-      
+
       if (hideUntil && now < parseInt(hideUntil)) return;
 
       // 🚀 Supabase에서 활성화된 공지사항 가져오기
       const { data, error } = await supabase
-        .from('popups')
-        .select('*')
-        .eq('is_active', true)
-        .order('priority', { ascending: false });
+        .from("popups")
+        .select("*")
+        .eq("is_active", true)
+        .order("priority", { ascending: false });
 
       if (data && data.length > 0) {
         setNotices(data);
@@ -71,9 +80,35 @@ export default function PopupManager() {
     }
   };
 
+  // 🚀 [유니폼 다음 자녀 체크]
+  const handleUniformNext = () => {
+    const nextList = pendingChildren.slice(1);
+    if (nextList.length > 0) {
+      setPendingChildren(nextList);
+      setTargetChild(nextList[0]);
+      // showUniform은 이미 true이므로 targetChild만 바꿔서 계속 띄웁니다.
+    } else {
+      setShowUniform(false);
+      setPendingChildren([]);
+      checkNoticePopup(); // 모든 자녀 완료 후 공지 체크로 이동
+    }
+  };
+
   return (
-    <View style={{ position: 'absolute' }}>
-      {/* 유니폼 생략 */}
+    <View style={styles.container} pointerEvents="box-none">
+      {/* 🚀 유니폼 신청 팝업 렌더링 추가 */}
+      <UniformPopup
+        key={targetChild?.id} // 💡 key를 주어야 다음 자녀로 바뀔 때 입력폼이 리셋됩니다.
+        isVisible={showUniform}
+        childId={targetChild?.id}
+        branchId={targetChild?.branch_id} // 🚀 자녀 정보에서 지점 ID 전달
+        childName={targetChild?.child_name} // 🚀 자녀 이름 전달
+        childBirth={targetChild?.child_birth} // 🚀 자녀 생년월일 전달
+        targetClass={targetChild?.target_class}
+        onComplete={handleUniformNext}
+        onClose={handleUniformNext}
+      />
+
       <NoticePopup
         isVisible={showNotice}
         notices={notices} // 💡 DB에서 가져온 공지 배열 전달
@@ -82,3 +117,10 @@ export default function PopupManager() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9999, // 다른 UI 요소보다 위에 표시
+  },
+});
