@@ -5,6 +5,31 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from 'expo-notifications'; // 🔔 전역 푸시 핸들링을 위해 추가
 
+
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault("Asia/Seoul");
+
+// =========================================================================
+// 🚀 [추가됨: 앱 사용 중(포그라운드) 팝업 강제 노출 설정]
+// 유저가 앱을 켜놓고 화면을 보고 있을 때도 카톡처럼 무조건 상단에 배너가 떨어지게 만듭니다.
+// 휴대폰 기본 설정에 따라 소리 모드면 소리가, 진동 모드면 진동이 자연스럽게 작동합니다!
+// =========================================================================
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,   // 💡 앱 켜놔도 화면 위에 배너 툭 떨어지게 강제!
+    shouldPlaySound: true,   // 💡 폰 설정에 맞춰 소리/진동 허용
+    shouldSetBadge: false,   // 💡 앱 아이콘 배지 숫자 업데이트
+    shouldShowBanner: true,  // 🚀 [신규 추가] 최신 Expo 필수값 (상단 배너 노출)
+    shouldShowList: true,    // 🚀 [신규 추가] 최신 Expo 필수값 (알림 센터 목록 노출)
+  }),
+});
+// =========================================================================
+
 // 🚀 [전역 상태 관리] 지점 및 권한 관리를 위한 Provider 임포트
 import { AuthProvider } from "./src/context/AuthContext";
 
