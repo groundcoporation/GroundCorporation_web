@@ -12,7 +12,6 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 // 🚀 [신규 연동] 콕 집어서 학부모에게 알림을 쏴줄 전역 배달부 임포트!
 import { sendGlobalPushNotification } from '../../services/notificationService'; 
 
-
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko'; // 한국어 설정
 import utc from 'dayjs/plugin/utc';
@@ -169,9 +168,49 @@ export default function AdminScheduleScreen() {
       fetchStatusData(); // 화면 즉시 새로고침
 
       // =========================================================================
-      // 🔔 [알림 발송] 코치님이 '등원' 또는 '하원'을 눌렀을 때만 해당 학부모에게 팝업 전송!
+      // 🔔 [알림 발송 및 DB 기록] 코치님이 '등원' 또는 '하원'을 눌렀을 때 작동!
       // =========================================================================
       if (attStatus === '등원' || attStatus === '하원') {
+        
+        // 🚀 [추가됨: 출석 동선 로그 기록 로직]
+        try {
+          const todayDateStr = dayjs(currentDate).tz("Asia/Seoul").format('YYYY-MM-DD');
+          const currentIsoTimestamp = new Date().toISOString();
+
+          // 1. 오늘 날짜의 아이 기록이 있는지 먼저 찾습니다.
+          const { data: existingLog } = await supabase
+            .from('attendance_logs')
+            .select('id')
+            .eq('child_id', res.child_id)
+            .eq('date', todayDateStr)
+            .maybeSingle();
+
+          if (existingLog) {
+            // 2-A. 기록이 있으면 (예: 아까 기사님이 승차 처리해서 만들어진 기록) 업데이트!
+            await supabase
+              .from('attendance_logs')
+              .update({
+                ...(attStatus === '등원' ? { check_in: currentIsoTimestamp } : { check_out: currentIsoTimestamp })
+              })
+              .eq('id', existingLog.id);
+          } else {
+            // 2-B. 셔틀 안 타고 자가등원해서 기록이 아예 없다면 새로 생성 (Insert)
+            await supabase
+              .from('attendance_logs')
+              .insert([{
+                child_id: res.child_id,
+                date: todayDateStr,
+                branch_id: selectedBranch,
+                created_at: currentIsoTimestamp,
+                ...(attStatus === '등원' ? { check_in: currentIsoTimestamp } : { check_out: currentIsoTimestamp })
+              }]);
+          }
+          console.log(`[센터출결 DB기록 완료] ${res.child_name} - ${attStatus}`);
+        } catch (logError) {
+          console.error("출석 동선 DB 기록 실패:", logError);
+        }
+
+        // 🚀 [기존 로직 유지: 학부모에게 푸시 팝업 발송]
         await sendGlobalPushNotification({
           targetBranchId: null, // 지점 전체 ❌
           targetUserId: res.user_id, // 💡 해당 아이의 학부모 1명에게만 전송 ⭕

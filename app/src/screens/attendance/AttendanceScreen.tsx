@@ -14,7 +14,7 @@ dayjs.locale('ko');
 export default function AttendanceScreen({ navigation }: any) {
   const [activeChildId, setActiveChildId] = useState(''); 
   const [childrenList, setChildrenList] = useState<any[]>([]);
-  const [attendance, setAttendance] = useState<any>(null);
+  const [timelineItems, setTimelineItems] = useState<any[]>([]); // 💡 통합 타임라인 배열
   const [loading, setLoading] = useState(true);
   
   // 📅 날짜 관련 상태
@@ -49,18 +49,53 @@ export default function AttendanceScreen({ navigation }: any) {
     try {
       setLoading(true);
       const dateStr = dayjs(selectedDate).format('YYYY-MM-DD');
+      const dateStart = dayjs(selectedDate).startOf('day').toISOString();
+      const dateEnd = dayjs(selectedDate).endOf('day').toISOString();
       
-      const { data, error } = await supabase
+      // 1. 센터 출결 로그 조회
+      const { data: attData } = await supabase
         .from('attendance_logs')
         .select('*')
         .eq('child_id', activeChildId)
         .eq('date', dateStr)
         .maybeSingle();
 
-      setAttendance(data || null);
+      // 2. 셔틀 로그 조회
+      const { data: shuttleData } = await supabase
+        .from('shuttle_logs')
+        .select('*')
+        .eq('child_id', activeChildId)
+        .gte('event_time', dateStart)
+        .lte('event_time', dateEnd)
+        .order('event_time', { ascending: true });
+
+      // 3. 타임라인 통합 및 정렬
+      let items = [];
+      
+      // 셔틀 로그 추가
+      if (shuttleData) {
+        shuttleData.forEach(log => {
+          items.push({
+            time: log.event_time,
+            label: `셔틀버스 ${log.event_type}`,
+            icon: log.event_type === '승차' ? 'bus-clock' : 'bus-marker'
+          });
+        });
+      }
+      
+      // 센터 출결 로그 추가
+      if (attData) {
+        if (attData.check_in) items.push({ time: attData.check_in, label: "센터 등원 완료", icon: "door-open" });
+        if (attData.check_out) items.push({ time: attData.check_out, label: "수업 종료 및 하원", icon: "door-closed" });
+      }
+
+      // 4. 시간순 정렬
+      items.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+      setTimelineItems(items);
+      
     } catch (e) {
       console.error(e);
-      setAttendance(null);
+      setTimelineItems([]);
     } finally {
       setLoading(false);
     }
@@ -80,30 +115,6 @@ export default function AttendanceScreen({ navigation }: any) {
     const newDate = new Date(selectedDate);
     newDate.setDate(selectedDate.getDate() + offset);
     setSelectedDate(newDate);
-  };
-
-  // 3. 타임라인 아이템 렌더링
-  const renderTimelineItem = (time: string, label: string, icon: any, isLast = false) => {
-    if (!time) return null;
-    
-    const displayTime = time.includes(':') 
-      ? dayjs(`${dayjs(selectedDate).format('YYYY-MM-DD')} ${time}`).format('A h:mm') 
-      : dayjs(time).format('A h:mm');
-
-    return (
-      <View style={styles.timelineItem}>
-        <View style={styles.lineWrapper}>
-          <View style={styles.iconCircle}>
-            <MaterialCommunityIcons name={icon} size={20} color="#6366F1" />
-          </View>
-          {!isLast && <View style={styles.verticalLine} />}
-        </View>
-        <View style={styles.textWrapper}>
-          <Text style={styles.timeText}>{displayTime}</Text>
-          <Text style={styles.labelTitle}>{label}</Text>
-        </View>
-      </View>
-    );
   };
 
   return (
@@ -140,7 +151,7 @@ export default function AttendanceScreen({ navigation }: any) {
           mode="date"
           display={Platform.OS === 'ios' ? 'inline' : 'default'}
           onChange={onChangeDate}
-          maximumDate={new Date()} // 오늘 이후 날짜는 선택 불가하게 설정 가능
+          maximumDate={new Date()}
         />
       )}
 
@@ -161,7 +172,7 @@ export default function AttendanceScreen({ navigation }: any) {
         <View style={styles.timelineWrapper}>
           {loading ? (
             <ActivityIndicator size="large" color="#6366F1" style={{ marginTop: 50 }} />
-          ) : !attendance ? (
+          ) : timelineItems.length === 0 ? (
             <View style={styles.emptyContainer}>
               <MaterialCommunityIcons name="calendar-blank" size={64} color="#E2E8F0" />
               <Text style={styles.emptyText}>기록된 동선이 없습니다.</Text>
@@ -169,10 +180,20 @@ export default function AttendanceScreen({ navigation }: any) {
             </View>
           ) : (
             <View style={styles.timeline}>
-              {renderTimelineItem(attendance.shuttle_ride_time, "셔틀버스 탑승", "bus-clock")}
-              {renderTimelineItem(attendance.shuttle_drop_time, "셔틀버스 하차", "bus-marker")}
-              {renderTimelineItem(attendance.check_in, "센터 등원 완료", "door-open")}
-              {renderTimelineItem(attendance.check_out, "수업 종료 및 하원", "door-closed")}
+              {timelineItems.map((item, index) => (
+                <View key={index} style={styles.timelineItem}>
+                  <View style={styles.lineWrapper}>
+                    <View style={styles.iconCircle}>
+                      <MaterialCommunityIcons name={item.icon} size={20} color="#6366F1" />
+                    </View>
+                    {index < timelineItems.length - 1 && <View style={styles.verticalLine} />}
+                  </View>
+                  <View style={styles.textWrapper}>
+                    <Text style={styles.timeText}>{dayjs(item.time).format('A h:mm')}</Text>
+                    <Text style={styles.labelTitle}>{item.label}</Text>
+                  </View>
+                </View>
+              ))}
             </View>
           )}
         </View>

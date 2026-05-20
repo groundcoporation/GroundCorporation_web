@@ -20,50 +20,51 @@ export default function PickupMainScreen({ navigation }: any) {
 
   // 실시간 상태 관리
   const [isDriving, setIsDriving] = useState(false); // 기사님 운행 여부
-  const [pickupInfo, setPickupInfo] = useState<any>(null); // 내 픽업 설정 정보[cite: 2]
+  const [pickupInfo, setPickupInfo] = useState<any>(null); // 내 픽업 설정 정보
   const [loading, setLoading] = useState(true);
   const [isPassModalVisible, setIsPassModalVisible] = useState(false); // 🚀 이용권 안내 팝업 상태
-
-  // 테스트용 아이 UUID (DB의 실제 UUID로 교체해서 테스트하세요)
-  const TEST_CHILD_ID = "550e8400-e29b-41d4-a716-446655440000";
 
   // 1. DB에서 실시간 데이터 및 설정 정보 가져오기
   const fetchLiveStatus = async () => {
     try {
       setLoading(true);
+      console.log("🔄 [디버그] fetchLiveStatus 데이터 조회 시작");
 
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.warn("⚠️ [디버그] 로그인 유저 정보를 찾을 수 없습니다.");
+        return;
+      }
+      console.log("👤 [디버그] 현재 접속 유저 ID:", user.id);
 
-      // (1) 셔틀버스 월 이용권 보유 여부 확인 (user_packages 테이블)
-      // 💡 [수정] 이모지나 특수문자가 섞인 긴 패키지명도 '셔틀' 글자만 있으면 찾을 수 있게 ilike를 유지하되,
-      // DB 쿼리에서 날짜 비교(.gte)를 제거하여 expiry_date가 null인 항목이 누락되는 현상을 방지합니다.
-      const { data: passData } = await supabase
+      // (1) 셔틀버스 월 이용권 보유 여부 확인
+      const { data: passData, error: passError } = await supabase
         .from("user_packages")
-        .select("id, package_name, expiry_date")
-        .eq("user_id", user.id) // 사용자 ID는 정확히 일치해야 합니다.
-        .ilike("status", "active") // status 필드를 대소문자 구분 없이 'active'로 검색합니다.
-        .ilike("package_name", "%셔틀%");
+        .select("id, package_name, expiry_date, is_shuttle")
+        .eq("user_id", user.id)
+        .ilike("status", "active")
+        .eq("is_shuttle", true);
 
-      // 💡 오늘 날짜 (시간 제외)
+      if (passError) console.error("❌ [디버그] 이용권 조회 에러:", passError);
+      console.log("🎟️ [디버그] 조회된 이용권 데이터:", passData);
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // 💡 [검증 로직] 유효기간이 아예 없거나(NULL), 유효기간이 오늘 이후인 이용권이 하나라도 있는지 확인
       const passExists = !!(
         passData &&
         passData.length > 0 &&
         passData.some((pkg) => {
-          if (!pkg.expiry_date) return true; // 유효기간이 설정되지 않은 데이터는 유효한 것으로 간주
-
+          if (!pkg.expiry_date) return true;
           const expiry = new Date(pkg.expiry_date);
           return expiry >= today;
         })
       );
 
       setHasPickupPass(passExists);
+      console.log("🎫 [디버그] 이용권 보유 상태:", passExists);
 
       // 이용권이 없는 경우 즉시 팝업 노출
       if (!passExists) {
@@ -72,31 +73,56 @@ export default function PickupMainScreen({ navigation }: any) {
         return;
       }
 
-      // (2) 기사님 운행 상태 확인 (shuttle_status 테이블)[cite: 2]
-      const { data: shuttleData } = await supabase
+      // (2) 기사님 운행 상태 확인
+      const { data: shuttleData, error: shuttleError } = await supabase
         .from("shuttle_status")
         .select("is_driving")
         .eq("is_driving", true)
         .limit(1)
-        .single();
+        .maybeSingle();
+
+      if (shuttleError) console.error("❌ [디버그] 운행상태 조회 에러:", shuttleError);
+      console.log("🚐 [디버그] 운행 중 여부:", !!shuttleData);
       setIsDriving(!!shuttleData);
 
-      // (3) 내 픽업 설정 정보 확인 (pickup_settings 테이블)[cite: 2]
-      const { data: settingsData } = await supabase
-        .from("pickup_settings")
-        .select("*")
-        .eq("child_id", TEST_CHILD_ID)
-        .single();
-      setPickupInfo(settingsData);
+      // (3) 내 픽업 설정 정보 확인
+      console.log("🔍 [디버그] 자녀 목록 및 픽업 정보 조회 시작...");
+      const { data: childrenData, error: childError } = await supabase
+        .from("children")
+        .select("id, child_name")
+        .eq("parent_id", user.id);
+
+      if (childError) console.error("❌ [디버그] 자녀 정보 조회 에러:", childError);
+      console.log("🧒 [디버그] 조회된 자녀 데이터:", childrenData);
+
+      if (childrenData && childrenData.length > 0) {
+        const primaryChildId = childrenData[0].id;
+        console.log("🧒 [디버그] 대표 자녀 ID:", primaryChildId);
+        
+        const { data: settingsData, error: settingError } = await supabase
+          .from("pickup_settings")
+          .select("*")
+          .eq("child_id", primaryChildId)
+          .single();
+          
+        if (settingError) console.error("❌ [디버그] 픽업 설정 조회 에러:", settingError);
+        console.log("📍 [디버그] 조회된 픽업 설정 데이터:", settingsData);
+        
+        setPickupInfo(settingsData);
+      } else {
+        console.log("⚠️ [디버그] 자녀 데이터가 없습니다.");
+        setPickupInfo(null);
+      }
+
     } catch (error) {
-      console.log("데이터 조회 실패 또는 데이터 없음:", error);
+      console.log("❌ [디버그] 데이터 조회 중 예외 발생:", error);
       setPickupInfo(null);
     } finally {
       setLoading(false);
+      console.log("🏁 [디버그] fetchLiveStatus 작업 종료");
     }
   };
 
-  // 🚀 [핵심 수정] 구매 화면에서 뒤로가기로 돌아왔을 때를 대비해, 화면이 포커스될 때마다 이용권 체크
   useFocusEffect(
     useCallback(() => {
       fetchLiveStatus();
@@ -104,7 +130,6 @@ export default function PickupMainScreen({ navigation }: any) {
   );
 
   useEffect(() => {
-    // 💡 셔틀 운행 상태 실시간 감시 (기사님이 상태 변경 시 즉시 반영)[cite: 2]
     const shuttleSubscription = supabase
       .channel("live_shuttle_main")
       .on(
@@ -134,16 +159,13 @@ export default function PickupMainScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* 🚀 이용권 구매 유도 팝업 (요청하신 문구 및 이동 로직 적용) */}
+      
+      {/* 🚀 이용권 구매 유도 팝업 */}
       <Modal visible={isPassModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalIconBg}>
-              <MaterialCommunityIcons
-                name="bus-alert"
-                size={40}
-                color="#6366F1"
-              />
+              <MaterialCommunityIcons name="bus-alert" size={40} color="#6366F1" />
             </View>
             <Text style={styles.modalTitle}>셔틀버스 이용권 필요</Text>
             <Text style={styles.modalDesc}>
@@ -151,23 +173,41 @@ export default function PickupMainScreen({ navigation }: any) {
               해야합니다.
             </Text>
 
+            {/* 🛠️ [추가] 팝업 내부 테스트용 강제 부여 버튼 */}
+            <TouchableOpacity 
+              style={{ backgroundColor: '#EF4444', padding: 12, borderRadius: 12, marginBottom: 12, width: '100%', alignItems: 'center' }}
+              onPress={async () => {
+                const { data: { user } } = await supabase.auth.getUser();
+                await supabase.from("user_packages").insert({
+                  user_id: user?.id,
+                  package_name: "테스트용 셔틀 이용권",
+                  status: "active",
+                  is_shuttle: true, 
+                  expiry_date: "2026-12-31" 
+                });
+                Alert.alert("알림", "셔틀 이용권이 강제로 생성되었습니다!");
+                setIsPassModalVisible(false);
+                fetchLiveStatus();
+              }}
+            >
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>[테스트] 이용권 강제 부여</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.modalPrimaryBtn}
               onPress={() => {
                 setIsPassModalVisible(false);
-                navigation.navigate("Pass"); // 구매 스크린으로 이동
+                navigation.navigate("Pass");
               }}
             >
-              <Text style={styles.modalPrimaryBtnText}>
-                셔틀버스 이용권 구매하러 가기
-              </Text>
+              <Text style={styles.modalPrimaryBtnText}>셔틀버스 이용권 구매하러 가기</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.modalCloseBtn}
               onPress={() => {
                 setIsPassModalVisible(false);
-                navigation.goBack(); // 이용권 없으면 이전 화면으로 강제 퇴장
+                navigation.goBack();
               }}
             >
               <Text style={styles.modalCloseBtnText}>나중에 할게요</Text>
@@ -188,7 +228,6 @@ export default function PickupMainScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* 1. 실시간 셔틀 위치 카드[cite: 2] */}
         <View
           style={[
             styles.statusCard,
@@ -226,7 +265,6 @@ export default function PickupMainScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        {/* 2. 내 픽업 정보 요약 (DB 데이터 반영)[cite: 2] */}
         <View style={styles.infoSection}>
           <Text style={styles.sectionTitle}>나의 픽업 정보</Text>
           <View style={styles.infoCard}>
@@ -276,7 +314,6 @@ export default function PickupMainScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* 3. 예외 처리 버튼 (하원 방식 변경)[cite: 1, 2] */}
         <TouchableOpacity
           style={styles.actionBtn}
           onPress={() =>
@@ -308,7 +345,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#111827" },
   scrollContent: { padding: 20 },
-
   statusCard: { padding: 24, borderRadius: 20, marginBottom: 25 },
   activeCard: { backgroundColor: "#1E293B" },
   inactiveCard: { backgroundColor: "#E2E8F0" },
@@ -331,7 +367,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     lineHeight: 28,
   },
-
   mapBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -347,7 +382,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginRight: 8,
   },
-
   infoSection: { marginBottom: 25 },
   sectionTitle: {
     fontSize: 16,
@@ -371,7 +405,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 2,
   },
-
   emptyInfoContainer: { alignItems: "center", paddingVertical: 10 },
   emptyInfoText: {
     color: "#6366F1",
@@ -380,7 +413,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     lineHeight: 20,
   },
-
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -398,8 +430,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginRight: 8,
   },
-
-  /* 🚀 추가된 팝업 UI 스타일 */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",

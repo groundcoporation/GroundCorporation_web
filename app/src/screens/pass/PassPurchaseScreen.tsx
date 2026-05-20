@@ -39,6 +39,7 @@ interface Package {
   total_count?: number;
   duration_in_days?: number;
   weekly_limit?: number;
+  is_shuttle?: boolean; // 🚀 [추가] 타입 정의에 셔틀 여부 추가
   package_options: PackageOption[];
 }
 interface CartItem {
@@ -244,6 +245,10 @@ export default function PassPurchaseScreen({ navigation }: any) {
               item.pkg.price ||
               0,
             status: "active",
+            // =========================================================================
+            // 🚀 [추가] 결제 내역(user_packages)에 셔틀 이용권 여부(is_shuttle) 도장 꽝!
+            // =========================================================================
+            is_shuttle: item.pkg.is_shuttle || false, 
           }),
         );
 
