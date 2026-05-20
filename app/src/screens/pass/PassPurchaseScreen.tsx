@@ -81,13 +81,14 @@ export default function PassPurchaseScreen({ navigation }: any) {
   useEffect(() => {
     // 🚀 branchId가 없으면 로딩 대기
     if (!branchId) return;
-    
+
     fetchInitialData();
     fetchCategoriesFromDB(true);
   }, [branchId]); // 🚀 의존성 배열에 branchId 적용
 
   useEffect(() => {
-    if (activeCategory && branchId) { // 🚀 branchId 추가
+    if (activeCategory && branchId) {
+      // 🚀 branchId 추가
       fetchPackagesFromDB();
     }
   }, [activeCategory, branchId]); // 🚀 의존성 배열에 branchId 적용
@@ -362,9 +363,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
             style={styles.branchSwitcher}
             // 🚀 [수정] 관리자가 지점을 누르면 전역 지점이 바뀝니다. (setBranch 함수 호출)
             onPress={() =>
-              setBranch(
-                branchId === "branch_1" ? "branch_2" : "branch_1",
-              )
+              setBranch(branchId === "branch_1" ? "branch_2" : "branch_1")
             }
           >
             <Text style={styles.headerTitle}>
