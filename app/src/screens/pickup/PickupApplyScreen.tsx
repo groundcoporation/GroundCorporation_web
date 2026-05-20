@@ -7,27 +7,44 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 
 export default function PickupApplyScreen({ navigation }: any) {
+  // 💡 [추가] 다자녀 관리를 위한 자녀 상태
+  const [childrenList, setChildrenList] = useState<any[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string>('');
+
   const [area, setArea] = useState('');      
   const [detailLocation, setDetailLocation] = useState(''); 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 💡 새롭게 추가된 상태 관리 (정류장 목록 DB 연동)
-  const [spots, setSpots] = useState<any[]>([]); // DB에서 불러온 목록
+  // 💡 정류장 목록 DB 연동 (코치들이 만든 공식 정류장만 들어옴)
+  const [spots, setSpots] = useState<any[]>([]); 
   const [loadingSpots, setLoadingSpots] = useState(false);
   const [selectedSpot, setSelectedSpot] = useState<any>(null); // 선택된 정류장 객체 {id, name}
-  const [showSpotDropdown, setShowSpotDropdown] = useState(false); // 드롭다운 열림/닫힘
+  const [showSpotDropdown, setShowSpotDropdown] = useState(false); 
 
-  // 💡 Phase 4: 탑승지 변경 감지를 위한 기존 ID 저장 상태
+  // 💡 탑승지 변경 감지를 위한 기존 ID 저장 상태
   const [originalSpotId, setOriginalSpotId] = useState<string | null>(null);
 
-  const TEST_CHILD_ID = "550e8400-e29b-41d4-a716-446655440000"; 
-
-  // 💡 컴포넌트가 켜질 때 DB에서 정류장 목록 및 기존 설정 정보를 가져옵니다.
+  // 💡 컴포넌트가 켜질 때 내 자녀 목록과 공식 정류장 목록을 가져옵니다.
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchInitialData = async () => {
       setLoadingSpots(true);
       
-      // 1. 정류장 목록 가져오기
+      // 1. 현재 접속한 부모님 정보 가져오기
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 2. 내 자녀 목록 가져오기
+      const { data: kidsData } = await supabase
+        .from('children')
+        .select('id, child_name')
+        .eq('parent_id', user.id);
+
+      if (kidsData && kidsData.length > 0) {
+        setChildrenList(kidsData);
+        setSelectedChildId(kidsData[0].id); // 기본으로 첫째 선택
+      }
+
+      // 3. 공식 정류장 목록 가져오기 (코치 지정)
       const { data: spotData, error: spotError } = await supabase
         .from('pickup_spots')
         .select('id, name');
@@ -36,44 +53,68 @@ export default function PickupApplyScreen({ navigation }: any) {
         setSpots(spotData);
       }
 
-      // 2. 💡 기존 픽업 설정 정보 불러오기 (수정 모드 대응)
+      setLoadingSpots(false);
+    };
+
+    fetchInitialData();
+  }, []);
+
+  // 💡 [추가] 선택된 자녀가 바뀔 때마다, 그 아이의 픽업 정보를 불러옵니다.
+  useEffect(() => {
+    if (!selectedChildId || spots.length === 0) return;
+
+    const fetchChildPickupSettings = async () => {
+      // 자녀 바뀔 때 폼 초기화
+      setArea('');
+      setDetailLocation('');
+      setSelectedSpot(null);
+      setOriginalSpotId(null);
+
       const { data: existingData } = await supabase
         .from('pickup_settings')
         .select('*')
-        .eq('child_id', TEST_CHILD_ID)
+        .eq('child_id', selectedChildId)
         .single();
 
       if (existingData) {
         setArea(existingData.area);
         setDetailLocation(existingData.detail_location);
         setOriginalSpotId(existingData.pickup_spot_id);
-        // 선택된 정류장 상태 미리 세팅
-        setSelectedSpot({ 
-          id: existingData.pickup_spot_id, 
-          name: existingData.apartment_name 
-        });
+        
+        // spots 배열에서 id가 일치하는 정류장 찾아서 매칭
+        const matchedSpot = spots.find(s => s.id === existingData.pickup_spot_id);
+        if (matchedSpot) {
+          setSelectedSpot(matchedSpot);
+        } else {
+          // 혹시 정류장이 삭제되었을 경우를 대비한 폴백
+          setSelectedSpot({ id: existingData.pickup_spot_id, name: existingData.apartment });
+        }
       }
-
-      setLoadingSpots(false);
     };
-    fetchData();
-  }, []);
 
-  // 💡 저장 실행 함수 (중복 코드를 방지하기 위해 분리)
+    fetchChildPickupSettings();
+  }, [selectedChildId, spots]);
+
+  // 💡 저장 실행 함수
   const executeSave = async () => {
+    if (!selectedChildId) {
+      Alert.alert("에러", "자녀 정보가 없습니다.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
       const { error } = await supabase
         .from('pickup_settings')
         .upsert({
-          child_id: TEST_CHILD_ID, 
+          child_id: selectedChildId, // 🚀 하드코딩 제거! 실제 선택된 자녀 ID 꽂기
           area: area,               
           pickup_spot_id: selectedSpot.id,   
-          apartment: selectedSpot.name, 
+          apartment: selectedSpot.name, // 💡 DB의 공식 정류장 이름 저장
           detail_location: detailLocation, 
           is_active: true,          
-          updated_at: new Date(),
+          updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
@@ -92,14 +133,13 @@ export default function PickupApplyScreen({ navigation }: any) {
   };
 
   const handleSave = async () => {
-    // 유효성 검사
+    // 💡 유효성 검사 빡세게 강제! (공식 정류장 선택 안 하면 못 넘어감)
     if (!area || !selectedSpot || !detailLocation) {
-      Alert.alert("알림", "모든 정보를 입력해야 기사님이 찾으실 수 있어요!");
+      Alert.alert("알림", "공식 정류장과 상세 위치를 모두 입력해야 기사님이 찾으실 수 있어요!");
       return;
     }
 
-    // 💡 [Phase 4] 탑승지 변경 경고 시스템 로직
-    // 기존에 등록된 정류장이 있고, 새로 선택한 정류장이 다를 경우 팝업 노출
+    // 💡 기존에 등록된 정류장이 있고, 새로 선택한 정류장이 다를 경우 팝업 노출
     if (originalSpotId && originalSpotId !== selectedSpot.id) {
       Alert.alert(
         "탑승지 변경 알림",
@@ -110,7 +150,6 @@ export default function PickupApplyScreen({ navigation }: any) {
         ]
       );
     } else {
-      // 신규 등록이거나 위치 변경이 없는 경우 바로 저장
       executeSave();
     }
   };
@@ -130,6 +169,27 @@ export default function PickupApplyScreen({ navigation }: any) {
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          
+          {/* 🚀 [추가] 다자녀 선택 탭 */}
+          {childrenList.length > 0 && (
+            <View style={styles.childSelectSection}>
+              <Text style={styles.label}>누구의 픽업 장소인가요?</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.childChipScroll}>
+                {childrenList.map((child) => (
+                  <TouchableOpacity 
+                    key={child.id}
+                    style={[styles.childChip, selectedChildId === child.id && styles.activeChildChip]}
+                    onPress={() => setSelectedChildId(child.id)}
+                  >
+                    <Text style={[styles.childChipText, selectedChildId === child.id && styles.activeChildChipText]}>
+                      {child.child_name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           <View style={styles.topInfo}>
             <Text style={styles.topInfoTitle}>📍 어디서 탑승하나요?</Text>
             <Text style={styles.topInfoSub}>
@@ -153,9 +213,12 @@ export default function PickupApplyScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* 아파트명 드롭다운 선택 */}
+          {/* 💡 공식 정류장 드롭다운 선택 (텍스트 입력 불가, 무조건 선택) */}
           <View style={styles.section}>
-            <Text style={styles.label}>아파트명 / 정류장 (선택)</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={[styles.label, { marginBottom: 0 }]}>공식 셔틀 정류장 선택 </Text>
+              <Text style={styles.requiredBadge}>필수</Text>
+            </View>
             
             <TouchableOpacity 
               style={styles.dropdownSelector}
@@ -164,7 +227,7 @@ export default function PickupApplyScreen({ navigation }: any) {
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name="business-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
                 <Text style={[styles.dropdownText, !selectedSpot && { color: '#94A3B8' }]}>
-                  {loadingSpots ? "정류장 목록 불러오는 중..." : (selectedSpot ? selectedSpot.name : "목록에서 정류장을 선택해주세요")}
+                  {loadingSpots ? "정류장 목록 불러오는 중..." : (selectedSpot ? selectedSpot.name : "목록에서 공식 정류장을 선택해주세요")}
                 </Text>
               </View>
               <Ionicons name={showSpotDropdown ? "chevron-up" : "chevron-down"} size={20} color="#94A3B8" />
@@ -174,7 +237,7 @@ export default function PickupApplyScreen({ navigation }: any) {
             {showSpotDropdown && (
               <View style={styles.dropdownListContainer}>
                 {spots.length === 0 && !loadingSpots ? (
-                  <Text style={styles.dropdownEmptyText}>등록된 정류장이 없습니다.</Text>
+                  <Text style={styles.dropdownEmptyText}>등록된 공식 정류장이 없습니다.</Text>
                 ) : (
                   spots.map((spot) => (
                     <TouchableOpacity 
@@ -233,11 +296,21 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
   scrollContent: { padding: 24 },
+
+  // 🚀 다자녀 선택 탭 스타일
+  childSelectSection: { marginBottom: 25, paddingBottom: 25, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  childChipScroll: { flexDirection: 'row' },
+  childChip: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 20, backgroundColor: '#F1F5F9', marginRight: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  activeChildChip: { backgroundColor: '#1E293B', borderColor: '#1E293B' },
+  childChipText: { fontSize: 15, color: '#64748B', fontWeight: '800' },
+  activeChildChipText: { color: '#FFFFFF' },
+
   topInfo: { marginBottom: 30 },
   topInfoTitle: { fontSize: 22, fontWeight: '800', color: '#111827', marginBottom: 8 },
   topInfoSub: { fontSize: 15, color: '#64748B', lineHeight: 22 },
   section: { marginBottom: 32 },
   label: { fontSize: 16, fontWeight: '800', color: '#1E293B', marginBottom: 16 },
+  requiredBadge: { backgroundColor: '#FEF2F2', color: '#EF4444', fontSize: 10, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
   
   chipGroup: { flexDirection: 'row', flexWrap: 'wrap' },
   chip: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12, backgroundColor: '#F1F5F9', marginRight: 10, marginBottom: 10 },
