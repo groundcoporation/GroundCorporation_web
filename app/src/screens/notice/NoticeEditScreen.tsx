@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase"; // 🚨 Supabase 연동 필수!
+import dayjs from "dayjs";
 import { Picker } from "@react-native-picker/picker"; // 🚀 지점 선택용 드롭다운
 
 // 🚀 [추가] 전역 상태에서 권한 스위치와 내 지점(branchId) 가져오기
@@ -32,15 +33,17 @@ export default function NoticeEditScreen({ route, navigation }: any) {
 
   const [title, setTitle] = useState(existingNotice?.title || "");
   const [content, setContent] = useState(existingNotice?.content || "");
-  const [isImportant, setIsImportant] = useState(existingNotice?.is_important || false);
+  const [isImportant, setIsImportant] = useState(
+    existingNotice?.is_important || false,
+  );
   const [isOnHome, setIsOnHome] = useState(existingNotice?.is_on_home || false); // 💡 새로 추가된 홈 노출 설정
-  
+
   // 🚀 [추가] 푸시 알림 발송 여부를 결정하는 스위치 상태 (신규 작성 시에만 활성화)
   const [isSendNotification, setIsSendNotification] = useState(false);
 
   // 🚀 [수정] 어드민이면 기본값이 전체공유(null), 직원이면 본인 지점(myBranchId)
   const [targetBranchId, setTargetBranchId] = useState<string | null>(
-    existingNotice ? existingNotice.branch_id : (isAdmin ? null : myBranchId)
+    existingNotice ? existingNotice.branch_id : isAdmin ? null : myBranchId,
   );
 
   const [branches, setBranches] = useState<any[]>([]); // 지점 목록 (어드민용)
@@ -92,8 +95,10 @@ export default function NoticeEditScreen({ route, navigation }: any) {
 
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       // 🚀 [추가] public.users 테이블에서 이 유저의 '진짜 이름' 동적 조회하기
       let realName = "사용자";
       if (user) {
@@ -102,19 +107,23 @@ export default function NoticeEditScreen({ route, navigation }: any) {
           .select("name")
           .eq("id", user.id)
           .maybeSingle();
-        
-        realName = profileData?.name || user.user_metadata?.name || user.email?.split('@')[0] || "사용자";
+
+        realName =
+          profileData?.name ||
+          user.user_metadata?.name ||
+          user.email?.split("@")[0] ||
+          "사용자";
       }
-      
+
       const noticeData = {
         title,
         content,
         is_important: isImportant,
         is_on_home: isOnHome,
         author_name: realName,
-        author_id: user?.id || null, 
-        branch_id: targetBranchId, 
-        updated_at: new Date().toISOString(),
+        author_id: user?.id || null,
+        branch_id: targetBranchId,
+        updated_at: dayjs().tz().format("YYYY-MM-DDTHH:mm:ssZ"), // 명시적으로 KST 오프셋 포함
       };
 
       // 🚀 알림 연동을 위해 생성된 공지글의 결과 데이터를 담을 변수
@@ -152,10 +161,11 @@ export default function NoticeEditScreen({ route, navigation }: any) {
       }
 
       setLoading(false);
-      Alert.alert("성공", isEditing ? "공지사항이 수정되었습니다." : "공지사항이 등록되었습니다.", [
-        { text: "확인", onPress: () => navigation.goBack() }
-      ]);
-
+      Alert.alert(
+        "성공",
+        isEditing ? "공지사항이 수정되었습니다." : "공지사항이 등록되었습니다.",
+        [{ text: "확인", onPress: () => navigation.goBack() }],
+      );
     } catch (error) {
       console.log("저장 에러:", error);
       setLoading(false);
@@ -166,12 +176,17 @@ export default function NoticeEditScreen({ route, navigation }: any) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
-      
+
       <View style={styles.appBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} disabled={loading}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          disabled={loading}
+        >
           <Ionicons name="close" size={28} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.appBarTitle}>{isEditing ? "공지사항 수정" : "새 공지사항"}</Text>
+        <Text style={styles.appBarTitle}>
+          {isEditing ? "공지사항 수정" : "새 공지사항"}
+        </Text>
         <TouchableOpacity onPress={handleSave} disabled={loading}>
           {loading ? (
             <ActivityIndicator size="small" color="#4F46E5" />
@@ -182,7 +197,6 @@ export default function NoticeEditScreen({ route, navigation }: any) {
       </View>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        
         {/* 🚀 [수정] 지점 선택 영역 UI 개선 (isAdmin 스위치 적용) */}
         <View style={styles.branchSelectSection}>
           <Text style={styles.sectionLabel}>게시 대상 설정</Text>
@@ -216,7 +230,9 @@ export default function NoticeEditScreen({ route, navigation }: any) {
         <View style={styles.switchRow}>
           <View>
             <Text style={styles.switchLabel}>중요 공지로 등록</Text>
-            <Text style={styles.switchSub}>목록 상단에 중요 뱃지와 함께 노출됩니다.</Text>
+            <Text style={styles.switchSub}>
+              목록 상단에 중요 뱃지와 함께 노출됩니다.
+            </Text>
           </View>
           <Switch
             value={isImportant}
@@ -232,7 +248,9 @@ export default function NoticeEditScreen({ route, navigation }: any) {
         <View style={styles.switchRow}>
           <View>
             <Text style={styles.switchLabel}>홈 화면 노출</Text>
-            <Text style={styles.switchSub}>체크 시 앱 메인 홈 화면에도 노출됩니다.</Text>
+            <Text style={styles.switchSub}>
+              체크 시 앱 메인 홈 화면에도 노출됩니다.
+            </Text>
           </View>
           <Switch
             value={isOnHome}
@@ -249,8 +267,12 @@ export default function NoticeEditScreen({ route, navigation }: any) {
           <>
             <View style={styles.switchRow}>
               <View>
-                <Text style={[styles.switchLabel, { color: "#4F46E5" }]}>Push 알림 발송</Text>
-                <Text style={styles.switchSub}>등록과 동시에 대상 학부모들에게 알림을 보냅니다.</Text>
+                <Text style={[styles.switchLabel, { color: "#4F46E5" }]}>
+                  Push 알림 발송
+                </Text>
+                <Text style={styles.switchSub}>
+                  등록과 동시에 대상 학부모들에게 알림을 보냅니다.
+                </Text>
               </View>
               <Switch
                 value={isSendNotification}
@@ -304,13 +326,33 @@ const styles = StyleSheet.create({
   appBarTitle: { fontSize: 18, fontWeight: "800", color: "#111827" },
   saveBtnText: { fontSize: 16, fontWeight: "700", color: "#4F46E5" },
   container: { flex: 1 },
-  
+
   branchSelectSection: { padding: 20, backgroundColor: "#F8FAFC" },
-  sectionLabel: { fontSize: 13, fontWeight: "800", color: "#64748B", marginBottom: 10 },
-  pickerWrapper: { backgroundColor: "#FFF", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden" },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#64748B",
+    marginBottom: 10,
+  },
+  pickerWrapper: {
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+  },
   picker: { height: 50, width: "100%" },
-  readOnlyBranch: { flexDirection: "row", alignItems: "center", paddingVertical: 5 },
-  readOnlyBranchText: { marginLeft: 6, fontSize: 14, color: "#4F46E5", fontWeight: "700" },
+  readOnlyBranch: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 5,
+  },
+  readOnlyBranchText: {
+    marginLeft: 6,
+    fontSize: 14,
+    color: "#4F46E5",
+    fontWeight: "700",
+  },
 
   switchRow: {
     flexDirection: "row",
@@ -318,7 +360,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-  switchLabel: { fontSize: 16, fontWeight: "700", color: "#1E293B", marginBottom: 4 },
+  switchLabel: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1E293B",
+    marginBottom: 4,
+  },
   switchSub: { fontSize: 12, color: "#64748B" },
   divider: { height: 1, backgroundColor: "#F1F5F9" },
   titleInput: {
