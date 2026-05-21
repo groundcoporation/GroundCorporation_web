@@ -28,6 +28,8 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
         Amount: paymentData.amount,
         Product: paymentData.packageName,
       });
+      // 🚀 [디버깅] 환경변수 실제 값을 확인합니다.
+      console.log("[KSPay] 디버그 - 환경변수 URL:", process.env.EXPO_PUBLIC_KSPAY_URL);
     }
   }, [isVisible]);
 
@@ -88,12 +90,15 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
           <WebView
             ref={webViewRef}
             source={{
-              uri: process.env.EXPO_PUBLIC_KSPAY_URL,
+              uri: process.env.EXPO_PUBLIC_KSPAY_URL || "",
             }}
             originWhitelist={["*"]}
             javaScriptEnabled={true}
             domStorageEnabled={true}
             mixedContentMode="always"
+            // 🚀 [디버그] 상세 로그들 유지
+            onLoadStart={(e) => console.log("[KSPay] 로드 시작:", e.nativeEvent.url)}
+            onHttpError={(e) => console.error("[KSPay] HTTP 에러:", e.nativeEvent.statusCode, e.nativeEvent.description)}
             onShouldStartLoadWithRequest={(request) => {
               const { url } = request;
               console.log("[KSPay] 🌐 URL 감시(Navigation):", url);
@@ -240,11 +245,10 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
                 console.error("[KSPay] ❌ 메시지 파싱 중 중대 에러:", err);
               }
             }}
-            onError={(syntheticEvent) => {
-              const { nativeEvent } = syntheticEvent;
+            onError={(e) => {
               console.error(
                 "[KSPay] ❌ 웹뷰 로드 실패(Network Error):",
-                nativeEvent,
+                e.nativeEvent,
               );
               Alert.alert(
                 "통신 오류",
