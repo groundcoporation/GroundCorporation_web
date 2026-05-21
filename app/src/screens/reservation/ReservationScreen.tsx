@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Calendar, LocaleConfig } from "react-native-calendars";
 import { Ionicons } from "@expo/vector-icons";
+import dayjs from "dayjs";
 import { supabase } from "../../lib/supabase";
 
 // 🚀 [추가] 전역 상태 보관소에서 지점 정보 가져오기
@@ -53,7 +54,7 @@ export default function ReservationScreen({ navigation }: any) {
   const { branchId } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0],
+    dayjs().tz().format("YYYY-MM-DD"),
   );
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);

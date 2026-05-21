@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase"; // 🚀 본부장님 환경에 맞춘 경로
+import dayjs from 'dayjs';
 
 // 🚀 [본부장님 기존 타입 + 신규 타입 합체]
 export type NotificationType = 'ATTENDANCE' | 'SHUTTLE' | 'CONSULT' | 'RESERVATION' | 'notice' | 'payment' | 'attendance';
@@ -98,7 +99,7 @@ export const sendGlobalPushNotification = async ({
       notice_id: type === "notice" ? relatedId : null,
       reservation_id: type === "RESERVATION" ? relatedId : null,
       is_read: false,
-      created_at: new Date().toISOString(),
+      created_at: dayjs().tz().format('YYYY-MM-DDTHH:mm:ssZ'), // 명시적으로 KST 오프셋 포함
     }));
 
     const { error: notiError } = await supabase.from("notifications").insert(notificationRows);
