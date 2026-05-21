@@ -28,8 +28,6 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
         Amount: paymentData.amount,
         Product: paymentData.packageName,
       });
-      // 🚀 [디버깅] 환경변수 실제 값을 확인합니다.
-      console.log("[KSPay] 디버그 - 환경변수 URL:", process.env.EXPO_PUBLIC_KSPAY_URL);
     }
   }, [isVisible]);
 
@@ -90,15 +88,12 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
           <WebView
             ref={webViewRef}
             source={{
-              uri: process.env.EXPO_PUBLIC_KSPAY_URL || "",
+              uri: process.env.EXPO_PUBLIC_KSPAY_URL,
             }}
             originWhitelist={["*"]}
             javaScriptEnabled={true}
             domStorageEnabled={true}
             mixedContentMode="always"
-            // 🚀 [디버그] 상세 로그들 유지
-            onLoadStart={(e) => console.log("[KSPay] 로드 시작:", e.nativeEvent.url)}
-            onHttpError={(e) => console.error("[KSPay] HTTP 에러:", e.nativeEvent.statusCode, e.nativeEvent.description)}
             onShouldStartLoadWithRequest={(request) => {
               const { url } = request;
               console.log("[KSPay] 🌐 URL 감시(Navigation):", url);
@@ -113,28 +108,23 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
                 return false;
               }
 
-              // 2. 💡 [핵심] 모든 카드사 결제 완료 파라미터 통합 감지
-              // 각 카드사/은행마다 파라미터 명칭이 다르므로 주요 키워드를 모두 체크합니다.
+              // 결제 완료/인증 성공 키 추출 로직
               const getPayKey = (targetUrl: string) => {
                 const params = [
-                  "reCommConId=", // 일반 신용카드/ISP
-                  "tx_key=", // 카카오페이 등 간편결제
-                  "pg_token=", // 카카오페이 토큰
-                  "payKey=", // 기타 결제
-                  "r_conid=", // 일부 은행/계좌이체
+                  "reCommConId=",
+                  "tx_key=",
+                  "pg_token=",
+                  "payKey=",
+                  "r_conid=",
                 ];
-
                 for (const p of params) {
-                  if (targetUrl.includes(p)) {
+                  if (targetUrl.includes(p))
                     return targetUrl.split(p)[1]?.split("&")[0];
-                  }
                 }
                 return null;
               };
 
               const payKey = getPayKey(url);
-
-              // 💡 특정 결과 처리 페이지(rs_o2, result, success 등)에 접근하면서 키가 존재하는 경우
               if (
                 payKey &&
                 (url.includes("rs_o2") ||
@@ -142,46 +132,59 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
                   url.includes("reCommConId"))
               ) {
                 console.log(
-                  "[KSPay] 결제 인증 키 추출 성공! 앱으로 복귀:",
+                  "[KSPay] ✨ 결제 인증 키 추출 성공 - 복귀 주소에서 감지:",
                   payKey,
                 );
                 handleInternalClose(true, payKey);
-                return false; // 하얀 창(결제 완료 웹페이지)이 뜨기 전에 차단
-              }
-
-              // 3. 결제 시작 후 초기화 루프 방지
-              if (isPayStarted && url.includes("sapp.jsp")) {
                 return false;
               }
 
               return true;
             }}
             onLoadEnd={(e) => {
-              if (e.nativeEvent.url.includes("sapp.jsp") && !isPayStarted) {
+              const currentUrl = e.nativeEvent.url;
+              console.log("[KSPay] 📄 페이지 로드 완료:", currentUrl);
+
+              if (currentUrl.includes("sapp.jsp") && !isPayStarted) {
+                console.log("[KSPay] 📥 KSNET 스크립트 주입 시작...");
                 setLoading(false);
-                console.log("[KSPay] 결제 스크립트 주입");
-                webViewRef.current?.injectJavaScript(`
+
+                const injectCode = `
                   (function() {
-                    if (typeof requestPay === 'function') {
-                      requestPay({
-                        callbackfunction: 'window.kspayCallback',
-                        mid: '${paymentData.kspay_mid}',
-                        paymethod: 'card',
-                        ordernumb: 'ORD_${Date.now()}',
-                        productname: '${paymentData.packageName}',
-                        username: '${paymentData.userName}',
-                        userphonenumb: '${paymentData.userPhone}',
-                        payamount: ${paymentData.amount}
-                      });
-                      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STARTED' }));
+                    try {
+                      if (typeof requestPay === 'function') {
+                        console.log('KSNET requestPay 실행 준비 완료');
+                        requestPay({
+                          callbackfunction: 'window.kspayCallback',
+                          mid: '${paymentData.kspay_mid}',
+                          paymethod: 'card',
+                          ordernumb: 'ORD_${Date.now()}',
+                          productname: '${paymentData.packageName}',
+                          username: '${paymentData.userName}',
+                          userphonenumb: '${paymentData.userPhone}',
+                          payamount: ${paymentData.amount}
+                        });
+                        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STARTED' }));
+                      } else {
+                        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR', message: 'requestPay 함수를 찾을 수 없습니다. (라이브러리 로드 지연 가능성)' }));
+                      }
+                    } catch (e) {
+                      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR', message: '주입 스크립트 실행 중 예외: ' + e.message }));
                     }
                   })();
                   true;
-                `);
+                `;
+
+                // 라이브러리 로딩을 위해 500ms 지연 후 주입
+                setTimeout(() => {
+                  console.log("[KSPay] 💉 JavaScript 주입 명령 전송");
+                  webViewRef.current?.injectJavaScript(injectCode);
+                }, 500);
               }
             }}
             injectedJavaScript={`
               window.kspayCallback = function(data) {
+                console.log("KSNET Callback 수신");
                 window.ReactNativeWebView.postMessage(JSON.stringify(data));
               };
               true;
@@ -237,10 +240,11 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
                 console.error("[KSPay] ❌ 메시지 파싱 중 중대 에러:", err);
               }
             }}
-            onError={(e) => {
+            onError={(syntheticEvent) => {
+              const { nativeEvent } = syntheticEvent;
               console.error(
                 "[KSPay] ❌ 웹뷰 로드 실패(Network Error):",
-                e.nativeEvent,
+                nativeEvent,
               );
               Alert.alert(
                 "통신 오류",
@@ -271,11 +275,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 50,
+    paddingTop: Platform.OS === "ios" ? 60 : 20,
     paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
     alignItems: "center",
+    backgroundColor: "#fff",
   },
   headerTitle: { fontSize: 18, fontWeight: "bold" },
   loadingOverlay: {
