@@ -170,6 +170,16 @@ export default function AdminHomeScreen({ navigation }: any) {
             "AdminMember",
             "정보 및 수강권",
           )}
+          
+          {/* 🚀 [추가] 언제든 청구서를 보낼 수 있는 독립 메뉴 버튼! */}
+          {renderGridMenu(
+            "이용권 청구",
+            "receipt-outline",
+            "#EC4899", // 예쁜 핑크색 
+            "AdminBilling", // 👈 아까 라우터에 등록한 이름!
+            "이용권 결제 요청",
+          )}
+
           {renderGridMenu(
             "예약 현황",
             "calendar-outline",

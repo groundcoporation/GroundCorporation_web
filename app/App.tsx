@@ -5,7 +5,6 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from 'expo-notifications'; // 🔔 전역 푸시 핸들링을 위해 추가
 
-
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
@@ -46,6 +45,8 @@ import { supabase } from "./src/lib/supabase";
 import PassPurchaseScreen from "./src/screens/pass/PassPurchaseScreen"; 
 import KSPayService from "./src/services/payment/KSPayService"; 
 import MyPackageScreen from "./src/screens/pass/MyPackageScreen"; 
+// 🚀 [추가] 학부모용 청구서 확인 및 결제 화면
+import InvoiceScreen from "./src/screens/pass/InvoiceScreen"; 
 
 // 📅 [예약 관련 시스템]
 import ReservationScreen from "./src/screens/reservation/ReservationScreen"; 
@@ -89,6 +90,8 @@ import AdminMemberScreen from "./src/screens/admin/AdminMemberScreen";
 import AdminScheduleScreen from "./src/screens/admin/AdminScheduleScreen";
 import AdminSettingScreen from "./src/screens/admin/AdminSettingScreen";
 import AdminMemberDetailScreen from "./src/screens/admin/AdminMemberDetailScreen"; // 관리자페이지 회원 상세 화면
+// 🚀 [추가] 관리자용 청구서 발행 화면
+import AdminBillingScreen from "./src/screens/admin/AdminBillingScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -150,8 +153,8 @@ export default function App() {
           // 공지사항 타입이면 공지 상세 보기 화면으로 하이패스 점프!
           navigationRef.navigate("NoticeDetail", { notice: data.noticeData }); 
         } else if (type === "payment") {
-          // 나중에 결제 알림이면 마이페이지 혹은 전용 화면으로 슥 이동
-          navigationRef.navigate("MyPage");
+          // 🚀 [수정] 결제 알림이면 MyPage 대신에 방금 만든 InvoiceScreen(청구서 결제 화면)으로 슥 이동
+          navigationRef.navigate("Invoice");
         } else if (type === "attendance") {
           // 출결 알림이면 출석 화면으로 슥 이동
           navigationRef.navigate("Attendance");
@@ -197,6 +200,8 @@ export default function App() {
           {/* 2. 이용권 및 결제 프로세스 */}
           <Stack.Screen name="Pass" component={PassPurchaseScreen} />
           <Stack.Screen name="MyPackage" component={MyPackageScreen} />
+          {/* 🚀 [추가] 청구서 결제 화면 등록 */}
+          <Stack.Screen name="Invoice" component={InvoiceScreen} />
           
           {/* <Stack.Screen 
             name="KSPay" 
@@ -249,6 +254,8 @@ export default function App() {
           <Stack.Screen name="AdminSchedule" component={AdminScheduleScreen} />
           <Stack.Screen name="AdminSetting" component={AdminSettingScreen} />
           <Stack.Screen name="AdminMemberDetail" component={AdminMemberDetailScreen} />
+          {/* 🚀 [추가] 관리자 청구서 발행 화면 등록 */}
+          <Stack.Screen name="AdminBilling" component={AdminBillingScreen} />
 
         </Stack.Navigator>
       </NavigationContainer>

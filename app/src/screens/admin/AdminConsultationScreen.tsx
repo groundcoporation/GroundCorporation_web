@@ -1,15 +1,67 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, StatusBar } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  TouchableOpacity, 
+  ActivityIndicator, 
+  Alert, 
+  Modal, // 🚀 [추가] 드롭다운용 모달
+  StatusBar 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context'; 
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase'; // 🚀 경로 수정 완료
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext'; // 🚀 [추가] 지점 정보를 가져오기 위해 추가
 
 export default function AdminConsultationScreen({ navigation }: any) {
+  const { branchId } = useAuth(); // 🚀 [추가] 현재 관리자의 지점 ID
+
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [targetClasses, setTargetClasses] = useState<{ [key: string]: string }>({});
 
-  useEffect(() => { fetchRequests(); }, []);
+  // 🚀 [추가] 반 배정 모달 관련 상태
+  const [availableClasses, setAvailableClasses] = useState<any[]>([]);
+  const [showClassModal, setShowClassModal] = useState(false);
+  const [currentSelectingUserId, setCurrentSelectingUserId] = useState<string | null>(null);
+
+  useEffect(() => { 
+    fetchRequests(); 
+    if (branchId) {
+      fetchClasses(); // 🚀 지점이 확인되면 반 목록도 가져옵니다.
+    }
+  }, [branchId]);
+
+  // 🚀 [추가] DB에서 현재 지점의 개설된 '반 목록' 가져오기
+  const fetchClasses = async () => {
+    try {
+      // 1. class_schedules 테이블에서 해당 지점의 target_class만 전부 가져옴
+      const { data, error } = await supabase
+        .from('class_schedules')
+        .select('target_class')
+        .eq('branch_id', branchId);
+        
+      if (!error && data) {
+        // 2. 🚀 중복 제거 (예: '초등부'가 월/수/금 3개 있어도 1개로 합침)
+        // Set 객체를 이용해 중복을 없앤 후 다시 배열로 변환합니다.
+        const uniqueClasses = Array.from(new Set(data.map((item) => item.target_class)));
+
+        // 3. 기존 모달 UI({ id, name })와 에러 없이 호환되도록 형태를 변환
+        const formattedClasses = uniqueClasses
+          .filter(Boolean) // 혹시 모를 null이나 빈 칸 방지
+          .map((className) => ({
+            id: className,
+            name: className,
+          }));
+
+        setAvailableClasses(formattedClasses);
+      }
+    } catch (e) {
+      console.log("반 목록 로드 에러:", e);
+    }
+  };
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -38,11 +90,11 @@ export default function AdminConsultationScreen({ navigation }: any) {
     }
   };
 
-  const handleComplete = async (requestId: string, userId: string) => {
+  const handleComplete = async (requestId: string, userId: string, reqUser: any) => {
     const assignedClass = targetClasses[userId];
     
     if (!assignedClass || assignedClass.trim() === '') {
-      Alert.alert("알림", "배정할 반 이름을 입력해주세요.");
+      Alert.alert("알림", "배정할 반을 선택해주세요.");
       return;
     }
 
@@ -63,8 +115,32 @@ export default function AdminConsultationScreen({ navigation }: any) {
 
       if (requestError) throw requestError;
       
-      Alert.alert("완료", `${assignedClass}로 배정이 완료되었습니다.`);
-      fetchRequests(); // 목록 새로고침
+      // 🚀 [수정] 배정 완료 후, 청구서 발송 여부를 묻는 스마트 팝업!
+      Alert.alert(
+        "배정 완료", 
+        `${assignedClass}로 배정이 완료되었습니다.\n해당 학부모님께 이용권 청구서를 지금 발송하시겠습니까?`,
+        [
+          { 
+            text: "나중에 할게요", 
+            style: "cancel",
+            onPress: () => fetchRequests() // 그냥 목록만 새로고침
+          },
+          {
+            text: "네, 발송할게요",
+            onPress: () => {
+              fetchRequests(); // 목록 새로고침 후
+              // 🚀 AdminBillingScreen으로 해당 학부모 정보 들고 이동!
+              navigation.navigate('AdminBilling', {
+                preSelectedParent: {
+                  id: userId,
+                  name: reqUser?.name || '이름없음',
+                  phone: reqUser?.phone || ''
+                }
+              });
+            }
+          }
+        ]
+      );
     } catch (e) {
       console.log(e);
       Alert.alert("에러", "처리에 실패했습니다.");
@@ -104,17 +180,24 @@ export default function AdminConsultationScreen({ navigation }: any) {
               <View style={styles.divider} />
               
               <Text style={styles.label}>반 배정 (Target Class)</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="예: 초등부 화/목 2시" 
-                placeholderTextColor="#94A3B8"
-                value={targetClasses[req.user_id] || ''}
-                onChangeText={(txt) => setTargetClasses({...targetClasses, [req.user_id]: txt})}
-              />
+              
+              {/* 🚀 [수정] 직접 입력(TextInput) 대신 모달을 띄우는 버튼으로 변경 */}
+              <TouchableOpacity 
+                style={styles.dropdownButton}
+                onPress={() => {
+                  setCurrentSelectingUserId(req.user_id);
+                  setShowClassModal(true);
+                }}
+              >
+                <Text style={targetClasses[req.user_id] ? styles.dropdownSelectedText : styles.dropdownPlaceholder}>
+                  {targetClasses[req.user_id] || "터치하여 배정할 반을 선택하세요"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#94A3B8" />
+              </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.completeBtn} 
-                onPress={() => handleComplete(req.id, req.user_id)}
+                onPress={() => handleComplete(req.id, req.user_id, req.user)} // 🚀 학부모 정보 같이 넘김
               >
                 <Text style={styles.completeBtnText}>상담 완료 및 배정 저장</Text>
               </TouchableOpacity>
@@ -122,6 +205,45 @@ export default function AdminConsultationScreen({ navigation }: any) {
           ))
         )}
       </ScrollView>
+
+      {/* 🚀 [추가] 반 선택 모달 창 */}
+      <Modal visible={showClassModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>반 선택</Text>
+              <TouchableOpacity onPress={() => setShowClassModal(false)}>
+                <Ionicons name="close" size={24} color="#111827" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {availableClasses.map((cls) => (
+                <TouchableOpacity 
+                  key={cls.id} 
+                  style={styles.classListItem}
+                  onPress={() => {
+                    if (currentSelectingUserId) {
+                      setTargetClasses({
+                        ...targetClasses, 
+                        [currentSelectingUserId]: cls.name
+                      });
+                    }
+                    setShowClassModal(false);
+                  }}
+                >
+                  <Text style={styles.classNameText}>{cls.name}</Text>
+                </TouchableOpacity>
+              ))}
+              {availableClasses.length === 0 && (
+                <Text style={{ textAlign: 'center', marginTop: 20, color: '#94A3B8' }}>
+                  등록된 반이 없습니다. 설정에서 먼저 반을 추가해주세요.
+                </Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -139,9 +261,22 @@ const styles = StyleSheet.create({
   userPhone: { fontSize: 14, color: '#64748B', marginBottom: 16 },
   divider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 16 },
   label: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 8 },
-  input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', padding: 12, borderRadius: 12, fontSize: 15, color: '#1E293B', marginBottom: 16 },
+  
+  // 🚀 [추가/수정] 드롭다운 버튼 스타일
+  dropdownButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', padding: 14, borderRadius: 12, marginBottom: 16 },
+  dropdownPlaceholder: { fontSize: 15, color: '#94A3B8' },
+  dropdownSelectedText: { fontSize: 15, color: '#1E293B', fontWeight: '600' },
+  
   completeBtn: { backgroundColor: '#6366F1', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   completeBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
   emptyContainer: { alignItems: 'center', marginTop: 100 },
-  emptyText: { color: '#94A3B8', fontSize: 15 }
+  emptyText: { color: '#94A3B8', fontSize: 15 },
+
+  // 🚀 [추가] 모달 스타일
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { backgroundColor: "#FFF", borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: "bold" },
+  classListItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  classNameText: { fontSize: 16, fontWeight: "600", color: "#1E293B", textAlign: "center" },
 });
