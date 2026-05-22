@@ -60,6 +60,7 @@ interface Parent {
   id: string;
   name: string;
   phone: string;
+  branch_id?: string;
 }
 
 const formatCurrency = (amount: number | null) => {
@@ -131,16 +132,17 @@ export default function AdminBillingScreen({ route, navigation }: any) {
     }
   }, [preSelectedParent]);
 
-  // 🚀 [추가] 학부모 목록 불러오기 함수
+  // 🚀 [추가] 학부모 목록 불러오기 함수 (지점 필터링 적용)
   const fetchParents = async () => {
     try {
+      // 🚀 지점별로 학부모 필터링 (branch_id가 현재 branchId와 같은 경우만)
       const { data, error } = await supabase
         .from("users")
-        .select("id, name, phone")
-        .eq("role", "parent")
+        .select("id, name, phone, branch_id")
         .eq("branch_id", branchId);
       
       if (!error && data) setParents(data);
+      else console.error("[Billing] ❌ 학부모 목록 로드 에러:", error);
     } catch (e) {
       console.error("[Billing] ❌ 학부모 목록 로드 실패:", e);
     }
@@ -204,9 +206,9 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         .single();
 
       if (branchData) {
-        console.log("[Purchase] 🔍 DB에서 가져온 MID:", branchData.kspay_mid); // 이 로그가 찍히는지 확인
+        console.log("[Purchase] 🔍 DB에서 가져온 MID:", branchData.kspay_mid);
         setCurrentBranch(branchData);
-        setBranchMid(branchData.kspay_mid || "2999199999"); // 테스트 아이디라도 강제 주입
+        setBranchMid(branchData.kspay_mid || "2999199999");
       }
 
       const { data, error } = await supabase
@@ -231,15 +233,11 @@ export default function AdminBillingScreen({ route, navigation }: any) {
       }
     } catch (e) {
       console.error("[Purchase] ❌ 패키지 로드 중 예외 발생:", e);
-    } finally { // 🚀 정상적인 문법으로 수정 완료!
+    } finally {
       setLoading(false);
     }
   };
 
-  // --- 결제 프로세스 ---
-  // 🚀 [수정] 관리자는 직접 결제(processCompletePayment)를 하지 않고 청구서(payment_requests)만 발행합니다.
-  // 기존 결제 승인 로직은 ParentPaymentScreen으로 이동해야 하므로 여기서는 청구서 발송 함수로 대체합니다.
-  
   const handleSendInvoice = async () => {
     if (!selectedParent) return Alert.alert("알림", "청구서를 받을 학부모님을 선택해주세요.");
     if (cartItems.length === 0) return Alert.alert("알림", "상품을 담아주세요.");
@@ -257,14 +255,13 @@ export default function AdminBillingScreen({ route, navigation }: any) {
             try {
               const orderNo = `REQ-${Date.now()}`;
               
-              // 1. payment_requests 테이블에 저장
               const { error: dbError } = await supabase
                 .from("payment_requests")
                 .insert([{
                   order_no: orderNo,
                   parent_id: selectedParent.id,
-                  parent_name: selectedParent.name, // 🚀 추가된 학부모 이름 기록
-                  sender_id: currentUser.id,        // 🚀 발송자(코치) ID 기록
+                  parent_name: selectedParent.name,
+                  sender_id: currentUser.id,
                   branch_id: branchId,
                   total_amount: finalPrice,
                   cart_items: cartItems,
@@ -273,7 +270,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
               
               if (dbError) throw dbError;
 
-              // 2. 학부모에게 푸시 알림 발송 (안전하게 catch 처리)
               try {
                 await sendGlobalPushNotification({
                   targetBranchId: null,
@@ -283,12 +279,12 @@ export default function AdminBillingScreen({ route, navigation }: any) {
                   type: "payment"
                 });
               } catch (pushError) {
-                console.log("[Billing] ⚠️ 푸시 알림 발송 중 에러 (DB는 저장됨):", pushError);
+                console.log("[Billing] ⚠️ 푸시 알림 발송 중 에러:", pushError);
               }
 
               Alert.alert("성공", "청구서가 성공적으로 발송되었습니다!");
-              setCartItems([]); // 장바구니 초기화
-              setSelectedParent(null); // 선택된 학부모 초기화
+              setCartItems([]);
+              setSelectedParent(null);
               setIsCartExpanded(false);
               setShowOptionModal(false);
             } catch (error) {
@@ -303,7 +299,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
     );
   };
 
-  // --- 장바구니 및 기타 핸들러 ---
   const addToCart = (pkg: Package, optIndex: number) => {
     console.log(`[Cart] 🛒 아이템 추가: ${pkg.name}`);
     const existingIndex = cartItems.findIndex(
@@ -354,30 +349,23 @@ export default function AdminBillingScreen({ route, navigation }: any) {
   }, 0);
 
   const totalCartCount = cartItems.reduce((acc, c) => acc + c.quantity, 0);
-  const hasConsult = cartItems.some((c) => c.pkg.is_consult);
   const popupOptions = allPackages.filter(
     (p) => p.is_option && !cartItems.some((cart) => cart.pkg.id === p.id),
   );
 
-  // 🚀 [수정] 결제 준비 로직 대체 -> 옵션 팝업 후 [최종 결제] 버튼 누를 때 청구서 발송 트리거
   const handleOpenPayment = () => {
     if (cartItems.length === 0) return Alert.alert("알림", "상품을 담아주세요.");
     if (!selectedParent) return Alert.alert("알림", "청구서를 받을 학부모님을 선택해주세요.");
-    
-    // 모달 닫고 바로 발송 로직 태우기
     setShowOptionModal(false);
     handleSendInvoice(); 
   };
 
-  // 🚀 [수정] 관리자 여부도 Context에서 받아온 role로 검증 가능 (본부장님이 스왑 가능하도록)
   const isDeveloper = role === "admin" || currentUser?.role === "admin";
 
-  // 🚀 [추가] 실시간 검색 필터링 로직
   const filteredParents = parents.filter((p) => {
     const searchLower = searchQuery.toLowerCase();
     const phoneClean = p.phone ? p.phone.replace(/-/g, '') : "";
     const searchPhoneClean = searchQuery.replace(/-/g, '');
-    
     return p.name.toLowerCase().includes(searchLower) || phoneClean.includes(searchPhoneClean);
   });
 
@@ -391,7 +379,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         {isDeveloper ? (
           <TouchableOpacity
             style={styles.branchSwitcher}
-            // 🚀 [수정] 관리자가 지점을 누르면 전역 지점이 바뀝니다. (setBranch 함수 호출)
             onPress={() =>
               setBranch(branchId === "branch_1" ? "branch_2" : "branch_1")
             }
@@ -423,11 +410,10 @@ export default function AdminBillingScreen({ route, navigation }: any) {
           { paddingBottom: isCartExpanded && cartItems.length > 0 ? 400 : 160 },
         ]}
       >
-        {/* 🚀 [추가] 학부모 선택 영역 */}
         <TouchableOpacity 
           style={styles.parentSelectBox} 
           onPress={() => {
-            setSearchQuery(""); // 모달 열 때 검색어 초기화
+            setSearchQuery("");
             setShowParentModal(true);
           }}
         >
@@ -594,7 +580,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* 배민 스타일 통합 하단 푸터 */}
       <View style={styles.integratedFooterWrapper}>
         <TouchableOpacity
           style={styles.cartToggleHeader}
@@ -682,7 +667,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
                   "알림",
                   "원하시는 상품에서 [담기] 버튼을 눌러주세요.",
                 );
-              // 🚀 [수정] 어드민은 복잡한 체크 없이 바로 청구서 발송 로직(또는 옵션 추가 팝업)을 띄웁니다.
               if (popupOptions.length > 0) setShowOptionModal(true);
               else handleSendInvoice();
             }}
@@ -692,7 +676,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         </View>
       </View>
 
-      {/* 🚀 [수정] 학부모 검색 및 선택 모달 */}
       <Modal visible={showParentModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -703,7 +686,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
               </TouchableOpacity>
             </View>
             
-            {/* 🚀 [추가] 검색창 UI */}
             <View style={styles.searchContainer}>
               <Ionicons name="search" size={20} color="#94A3B8" style={{ marginRight: 8 }} />
               <TextInput
@@ -722,7 +704,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
             </View>
 
             <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={true}>
-              {/* 🚀 [수정] parents.map 대신 filteredParents.map 사용 */}
               {filteredParents.map((p) => (
                 <TouchableOpacity 
                   key={p.id} 
@@ -747,7 +728,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         </View>
       </Modal>
 
-      {/* 🚀 [유지] 상담 유도 모달 */}
       <Modal visible={showConsultModal} transparent animationType="fade">
         <View style={styles.consultModalOverlay}>
           <View style={styles.consultModalContent}>
@@ -817,7 +797,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         </View>
       </Modal>
 
-      {/* 추가 옵션 팝업 모달 */}
       <Modal visible={showOptionModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -865,7 +844,7 @@ export default function AdminBillingScreen({ route, navigation }: any) {
               </View>
               <TouchableOpacity
                 style={styles.finalPayBtn}
-                onPress={handleOpenPayment} // 🚀 [수정] 모달에서 결제 누르면 청구서 발송 트리거
+                onPress={handleOpenPayment}
               >
                 <Text style={styles.finalPayBtnText}>최종 청구서 발송</Text>
               </TouchableOpacity>
@@ -874,7 +853,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         </View>
       </Modal>
 
-      {/* 로딩 오버레이 */}
       {isProcessing && (
         <View style={styles.processingOverlay}>
           <ActivityIndicator size="large" color="#6366F1" />
@@ -906,8 +884,6 @@ const styles = StyleSheet.create({
   },
   branchStatic: { paddingHorizontal: 12, paddingVertical: 6 },
   headerTitle: { fontSize: 16, fontWeight: "800", color: "#111827" },
-  
-  // 🚀 [추가] 학부모 선택 영역 스타일
   parentSelectBox: { 
     flexDirection: "row", 
     justifyContent: "space-between", 
@@ -923,7 +899,6 @@ const styles = StyleSheet.create({
   parentSelectLabel: { fontSize: 12, color: "#6366F1", fontWeight: "700", marginBottom: 4 },
   parentSelectedText: { fontSize: 16, fontWeight: "800", color: "#1E1B4B" },
   parentPlaceholderText: { fontSize: 15, fontWeight: "600", color: "#94A3B8" },
-
   tabContainer: {
     flexDirection: "row",
     backgroundColor: "#FFF",
@@ -1123,18 +1098,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: { fontSize: 18, fontWeight: "bold" },
-  
-  // 🚀 [추가] 검색창 관련 스타일
   searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12, marginBottom: 16, borderWidth: 1, borderColor: "#E2E8F0" },
   searchInput: { flex: 1, fontSize: 15, color: "#1E293B", padding: 0 },
   emptySearchContainer: { paddingVertical: 40, alignItems: "center" },
   emptySearchText: { color: "#94A3B8", fontSize: 14, fontWeight: "600", marginTop: 12 },
-
-  // 🚀 [추가] 학부모 리스트 모달 스타일
   parentListItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
   parentListName: { fontSize: 16, fontWeight: "700", color: "#1E293B" },
   parentListPhone: { fontSize: 14, color: "#94A3B8", marginTop: 4 },
-  
   optionList: { marginBottom: 30 },
   optionItem: {
     flexDirection: "row",
@@ -1201,24 +1171,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   consultKakaoBtn: {
-    flex: 1,
     flexDirection: "row",
     backgroundColor: "#FEE500",
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    flex: 1,
     marginRight: 8,
   },
   consultKakaoText: { color: "#111827", fontSize: 15, fontWeight: "700" },
   consultCallBtn: {
-    flex: 1,
     flexDirection: "row",
     backgroundColor: "#6366F1",
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    flex: 1,
     marginLeft: 8,
   },
   consultCallText: { color: "#FFF", fontSize: 15, fontWeight: "700" },
