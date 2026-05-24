@@ -52,7 +52,6 @@ export default function AdminHomeScreen({ navigation }: any) {
         .gte("created_at", monthStart);
 
       // 2. 예약 인원 카운트 (오늘 / 이번 달)
-      // *주의: 테이블명이나 날짜 컬럼명은 팀장님 DB 설계에 맞춰 확인 필요 (현재 'reservations' 기준)
       const { count: tRes } = await supabase
         .from("reservations")
         .select("*", { count: "exact", head: true })
@@ -170,16 +169,13 @@ export default function AdminHomeScreen({ navigation }: any) {
             "AdminMember",
             "정보 및 수강권",
           )}
-          
-          {/* 🚀 [추가] 언제든 청구서를 보낼 수 있는 독립 메뉴 버튼! */}
           {renderGridMenu(
             "이용권 청구",
             "receipt-outline",
-            "#EC4899", // 예쁜 핑크색 
-            "AdminBilling", // 👈 아까 라우터에 등록한 이름!
+            "#EC4899",
+            "AdminBilling",
             "이용권 결제 요청",
           )}
-
           {renderGridMenu(
             "예약 현황",
             "calendar-outline",
@@ -187,6 +183,15 @@ export default function AdminHomeScreen({ navigation }: any) {
             "AdminSchedule",
             "출석 및 시간표",
           )}
+          {/* 🚀 정류장 관리 추가 */}
+          {renderGridMenu(
+            "정류장 관리",
+            "location-outline",
+            "#8B5CF6",
+            "ManageSpots",
+            "승하차 위치 등록",
+          )}
+          {/* 🚀 이용권 설정 복구 */}
           {renderGridMenu(
             "이용권 설정",
             "options-outline",
@@ -196,25 +201,36 @@ export default function AdminHomeScreen({ navigation }: any) {
           )}
         </View>
 
+        {/* 🚀 하단 배너: 실시간 관제 센터 */}
         <TouchableOpacity
           style={styles.bannerCard}
-          onPress={() => navigation.navigate("DriverDashboard")}
+          onPress={() => navigation.navigate("RealtimeMap")}
         >
           <View style={styles.bannerInfo}>
             <Ionicons
-              name="bus"
+              name="map"
               size={24}
               color="#FFF"
               style={{ marginBottom: 8 }}
             />
-            <Text style={styles.bannerTitle}>차량 운행 현황</Text>
-            <Text style={styles.bannerSub}>실시간 셔틀 위치 모니터링</Text>
+            <Text style={styles.bannerTitle}>실시간 위치 관제</Text>
+            <Text style={styles.bannerSub}>운행 중인 셔틀 위치 모니터링</Text>
           </View>
           <Ionicons
             name="chevron-forward"
             size={24}
             color="rgba(255,255,255,0.5)"
           />
+        </TouchableOpacity>
+
+        {/* 🚀 기사 대시보드 바로가기 */}
+        <TouchableOpacity
+          style={{ marginTop: 20, alignItems: "center" }}
+          onPress={() => navigation.navigate("DriverDashboard")}
+        >
+          <Text style={{ color: "#94A3B8", fontSize: 13, fontWeight: "700" }}>
+            기사님 전용 대시보드로 이동
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -248,7 +264,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: { paddingHorizontal: 25, paddingBottom: 40 },
 
-  // 🚀 요약 카드 스타일 고도화
   summaryRow: {
     flexDirection: "row",
     backgroundColor: "#FFF",

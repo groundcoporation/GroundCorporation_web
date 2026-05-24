@@ -20,9 +20,11 @@ export default function PickupMainScreen({ navigation }: any) {
 
   // 실시간 상태 관리
   const [isDriving, setIsDriving] = useState(false); // 기사님 운행 여부
-  const [pickupInfo, setPickupInfo] = useState<any>(null); // 내 픽업 설정 정보
   const [loading, setLoading] = useState(true);
   const [isPassModalVisible, setIsPassModalVisible] = useState(false); // 🚀 이용권 안내 팝업 상태
+
+  // 🚀 [추가] 리스트 형태로 변경 (본인 + 자녀들)
+  const [pickupList, setPickupList] = useState<any[]>([]);
 
   // 1. DB에서 실시간 데이터 및 설정 정보 가져오기
   const fetchLiveStatus = async () => {
@@ -85,38 +87,34 @@ export default function PickupMainScreen({ navigation }: any) {
       console.log("🚐 [디버그] 운행 중 여부:", !!shuttleData);
       setIsDriving(!!shuttleData);
 
-      // (3) 내 픽업 설정 정보 확인
-      console.log("🔍 [디버그] 자녀 목록 및 픽업 정보 조회 시작...");
-      const { data: childrenData, error: childError } = await supabase
-        .from("children")
-        .select("id, child_name")
-        .eq("parent_id", user.id);
+      // (3) 본인 및 자녀 목록 조회
+      const { data: profile } = await supabase.from("users").select("name").eq("id", user.id).single();
+      const { data: kids } = await supabase.from("children").select("id, child_name").eq("parent_id", user.id);
 
-      if (childError) console.error("❌ [디버그] 자녀 정보 조회 에러:", childError);
-      console.log("🧒 [디버그] 조회된 자녀 데이터:", childrenData);
+      // (4) 대상자 리스트 구성 (자녀가 있으면 자녀들, 없으면 본인)
+      const targets = (kids && kids.length > 0) 
+        ? kids.map(k => ({ id: k.id, name: k.child_name, type: "자녀" }))
+        : [{ id: user.id, name: profile?.name || "학부모님", type: "본인" }];
 
-      if (childrenData && childrenData.length > 0) {
-        const primaryChildId = childrenData[0].id;
-        console.log("🧒 [디버그] 대표 자녀 ID:", primaryChildId);
-        
-        const { data: settingsData, error: settingError } = await supabase
-          .from("pickup_settings")
-          .select("*")
-          .eq("child_id", primaryChildId)
-          .single();
-          
-        if (settingError) console.error("❌ [디버그] 픽업 설정 조회 에러:", settingError);
-        console.log("📍 [디버그] 조회된 픽업 설정 데이터:", settingsData);
-        
-        setPickupInfo(settingsData);
-      } else {
-        console.log("⚠️ [디버그] 자녀 데이터가 없습니다.");
-        setPickupInfo(null);
-      }
+      const targetIds = targets.map(t => t.id);
+
+      // (5) 해당 대상들의 픽업 설정 일괄 조회
+      const { data: pickups } = await supabase
+        .from("pickup_settings")
+        .select("child_id, area, apartment, detail_location")
+        .in("child_id", targetIds)
+        .eq("is_active", true);
+
+      // (6) 화면용 데이터 결합
+      const finalList = targets.map(t => ({
+        ...t,
+        info: pickups?.find(p => p.child_id === t.id) || null
+      }));
+
+      setPickupList(finalList);
 
     } catch (error) {
       console.log("❌ [디버그] 데이터 조회 중 예외 발생:", error);
-      setPickupInfo(null);
     } finally {
       setLoading(false);
       console.log("🏁 [디버그] fetchLiveStatus 작업 종료");
@@ -169,29 +167,8 @@ export default function PickupMainScreen({ navigation }: any) {
             </View>
             <Text style={styles.modalTitle}>셔틀버스 이용권 필요</Text>
             <Text style={styles.modalDesc}>
-              셔틀버스 이용을 위해서는{"\n"}셔틀버스 월 이용권 구매를
-              해야합니다.
+              셔틀버스 이용을 위해서는{"\n"}셔틀버스 월 이용권 구매를{"\n"}해야합니다.
             </Text>
-
-            {/* 🛠️ [추가] 팝업 내부 테스트용 강제 부여 버튼 */}
-            <TouchableOpacity 
-              style={{ backgroundColor: '#EF4444', padding: 12, borderRadius: 12, marginBottom: 12, width: '100%', alignItems: 'center' }}
-              onPress={async () => {
-                const { data: { user } } = await supabase.auth.getUser();
-                await supabase.from("user_packages").insert({
-                  user_id: user?.id,
-                  package_name: "테스트용 셔틀 이용권",
-                  status: "active",
-                  is_shuttle: true, 
-                  expiry_date: "2026-12-31" 
-                });
-                Alert.alert("알림", "셔틀 이용권이 강제로 생성되었습니다!");
-                setIsPassModalVisible(false);
-                fetchLiveStatus();
-              }}
-            >
-              <Text style={{ color: 'white', fontWeight: 'bold' }}>[테스트] 이용권 강제 부여</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.modalPrimaryBtn}
@@ -228,6 +205,8 @@ export default function PickupMainScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        
+        {/* 운행 상태 카드 */}
         <View
           style={[
             styles.statusCard,
@@ -265,54 +244,50 @@ export default function PickupMainScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>나의 픽업 정보</Text>
-          <View style={styles.infoCard}>
-            {pickupInfo ? (
-              <>
-                <View style={styles.infoRow}>
-                  <MaterialCommunityIcons
-                    name="bus-side"
-                    size={20}
-                    color="#6366F1"
-                  />
-                  <View style={styles.infoTexts}>
-                    <Text style={styles.infoLabel}>
-                      {pickupInfo.area} 탑승지
-                    </Text>
-                    <Text style={styles.infoValue}>
-                      {pickupInfo.apartment} {pickupInfo.detail_location}
-                    </Text>
+        {/* 🚀 리스트형 픽업 상세 정보 */}
+        <Text style={styles.sectionTitle}>픽업 정보</Text>
+        {pickupList.map((item) => (
+          <View key={item.id} style={styles.infoCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{item.name} 님의 픽업 정보</Text>
+              {item.info ? (
+                <>
+                  <View style={styles.infoRow}>
+                    <MaterialCommunityIcons
+                      name="bus-side"
+                      size={20}
+                      color="#6366F1"
+                    />
+                    <View style={styles.infoTexts}>
+                      <Text style={styles.infoLabel}>
+                        {item.info.area} 탑승지
+                      </Text>
+                      <Text style={styles.infoValue}>
+                        {item.info.apartment} {item.info.detail_location}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-                <View style={[styles.infoRow, { marginTop: 15 }]}>
-                  <MaterialCommunityIcons
-                    name="home-export-outline"
-                    size={20}
-                    color="#10B981"
-                  />
-                  <View style={styles.infoTexts}>
-                    <Text style={styles.infoLabel}>하원 정보</Text>
-                    <Text style={styles.infoValue}>
-                      지정된 장소에서 하차 (등원과 동일)
-                    </Text>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <TouchableOpacity
-                style={styles.emptyInfoContainer}
-                onPress={() => navigation.navigate("PickupApply")}
-              >
-                <Ionicons name="add-circle-outline" size={32} color="#6366F1" />
-                <Text style={styles.emptyInfoText}>
-                  등록된 픽업 정보가 없습니다.{"\n"}여기를 눌러 정보를
-                  설정해주세요.
-                </Text>
+                </>
+              ) : (
+                <TouchableOpacity
+                  style={styles.emptyInfoContainer}
+                  onPress={() => navigation.navigate("PickupApply", { targetId: item.id })}
+                >
+                  <Ionicons name="add-circle-outline" size={32} color="#6366F1" />
+                  <Text style={styles.emptyInfoText}>
+                    등록된 픽업 정보가 없습니다.{"\n"}여기를 눌러 정보를
+                    설정해주세요.
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {item.info && (
+              <TouchableOpacity style={styles.editBtn} onPress={() => navigation.navigate("PickupApply", { targetId: item.id })}>
+                <Text style={styles.editBtnText}>변경</Text>
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        ))}
 
         <TouchableOpacity
           style={styles.actionBtn}
@@ -395,8 +370,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#F1F5F9",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
   },
-  infoRow: { flexDirection: "row", alignItems: "center" },
+  name: { fontSize: 15, fontWeight: "800", color: "#1E293B" },
+  infoRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
   infoTexts: { marginLeft: 12 },
   infoLabel: { fontSize: 12, color: "#64748B", fontWeight: "600" },
   infoValue: {
@@ -413,6 +393,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     lineHeight: 20,
   },
+  editBtn: { backgroundColor: "#F1F5F9", padding: 10, borderRadius: 8, marginLeft: 10 },
+  editBtnText: { color: "#4F46E5", fontWeight: "700" },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",

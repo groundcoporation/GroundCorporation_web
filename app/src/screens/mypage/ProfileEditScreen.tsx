@@ -39,6 +39,7 @@ export default function ProfileEditScreen({ navigation }: any) {
         setEmail(user.email || "");
         setCreatedAt(new Date(user.created_at).toLocaleDateString() || "");
         
+        // 1. 유저 기본 정보 가져오기
         const { data: profile } = await supabase
           .from("users")
           .select("*")
@@ -48,8 +49,24 @@ export default function ProfileEditScreen({ navigation }: any) {
         if (profile) {
           setName(profile.name || "");
           setPhone(profile.phone || "");
-          setPickupSpot(profile.default_pickup || "설정된 장소 없음"); 
         }
+
+        // 🚀 2. 픽업 설정 테이블에서 해당 부모님의 자녀 정보와 연결된 정류장 가져오기
+        // children 테이블을 조인하여 parent_id가 현재 로그인 유저인 데이터 조회
+        const { data: pickupData } = await supabase
+          .from("pickup_settings")
+          .select("apartment")
+          .eq("is_active", true)
+          .in("child_id", (
+            await supabase
+              .from("children")
+              .select("id")
+              .eq("parent_id", user.id)
+          ).data?.map(c => c.id) || [])
+          .order("updated_at", { ascending: false })
+          .maybeSingle();
+
+        setPickupSpot(pickupData ? pickupData.apartment : "설정된 장소 없음");
       }
     } catch (error) {
       console.log("유저 정보 로드 실패:", error);

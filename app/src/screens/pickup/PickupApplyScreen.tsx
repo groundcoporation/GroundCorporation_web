@@ -25,6 +25,9 @@ export default function PickupApplyScreen({ navigation }: any) {
   const [detailLocation, setDetailLocation] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 🚀 [추가] 현재 부모님의 지점 아이디 저장 상태
+  const [userBranchId, setUserBranchId] = useState<string | null>(null);
+
   // 💡 정류장 목록 DB 연동 (코치들이 만든 공식 정류장만 들어옴)
   const [spots, setSpots] = useState<any[]>([]);
   const [loadingSpots, setLoadingSpots] = useState(false);
@@ -45,6 +48,17 @@ export default function PickupApplyScreen({ navigation }: any) {
       } = await supabase.auth.getUser();
       if (!user) return;
 
+      // 🚀 1-1. 부모님의 지점 정보(branch_id) 가져오기
+      const { data: profile } = await supabase
+        .from("users")
+        .select("branch_id")
+        .eq("id", user.id)
+        .single();
+      
+      if (profile?.branch_id) {
+        setUserBranchId(profile.branch_id);
+      }
+
       // 2. 내 자녀 목록 가져오기
       const { data: kidsData } = await supabase
         .from("children")
@@ -57,9 +71,13 @@ export default function PickupApplyScreen({ navigation }: any) {
       }
 
       // 3. 공식 정류장 목록 가져오기 (코치 지정)
-      const { data: spotData, error: spotError } = await supabase
-        .from("pickup_spots")
-        .select("id, name");
+      // 🚀 내 지점의 정류장만 가져오도록 쿼리 수정
+      let spotQuery = supabase.from("pickup_spots").select("id, name");
+      if (profile?.branch_id) {
+        spotQuery = spotQuery.eq("branch_id", profile.branch_id);
+      }
+      
+      const { data: spotData, error: spotError } = await spotQuery;
 
       if (!spotError && spotData) {
         setSpots(spotData);
@@ -124,6 +142,7 @@ export default function PickupApplyScreen({ navigation }: any) {
 
       const { error } = await supabase.from("pickup_settings").upsert({
         child_id: selectedChildId, // 🚀 하드코딩 제거! 실제 선택된 자녀 ID 꽂기
+        branch_id: userBranchId, // 🚀 [추가] 부모님의 지점 ID 자동 저장
         area: area,
         pickup_spot_id: selectedSpot.id,
         apartment: selectedSpot.name, // 💡 DB의 공식 정류장 이름 저장
@@ -152,6 +171,12 @@ export default function PickupApplyScreen({ navigation }: any) {
         "알림",
         "공식 정류장과 상세 위치를 모두 입력해야 기사님이 찾으실 수 있어요!",
       );
+      return;
+    }
+
+    // 🚀 지점 정보 없을 시 방어 로직 추가
+    if (!userBranchId) {
+      Alert.alert("알림", "소속 지점 정보가 없습니다. 다시 로그인해 주세요.");
       return;
     }
 
