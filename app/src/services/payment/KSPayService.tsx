@@ -56,11 +56,21 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
         }
       }
 
-      const canOpen = await Linking.canOpenURL(finalUrl);
-      if (canOpen) {
+      // 🚀 개선: canOpenURL 체크를 건너뛰거나 더 유연하게 처리
+      try {
         await Linking.openURL(finalUrl);
-      } else {
-        console.warn(`[KSPay] ⚠️ 앱 실행 불가 (미설치): ${finalUrl}`);
+      } catch (err) {
+        console.warn(`[KSPay] ⚠️ 앱 실행 실패: ${finalUrl}`, err);
+
+        // 인텐트 URL에 마켓 이동 정보가 포함된 경우 처리 (선택 사항)
+        if (url.includes("package=")) {
+          const packageName = url.split("package=")[1]?.split(";")[0];
+          if (packageName) {
+            Linking.openURL(`market://details?id=${packageName}`);
+            return;
+          }
+        }
+
         Alert.alert(
           "앱 미설치",
           "결제를 진행할 카드사 앱이 설치되어 있지 않습니다.",

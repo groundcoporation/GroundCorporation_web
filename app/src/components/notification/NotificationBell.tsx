@@ -28,20 +28,22 @@ export default function NotificationBell() {
 
   useEffect(() => {
     getUserIdAndInit();
-    
+
     // 🚀 실시간 알림 구독
     const channel = supabase
-      .channel('bell_realtime_channel')
+      .channel("bell_realtime_channel")
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications' },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications" },
         () => {
-          console.log("🔔 [알림 종 실시간 감지] 배지 카운트와 리스트를 즉시 동기화합니다.");
-          fetchUnreadCount(); 
+          console.log(
+            "🔔 [알림 종 실시간 감지] 배지 카운트와 리스트를 즉시 동기화합니다.",
+          );
+          fetchUnreadCount();
           if (modalVisible) {
             reloadNotificationsOnly();
           }
-        }
+        },
       )
       .subscribe();
 
@@ -51,7 +53,9 @@ export default function NotificationBell() {
   }, [currentUserId, modalVisible]);
 
   const getUserIdAndInit = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user) {
       setCurrentUserId(user.id);
       fetchUnreadCount(user.id);
@@ -75,7 +79,7 @@ export default function NotificationBell() {
   const fetchUnreadCount = async (userId?: string) => {
     const id = userId || currentUserId;
     if (!id) return;
-    
+
     const { count, error } = await supabase
       .from("notifications")
       .select("*", { count: "exact", head: true })
@@ -121,7 +125,7 @@ export default function NotificationBell() {
       .eq("id", id);
 
     if (!error) {
-      setNotifications(notifications.filter(n => n.id !== id));
+      setNotifications(notifications.filter((n) => n.id !== id));
       fetchUnreadCount();
     }
   };
@@ -132,9 +136,11 @@ export default function NotificationBell() {
       .from("notifications")
       .update({ is_read: true })
       .eq("id", id);
-    
+
     if (!error) {
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+      );
       fetchUnreadCount();
     }
   };
@@ -142,11 +148,11 @@ export default function NotificationBell() {
   // 🚀 [전체 삭제 기능 원상복구]
   const deleteAllNotifications = async () => {
     if (!currentUserId) return;
-    
+
     Alert.alert("알림 삭제", "모든 알림 내역을 삭제하시겠습니까?", [
       { text: "취소", style: "cancel" },
-      { 
-        text: "삭제", 
+      {
+        text: "삭제",
         style: "destructive",
         onPress: async () => {
           const { error } = await supabase
@@ -158,15 +164,15 @@ export default function NotificationBell() {
             setNotifications([]);
             setUnreadCount(0);
           }
-        }
-      }
+        },
+      },
     ]);
   };
 
   // 🚀 [🔥 버그 수정] 모두 읽음 시 데이터가 증발하던 동기화 로직 전면 수정
   const markAllAsRead = async () => {
     if (!currentUserId) return;
-    
+
     const { error } = await supabase
       .from("notifications")
       .update({ is_read: true })
@@ -176,7 +182,9 @@ export default function NotificationBell() {
     if (!error) {
       setUnreadCount(0);
       // 기존 내역을 지우지 않고, 배열 내 모든 아이템들의 읽음 여부(is_read)만 true로 완벽 변환하여 유지시킵니다!
-      setNotifications(prevNotis => prevNotis.map(n => ({ ...n, is_read: true })));
+      setNotifications((prevNotis) =>
+        prevNotis.map((n) => ({ ...n, is_read: true })),
+      );
     }
   };
 
@@ -186,7 +194,9 @@ export default function NotificationBell() {
         <Ionicons name="notifications-outline" size={24} color="#111827" />
         {unreadCount > 0 && (
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+            <Text style={styles.badgeText}>
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </Text>
           </View>
         )}
       </TouchableOpacity>
@@ -199,13 +209,20 @@ export default function NotificationBell() {
               <View style={styles.dropdownContainer}>
                 {/* 🚀 삼각형 위치: 58에서 62로 수정하여 살짝 더 왼쪽으로 이동 */}
                 <View style={styles.triangle} />
-                
+
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>최근 알림</Text>
-                  <View style={{ flexDirection: 'row' }}>
+                  <View style={{ flexDirection: "row" }}>
                     {/* 🚀 팀장님 요청: 전체 삭제를 왼쪽으로 배치 */}
-                    <TouchableOpacity onPress={deleteAllNotifications} style={{ marginRight: 12 }}>
-                      <Text style={[styles.headerActionText, { color: '#EF4444' }]}>전체 삭제</Text>
+                    <TouchableOpacity
+                      onPress={deleteAllNotifications}
+                      style={{ marginRight: 12 }}
+                    >
+                      <Text
+                        style={[styles.headerActionText, { color: "#EF4444" }]}
+                      >
+                        전체 삭제
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={markAllAsRead}>
                       <Text style={styles.headerActionText}>모두 읽음</Text>
@@ -214,22 +231,33 @@ export default function NotificationBell() {
                 </View>
 
                 {loading ? (
-                  <ActivityIndicator color="#6366F1" style={{ marginVertical: 30 }} />
+                  <ActivityIndicator
+                    color="#6366F1"
+                    style={{ marginVertical: 30 }}
+                  />
                 ) : notifications.length === 0 ? (
                   <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>새로운 알림이 없습니다.</Text>
+                    <Text style={styles.emptyText}>
+                      새로운 알림이 없습니다.
+                    </Text>
                   </View>
                 ) : (
-                  <ScrollView style={{ maxHeight: 350 }} showsVerticalScrollIndicator={false}>
+                  <ScrollView
+                    style={{ maxHeight: 350 }}
+                    showsVerticalScrollIndicator={false}
+                  >
                     {notifications.map((item) => (
                       /* 🚀 [수정] 단순 View였던 알림 행을 터치 가능한 TouchableOpacity로 변경하고 경우의 수 분기 처리! */
-                      <TouchableOpacity 
-                        key={item.id} 
-                        style={[styles.notiItem, !item.is_read && styles.unreadNoti]}
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[
+                          styles.notiItem,
+                          !item.is_read && styles.unreadNoti,
+                        ]}
                         activeOpacity={0.7}
                         onPress={async () => {
                           setModalVisible(false); // 1. 모달 팝업 닫기
-                          markAsRead(item.id);    // 2. 알림 읽음 처리
+                          markAsRead(item.id); // 2. 알림 읽음 처리
 
                           // =======================================================================================
                           // 💡 [본부장님 기획구역 주석 보강] 알림 종류(type)에 따라 원하는 전역 스크린 화면으로 네비게이션 전환 처리!
@@ -246,41 +274,50 @@ export default function NotificationBell() {
 
                               if (realNotice) {
                                 // 가져온 진짜 공지글 데이터 덩어리(realNotice)를 파라미터로 실어 상세 화면("NoticeDetail")으로 완벽히 점프시킵니다.
-                                navigation.navigate("NoticeDetail", { notice: realNotice }); 
+                                navigation.navigate("NoticeDetail", {
+                                  notice: realNotice,
+                                });
                                 return;
                               }
                             } catch (err) {
                               console.log("공지글 상세 데이터 조회 실패:", err);
                             }
-                            
+
                             // 💡 안전용 백업 폴백: 글 데이터 호출에 실패한 경우 공지 리스트로 안전하게 안내합니다.
                             navigation.navigate("NoticeList");
-
                           } else if (item.type === "payment") {
                             // 💳 [결제 관련 알림 터치 시]
                             // 결제 영수증이나 청구 확인 내역으로 즉시 보낼 수 있도록 마이페이지("MyPage")로 라우팅을 넘깁니다.
-                            navigation.navigate("MyPage"); 
-
+                            navigation.navigate("MyPage");
                           } else if (item.type === "attendance") {
                             // 🚌 [출결 및 등하원 알림 터치 시]
                             // 등하원 픽업 버스 상태를 부모가 확인할 수 있도록 출석확인 스크린("Attendance")으로 네비게이션을 넘깁니다.
-                            navigation.navigate("Attendance"); 
+                            navigation.navigate("Attendance");
                           }
                           // =======================================================================================
                         }}
                       >
                         <View style={styles.notiContent}>
                           <Text style={styles.notiTitle}>{item.title}</Text>
-                          <Text style={styles.notiMessage} numberOfLines={2}>{item.message}</Text>
+                          <Text style={styles.notiMessage} numberOfLines={2}>
+                            {item.message}
+                          </Text>
                           <Text style={styles.notiDate}>
-                            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(item.created_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
                           </Text>
                         </View>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           onPress={() => deleteNotification(item.id)}
                           style={styles.deleteBtn}
                         >
-                          <Ionicons name="trash-outline" size={16} color="#D1D5DB" />
+                          <Ionicons
+                            name="trash-outline"
+                            size={16}
+                            color="#D1D5DB"
+                          />
                         </TouchableOpacity>
                       </TouchableOpacity>
                     ))}
@@ -314,7 +351,7 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: "transparent" },
   dropdownContainer: {
     position: "absolute",
-    top: Platform.OS === 'ios' ? 100 : 65, 
+    top: Platform.OS === "ios" ? 100 : 65,
     right: 15,
     width: width * 0.85,
     backgroundColor: "#FFF",
@@ -331,7 +368,7 @@ const styles = StyleSheet.create({
   triangle: {
     position: "absolute",
     top: -8,
-    right: 67, 
+    right: 67,
     width: 0,
     height: 0,
     backgroundColor: "transparent",
@@ -361,10 +398,24 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F8FAFC",
     alignItems: "center",
   },
-  unreadNoti: { backgroundColor: "#F9FAFB", borderRadius: 10, paddingHorizontal: 8 },
+  unreadNoti: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+  },
   notiContent: { flex: 1 },
-  notiTitle: { fontSize: 13, fontWeight: "700", color: "#1E293B", marginBottom: 2 },
-  notiMessage: { fontSize: 12, color: "#64748B", lineHeight: 16, marginBottom: 4 },
+  notiTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1E293B",
+    marginBottom: 2,
+  },
+  notiMessage: {
+    fontSize: 12,
+    color: "#64748B",
+    lineHeight: 16,
+    marginBottom: 4,
+  },
   notiDate: { fontSize: 10, color: "#94A3B8" },
   deleteBtn: { padding: 8, marginLeft: 5 },
   emptyContainer: { paddingVertical: 40, alignItems: "center" },
