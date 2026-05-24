@@ -92,6 +92,7 @@ import AdminSettingScreen from "./src/screens/admin/AdminSettingScreen";
 import AdminMemberDetailScreen from "./src/screens/admin/AdminMemberDetailScreen"; // 관리자페이지 회원 상세 화면
 // 🚀 [추가] 관리자용 청구서 발행 화면
 import AdminBillingScreen from "./src/screens/admin/AdminBillingScreen";
+import ManageSpotsScreen from "./src/screens/admin/ManageSpotsScreen"; // 🚀 추가!
 
 const Stack = createNativeStackNavigator();
 
@@ -256,6 +257,9 @@ export default function App() {
           <Stack.Screen name="AdminMemberDetail" component={AdminMemberDetailScreen} />
           {/* 🚀 [추가] 관리자 청구서 발행 화면 등록 */}
           <Stack.Screen name="AdminBilling" component={AdminBillingScreen} />
+          
+          {/* 🚀 [추가] 관리자 정류장 관리 등록 */}
+          <Stack.Screen name="ManageSpots" component={ManageSpotsScreen} />
 
         </Stack.Navigator>
       </NavigationContainer>
