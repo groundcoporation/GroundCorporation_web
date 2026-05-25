@@ -25,7 +25,10 @@ export const businessCategories = [
   },
   {
     category: "스포테인먼트",
-    units: [{ id: "agency", title: "에이전시", link: "/business/agency/" }],
+    units: [
+      { id: "agency", title: "에이전시", link: "/business/agency/" },
+      { id: "management", title: "매니지먼트", link: "/business/management/" },
+    ],
   },
   {
     category: "IT 솔루션",
