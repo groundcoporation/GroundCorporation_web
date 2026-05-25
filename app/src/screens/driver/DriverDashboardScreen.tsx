@@ -18,7 +18,7 @@ import { sendGlobalPushNotification } from "../../services/notificationService";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
-import * as Location from 'expo-location'; // 🚀 [추가] 실시간 위치 추적 라이브러리
+import * as Location from "expo-location"; // 🚀 [추가] 실시간 위치 추적 라이브러리
 import { useAuth } from "../../context/AuthContext"; // 🚀 [추가] 전역 상태에서 권한 및 지점 가져오기
 
 dayjs.extend(utc);
@@ -31,14 +31,17 @@ export default function DriverDashboardScreen({ navigation }: any) {
   const [isDriving, setIsDriving] = useState(false); // 기사님 운행 여부
   const [loading, setLoading] = useState(true);
   const [pickupGroups, setPickupGroups] = useState<any[]>([]);
-  
+
   // 🚀 [추가] 기사님 정보 및 위치 구독 객체 상태 관리
   const [driverInfo, setDriverInfo] = useState<any>(null);
-  const [locationSubscription, setLocationSubscription] = useState<Location.LocationSubscription | null>(null);
+  const [locationSubscription, setLocationSubscription] =
+    useState<Location.LocationSubscription | null>(null);
 
   // 🚀 [안전장치] 위치 전송 즉시 차단용 Ref
   const isDrivingRef = useRef(false);
-  useEffect(() => { isDrivingRef.current = isDriving; }, [isDriving]);
+  useEffect(() => {
+    isDrivingRef.current = isDriving;
+  }, [isDriving]);
 
   // 관리자 여부 확인
   const isDeveloper = role === "admin" || driverInfo?.role === "admin";
@@ -59,11 +62,11 @@ export default function DriverDashboardScreen({ navigation }: any) {
       .channel("realtime:pickup_dashboard")
       .on(
         "postgres_changes",
-        { 
-          event: "*", 
-          schema: "public", 
+        {
+          event: "*",
+          schema: "public",
           table: "pickup_settings",
-          filter: targetBranch ? `branch_id=eq.${targetBranch}` : undefined 
+          filter: targetBranch ? `branch_id=eq.${targetBranch}` : undefined,
         },
         () => {
           if (targetBranch) fetchTodayPickups(targetBranch);
@@ -78,75 +81,89 @@ export default function DriverDashboardScreen({ navigation }: any) {
 
   // 🚀 [추가] 위치 전송을 시작하는 독립 함수 (화면 재진입 시 자동 복구용)
   const startLocationTracking = async (profile: any) => {
-  let { status } = await Location.requestForegroundPermissionsAsync();
-  if (status !== 'granted') return null;
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") return null;
 
-  // 🚀 테스트를 위해 1초(1000ms)로 설정
-  //추후 distanceInterval: 10 으로 변경예정( 거리가 10미터 이상 이동했을 때만 업데이트 )
-  const subscription = await Location.watchPositionAsync(
-    { accuracy: Location.Accuracy.High, timeInterval: 1000, distanceInterval: 1},
-    async (location) => {
-      // 🚀 [안전장치] 운행 중이 아니면 즉시 리턴
-      if (!isDrivingRef.current) return;
+    // 🚀 테스트를 위해 1초(1000ms)로 설정
+    //추후 distanceInterval: 10 으로 변경예정( 거리가 10미터 이상 이동했을 때만 업데이트 )
+    const subscription = await Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.High,
+        timeInterval: 1000,
+        distanceInterval: 1,
+      },
+      async (location) => {
+        // 🚀 [안전장치] 운행 중이 아니면 즉시 리턴
+        if (!isDrivingRef.current) return;
 
-      const { latitude, longitude } = location.coords;
-      
-      // 💡 [테스트용 로그] 1초마다 찍히는지 확인
-      console.log(`📍 [GPS 테스트 중] ${new Date().toLocaleTimeString()} - 위도: ${latitude.toFixed(6)}, 경도: ${longitude.toFixed(6)}`);
-      
-      const { error } = await supabase.from('shuttle_status').upsert({
-        shuttle_id: profile.id,
-        driver_id: profile.id,
-        is_driving: true,
-        lat: latitude,
-        lng: longitude,
-        last_update: new Date().toISOString(),
-        branch_id: isDeveloper ? branchId : profile.branch_id
-      });
-      
-      if (error) console.log("🚨 DB 저장 에러:", error.message);
-      else console.log("✅ DB 업데이트 성공");
-    }
-  );
-  return subscription;
-};
+        const { latitude, longitude } = location.coords;
+
+        // 💡 [테스트용 로그] 1초마다 찍히는지 확인
+        console.log(
+          `📍 [GPS 테스트 중] ${new Date().toLocaleTimeString()} - 위도: ${latitude.toFixed(6)}, 경도: ${longitude.toFixed(6)}`,
+        );
+
+        const { error } = await supabase.from("shuttle_status").upsert({
+          shuttle_id: profile.id,
+          driver_id: profile.id,
+          is_driving: true,
+          lat: latitude,
+          lng: longitude,
+          last_update: new Date().toISOString(),
+          branch_id: isDeveloper ? branchId : profile.branch_id,
+        });
+
+        if (error) console.log("🚨 DB 저장 에러:", error.message);
+        else console.log("✅ DB 업데이트 성공");
+      },
+    );
+    return subscription;
+  };
 
   // 🚀 [수정] 로그인한 기사님의 지점 정보 및 기존 운행 상태 확인 (profile null 체크 추가)
   const fetchDriverInfoAndPickups = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
-      
+
       const { data: profile } = await supabase
         .from("users")
         .select("id, name, branch_id, role")
         .eq("id", user.id)
         .single();
-      
-      if (profile) { // 💡 [TS 해결] profile이 확실히 존재할 때만 아래 로직 실행
+
+      if (profile) {
+        // 💡 [TS 해결] profile이 확실히 존재할 때만 아래 로직 실행
         setDriverInfo(profile);
-        
+
         // 💡 [핵심] DB에서 현재 운행 상태를 조회하여 상태 복구
         const { data: statusData, error: statusError } = await supabase
           .from("shuttle_status")
           .select("is_driving")
           .eq("shuttle_id", profile.id)
           .maybeSingle();
-        
+
         const drivingNow = !!statusData?.is_driving;
         setIsDriving(drivingNow);
         isDrivingRef.current = drivingNow;
 
         // 운행 중이라면 위치 추적 자동 재개
         if (drivingNow) {
-          console.log("🚐 [운행 복구] 기존 운행 상태를 감지하여 위치 추적을 자동 재개합니다.");
+          console.log(
+            "🚐 [운행 복구] 기존 운행 상태를 감지하여 위치 추적을 자동 재개합니다.",
+          );
           const sub = await startLocationTracking(profile);
           if (sub) setLocationSubscription(sub);
         }
 
         // 타겟 지점: 어드민이면 Context의 전역 지점, 기사면 본인 소속 지점
-        const targetBranch = (profile.role === "admin" || role === "admin") ? branchId : profile.branch_id;
+        const targetBranch =
+          profile.role === "admin" || role === "admin"
+            ? branchId
+            : profile.branch_id;
 
         if (targetBranch) {
           fetchTodayPickups(targetBranch);
@@ -162,7 +179,7 @@ export default function DriverDashboardScreen({ navigation }: any) {
   useFocusEffect(
     useCallback(() => {
       fetchDriverInfoAndPickups();
-    }, [])
+    }, []),
   );
 
   const fetchTodayPickups = async (targetBranchId: string) => {
@@ -205,7 +222,7 @@ export default function DriverDashboardScreen({ navigation }: any) {
         const newGroups = Object.values(grouped);
         // 🚀 [핵심] JSON으로 변환하여 값이 진짜 바뀐 경우에만 상태 업데이트
         if (JSON.stringify(newGroups) !== JSON.stringify(pickupGroups)) {
-           setPickupGroups(newGroups);
+          setPickupGroups(newGroups);
         }
       } else {
         setPickupGroups([]);
@@ -219,52 +236,52 @@ export default function DriverDashboardScreen({ navigation }: any) {
 
   // 🚀 [수정] 운행 상태 토글 스위치 핸들러: 종료 시 확실한 false 처리
   const toggleDrivingStatus = async (nextStatus: boolean) => {
-  if (!driverInfo) return;
+    if (!driverInfo) return;
 
-  try {
-    if (nextStatus) {
-      // 🟢 운행 시작
-      setIsDriving(true);
-      isDrivingRef.current = true;
+    try {
+      if (nextStatus) {
+        // 🟢 운행 시작
+        setIsDriving(true);
+        isDrivingRef.current = true;
 
-      await supabase.from('shuttle_status').upsert({
-        shuttle_id: driverInfo.id,
-        is_driving: true,
-        updated_at: new Date().toISOString()
-      });
+        await supabase.from("shuttle_status").upsert({
+          shuttle_id: driverInfo.id,
+          is_driving: true,
+          updated_at: new Date().toISOString(),
+        });
 
-      const sub = await startLocationTracking(driverInfo);
-      if (sub) setLocationSubscription(sub);
-      Alert.alert("운행 시작", "운행이 시작되었습니다.");
-    } else {
-      // 🛑 [강력한 종료]
-      setIsDriving(false);
-      isDrivingRef.current = false; // GPS 추적기 차단
-
-      // 1. 모든 구독 객체를 찾아서 강제로 remove
-      if (locationSubscription) {
-        locationSubscription.remove();
-        setLocationSubscription(null);
-      }
-      
-      // 2. DB를 FALSE로 강제 업데이트
-      const { error } = await supabase
-        .from('shuttle_status')
-        .update({ is_driving: false, updated_at: new Date().toISOString() })
-        .eq('shuttle_id', driverInfo.id);
-
-      if (error) {
-        console.error("DB 업데이트 실패:", error);
+        const sub = await startLocationTracking(driverInfo);
+        if (sub) setLocationSubscription(sub);
+        Alert.alert("운행 시작", "운행이 시작되었습니다.");
       } else {
-        console.log("🛑 성공: DB 상태가 false로 고정되었습니다.");
+        // 🛑 [강력한 종료]
+        setIsDriving(false);
+        isDrivingRef.current = false; // GPS 추적기 차단
+
+        // 1. 모든 구독 객체를 찾아서 강제로 remove
+        if (locationSubscription) {
+          locationSubscription.remove();
+          setLocationSubscription(null);
+        }
+
+        // 2. DB를 FALSE로 강제 업데이트
+        const { error } = await supabase
+          .from("shuttle_status")
+          .update({ is_driving: false, updated_at: new Date().toISOString() })
+          .eq("shuttle_id", driverInfo.id);
+
+        if (error) {
+          console.error("DB 업데이트 실패:", error);
+        } else {
+          console.log("🛑 성공: DB 상태가 false로 고정되었습니다.");
+        }
+
+        Alert.alert("운행 종료", "운행이 종료되었습니다.");
       }
-      
-      Alert.alert("운행 종료", "운행이 종료되었습니다.");
+    } catch (e) {
+      console.error("오류 발생:", e);
     }
-  } catch (e) {
-    console.error("오류 발생:", e);
-  }
-};
+  };
 
   const handleStudentBoarding = async (
     groupId: string,
@@ -338,17 +355,29 @@ export default function DriverDashboardScreen({ navigation }: any) {
         {isDeveloper ? (
           <TouchableOpacity
             style={styles.branchSwitcher}
-            onPress={() => setBranch(branchId === "branch_1" ? "branch_2" : "branch_1")}
+            onPress={() =>
+              setBranch(branchId === "branch_1" ? "branch_2" : "branch_1")
+            }
           >
             <Text style={styles.branchSwitcherText}>
               {branchId === "branch_1" ? "시흥본점" : "영종도점"} 셔틀
             </Text>
-            <Ionicons name="swap-horizontal" size={16} color="#FFF" style={{ marginLeft: 4 }} />
+            <Ionicons
+              name="swap-horizontal"
+              size={16}
+              color="#FFF"
+              style={{ marginLeft: 4 }}
+            />
           </TouchableOpacity>
         ) : (
           <View style={styles.branchStatic}>
             <Text style={styles.branchStaticText}>
-              {driverInfo?.branch_id === "branch_1" ? "시흥본점" : driverInfo?.branch_id === "branch_2" ? "영종도점" : "내 지점"} 셔틀
+              {driverInfo?.branch_id === "branch_1"
+                ? "시흥본점"
+                : driverInfo?.branch_id === "branch_2"
+                  ? "영종도점"
+                  : "내 지점"}{" "}
+              셔틀
             </Text>
           </View>
         )}
@@ -371,7 +400,11 @@ export default function DriverDashboardScreen({ navigation }: any) {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {loading ? (
-          <ActivityIndicator size="large" color="#1E293B" style={{ marginTop: 50 }} />
+          <ActivityIndicator
+            size="large"
+            color="#1E293B"
+            style={{ marginTop: 50 }}
+          />
         ) : pickupGroups.length > 0 ? (
           pickupGroups.map((group) => (
             <View key={group.id} style={styles.groupCard}>
@@ -409,10 +442,24 @@ export default function DriverDashboardScreen({ navigation }: any) {
             </View>
           ))
         ) : (
-          <View style={{ alignItems: 'center', marginTop: 60 }}>
+          <View style={{ alignItems: "center", marginTop: 60 }}>
             <Ionicons name="bus-outline" size={60} color="#CBD5E1" />
-            <Text style={{ color: '#64748B', fontSize: 16, fontWeight: '700', marginTop: 16, textAlign: 'center' }}>
-              현재 {isDeveloper ? (branchId === "branch_1" ? "시흥본점" : "영종도점") : "해당 지점"}에 배정된{'\n'}오늘의 셔틀 탑승 학생이 없습니다.
+            <Text
+              style={{
+                color: "#64748B",
+                fontSize: 16,
+                fontWeight: "700",
+                marginTop: 16,
+                textAlign: "center",
+              }}
+            >
+              현재{" "}
+              {isDeveloper
+                ? branchId === "branch_1"
+                  ? "시흥본점"
+                  : "영종도점"
+                : "해당 지점"}
+              에 배정된{"\n"}오늘의 셔틀 탑승 학생이 없습니다.
             </Text>
           </View>
         )}
@@ -423,27 +470,80 @@ export default function DriverDashboardScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F1F5F9" },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, backgroundColor: "#1E293B" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 20,
+    backgroundColor: "#1E293B",
+  },
   headerLeft: { flexDirection: "row", alignItems: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "800", color: "#FFFFFF", marginLeft: 15 },
-  branchSwitcher: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginLeft: 15,
+  },
+  branchSwitcher: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
   branchSwitcherText: { fontSize: 13, fontWeight: "700", color: "#FFF" },
-  branchStatic: { backgroundColor: "rgba(255,255,255,0.1)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  branchStatic: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
   branchStaticText: { fontSize: 13, fontWeight: "700", color: "#E2E8F0" },
-  controlPanel: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#FFFFFF", padding: 20, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
+  controlPanel: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
   statusInfo: { flexDirection: "row", alignItems: "center" },
   statusIndicator: { width: 12, height: 12, borderRadius: 6, marginRight: 10 },
   activeIndicator: { backgroundColor: "#10B981" },
   inactiveIndicator: { backgroundColor: "#94A3B8" },
   statusText: { fontSize: 16, fontWeight: "700", color: "#1E293B" },
   scrollContent: { padding: 16 },
-  groupCard: { backgroundColor: "#FFFFFF", borderRadius: 16, marginBottom: 20, elevation: 1 },
-  groupHeader: { padding: 16, backgroundColor: "#F8FAFC", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
+  groupCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    marginBottom: 20,
+    elevation: 1,
+  },
+  groupHeader: {
+    padding: 16,
+    backgroundColor: "#F8FAFC",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
   spotNameText: { fontSize: 18, fontWeight: "800", color: "#1E293B" },
   studentList: { padding: 16 },
-  studentRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  studentRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
   studentName: { fontSize: 16, fontWeight: "800", color: "#1E293B" },
-  statusBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, minWidth: 90, alignItems: "center" },
+  statusBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 90,
+    alignItems: "center",
+  },
   pendingBtn: { backgroundColor: "#FFFFFF", borderColor: "#CBD5E1" },
   boardedBtn: { backgroundColor: "#F59E0B", borderColor: "#F59E0B" },
   droppedBtn: { backgroundColor: "#10B981", borderColor: "#10B981" },
