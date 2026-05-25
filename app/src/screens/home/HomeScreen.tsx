@@ -35,7 +35,7 @@ interface BizInfo {
   contact: string; // 👈 고객센터 연락처 추가
   tongshin_no: string;
   company_name: string;
-  
+
   terms_url?: string; // 👈 지점별 이용약관 링크 (선택형 폴백 처리)
   privacy_url?: string; // 👈 지점별 개인정보 처리방침 링크 (선택형 폴백 처리)
   escrow_no?: string;
@@ -46,7 +46,7 @@ const { width } = Dimensions.get("window");
 export default function HomeScreen({ navigation }: any) {
   // 🚀 [추가] 전역 지점 ID 호출
   const { branchId } = useAuth();
-  
+
   // 🚀 [추가] 화면 포커스 여부 감시 센서 선언 (유저 눈에 홈 화면이 띄워져 있는지 감지)
   const isFocused = useIsFocused();
 
@@ -67,7 +67,9 @@ export default function HomeScreen({ navigation }: any) {
   // 🚀 [수정] branchId가 변경되거나 화면이 유저 눈앞에 다시 포커스될 때마다 데이터를 실시간 갱신합니다.
   useEffect(() => {
     if (branchId && isFocused) {
-      console.log("🏠 [포커스 감지] 홈 화면 진입 또는 리턴이 확인되어 최신 데이터를 새로고침합니다.");
+      console.log(
+        "🏠 [포커스 감지] 홈 화면 진입 또는 리턴이 확인되어 최신 데이터를 새로고침합니다.",
+      );
       fetchData();
     }
   }, [branchId, isFocused]);
@@ -157,7 +159,7 @@ export default function HomeScreen({ navigation }: any) {
           .order("is_important", { ascending: false })
           .order("created_at", { ascending: false })
           .limit(2);
-        
+
         setHomeNotices(notices || []);
       }
     } catch (e) {
@@ -333,107 +335,155 @@ export default function HomeScreen({ navigation }: any) {
 
           {/* 2. Quick Menu */}
           <View style={styles.quickMenuGrid}>
+            {/* 1. 수업 예약 - 빨강 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("Reservation")}
             >
-              <View style={styles.menuIconBg}>
+              <View
+                style={[styles.menuIconBg, { backgroundColor: "#FF4B4B15" }]}
+              >
                 <MaterialCommunityIcons
                   name="calendar-plus"
                   size={28}
-                  color="#4F46E5"
+                  color="#FF4B4B"
                 />
               </View>
-              <Text style={[styles.menuLabel, { color: "#4F46E5" }]}>
+              <Text style={[styles.menuLabel, { color: "#FF4B4B" }]}>
                 수업 예약
               </Text>
             </TouchableOpacity>
 
+            {/* 2. 이용권 구매 - 주황 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("Pass")}
             >
-              <View style={styles.menuIconBg}>
+              <View
+                style={[styles.menuIconBg, { backgroundColor: "#FF9F4315" }]}
+              >
                 <MaterialCommunityIcons
                   name="ticket-confirmation-outline"
                   size={28}
-                  color="#111827"
+                  color="#FF9F43"
                 />
               </View>
-              <Text style={styles.menuLabel}>이용권 구매</Text>
+              <Text style={[styles.menuLabel, { color: "#FF9F43" }]}>
+                이용권 구매
+              </Text>
             </TouchableOpacity>
 
+            {/* 3. 이용권 확인 - 노랑 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("MyPackage")}
             >
-              <View style={styles.menuIconBg}>
+              <View
+                style={[styles.menuIconBg, { backgroundColor: "#FFD93D15" }]}
+              >
                 <MaterialCommunityIcons
                   name="ticket-account"
                   size={28}
-                  color="#111827"
+                  color="#FFD93D"
                 />
               </View>
-              <Text style={styles.menuLabel}>이용권 확인</Text>
+              <Text style={[styles.menuLabel, { color: "#EAB308" }]}>
+                이용권 확인
+              </Text>
             </TouchableOpacity>
 
+            {/* 4. 쇼핑몰 - 초록 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => Linking.openURL("http://vog-sports.com/")}
             >
-              <View style={styles.menuIconBg}>
+              <View
+                style={[styles.menuIconBg, { backgroundColor: "#6BCB7715" }]}
+              >
                 <MaterialCommunityIcons
                   name="shopping-outline"
                   size={28}
-                  color="#111827"
+                  color="#6BCB77"
                 />
               </View>
-              <Text style={styles.menuLabel}>쇼핑몰</Text>
+              <Text style={[styles.menuLabel, { color: "#6BCB77" }]}>
+                쇼핑몰
+              </Text>
             </TouchableOpacity>
 
+            {/* 5. 갤러리 - 파랑 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("GalleryList")}
             >
-              <View style={styles.menuIconBg}>
+              <View
+                style={[styles.menuIconBg, { backgroundColor: "#4D96FF15" }]}
+              >
                 <MaterialCommunityIcons
                   name="image-outline"
                   size={28}
-                  color="#111827"
+                  color="#4D96FF"
                 />
               </View>
-              <Text style={styles.menuLabel}>갤러리</Text>
+              <Text style={[styles.menuLabel, { color: "#4D96FF" }]}>
+                갤러리
+              </Text>
             </TouchableOpacity>
 
+            {/* 6. 픽업 - 남색 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("PickupMain")}
             >
-              <View style={styles.menuIconBg}>
+              <View
+                style={[styles.menuIconBg, { backgroundColor: "#3D56B215" }]}
+              >
                 <MaterialCommunityIcons
                   name="bus-school"
                   size={28}
-                  color="#111827"
+                  color="#3D56B2"
                 />
               </View>
-              <Text style={styles.menuLabel}>픽업</Text>
+              <Text style={[styles.menuLabel, { color: "#3D56B2" }]}>픽업</Text>
             </TouchableOpacity>
 
+            {/* 7. 출석확인 - 보라 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("Attendance")}
             >
-              <View style={styles.menuIconBg}>
+              <View
+                style={[styles.menuIconBg, { backgroundColor: "#917FB315" }]}
+              >
                 <MaterialCommunityIcons
                   name="check-decagram"
                   size={28}
-                  color="#111827"
+                  color="#917FB3"
                 />
               </View>
-              <Text style={styles.menuLabel}>출석확인</Text>
+              <Text style={[styles.menuLabel, { color: "#917FB3" }]}>
+                출석확인
+              </Text>
             </TouchableOpacity>
 
-            <View style={styles.menuItem} />
+            {/* 8. 추천하기 - 핑크 */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate("Referral")}
+            >
+              <View
+                style={[styles.menuIconBg, { backgroundColor: "#FF2D5515" }]}
+              >
+                <MaterialCommunityIcons
+                  name="account-plus-outline"
+                  size={28}
+                  color="#FF2D55"
+                />
+              </View>
+              <Text style={[styles.menuLabel, { color: "#FF2D55" }]}>
+                추천하기
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* 3. 광고 배너 섹션 */}
@@ -465,22 +515,32 @@ export default function HomeScreen({ navigation }: any) {
             {homeNotices.length > 0 ? (
               homeNotices.map((notice, index) => (
                 <React.Fragment key={notice.id}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.noticeRow}
-                    onPress={() => navigation.navigate("NoticeDetail", { notice })}
+                    onPress={() =>
+                      navigation.navigate("NoticeDetail", { notice })
+                    }
                   >
                     <Text style={styles.noticeTitle} numberOfLines={1}>
                       {notice.branch_id === null ? "[전체공지] " : ""}
                       {notice.title}
                     </Text>
-                    <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
+                    <Ionicons
+                      name="chevron-forward"
+                      size={14}
+                      color="#D1D5DB"
+                    />
                   </TouchableOpacity>
-                  {index < homeNotices.length - 1 && <View style={styles.divider} />}
+                  {index < homeNotices.length - 1 && (
+                    <View style={styles.divider} />
+                  )}
                 </React.Fragment>
               ))
             ) : (
               <View style={styles.noticeRow}>
-                <Text style={[styles.noticeTitle, { color: "#94A3B8" }]}>등록된 공지사항이 없습니다.</Text>
+                <Text style={[styles.noticeTitle, { color: "#94A3B8" }]}>
+                  등록된 공지사항이 없습니다.
+                </Text>
               </View>
             )}
           </View>
@@ -490,7 +550,7 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={styles.footerCompany}>
               {bizInfo?.company_name || "(주)그라운드코퍼레이션"}
             </Text>
-            
+
             <View style={styles.footerInfoRow}>
               <Text style={styles.footerText}>
                 대표자 : {bizInfo?.ceo || "김강태"}
