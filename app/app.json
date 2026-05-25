@@ -22,14 +22,25 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.goundcorp.ipasscare",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAU57YxeP5CM9akxV7qBMckyLhpYl02ZEQ"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "@react-native-community/datetimepicker",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "셔틀 운행 위치 추적을 위해 위치 권한이 필요합니다."
+        }
+      ]
     ],
     "extra": {
       "eas": {

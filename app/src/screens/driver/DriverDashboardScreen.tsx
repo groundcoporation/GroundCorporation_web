@@ -13,47 +13,44 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { supabase } from "../../lib/supabase"; // 👈 팀장님 프로젝트의 supabase 설정 경로
+import { supabase } from "../../lib/supabase";
 import { sendGlobalPushNotification } from "../../services/notificationService";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
-import * as Location from "expo-location"; // 🚀 [추가] 실시간 위치 추적 라이브러리
-import { useAuth } from "../../context/AuthContext"; // 🚀 [추가] 전역 상태에서 권한 및 지점 가져오기
+import * as Location from "expo-location";
+import { useAuth } from "../../context/AuthContext";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+// 🚀 [좀비 원천 봉쇄] 앱 전체에서 딱 하나씩만 존재하도록 통제하는 글로벌 변수들
+let globalLocationSub: Location.LocationSubscription | null = null;
+let globalIsDriving = false;
+let currentTrackingSessionId: string | null = null; // 💡 좀비 추적기를 감별할 고유 고스트 세션 ID
+
 export default function DriverDashboardScreen({ navigation }: any) {
-  // 🚀 [추가] 권한 및 전역 지점 관리
   const { branchId, role, setBranch } = useAuth();
 
-  const [isDriving, setIsDriving] = useState(false); // 기사님 운행 여부
+  const [isDriving, setIsDriving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pickupGroups, setPickupGroups] = useState<any[]>([]);
 
-  // 🚀 [추가] 기사님 정보 및 위치 구독 객체 상태 관리
   const [driverInfo, setDriverInfo] = useState<any>(null);
-  const [locationSubscription, setLocationSubscription] =
-    useState<Location.LocationSubscription | null>(null);
 
-  // 🚀 [안전장치] 위치 전송 즉시 차단용 Ref
   const isDrivingRef = useRef(false);
   useEffect(() => {
     isDrivingRef.current = isDriving;
   }, [isDriving]);
 
-  // 관리자 여부 확인
   const isDeveloper = role === "admin" || driverInfo?.role === "admin";
 
-  // 🚀 [수정] 관리자가 지점을 스왑할 때마다 명단 새로고침 (branchId가 null이 아닐 때만 실행되도록 TS 에러 방지)
   useEffect(() => {
     if (isDeveloper && driverInfo && branchId) {
       fetchTodayPickups(branchId);
     }
   }, [branchId]);
 
-  // 🚀 [핵심] 구독 로직: driverInfo가 로드된 후 딱 한 번만 설정되도록 의존성 최적화
   useEffect(() => {
     if (!driverInfo) return;
 
@@ -79,26 +76,41 @@ export default function DriverDashboardScreen({ navigation }: any) {
     };
   }, [isDeveloper, branchId, driverInfo]);
 
-  // 🚀 [추가] 위치 전송을 시작하는 독립 함수 (화면 재진입 시 자동 복구용)
   const startLocationTracking = async (profile: any) => {
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") return null;
 
-    // 🚀 테스트를 위해 1초(1000ms)로 설정
-    //추후 distanceInterval: 10 으로 변경예정( 거리가 10미터 이상 이동했을 때만 업데이트 )
-    const subscription = await Location.watchPositionAsync(
+    // 🚀 새로운 추적 세션 번호를 발급합니다.
+    const mySessionId = Math.random().toString(36).substring(7);
+    currentTrackingSessionId = mySessionId;
+
+    if (globalLocationSub) {
+      try {
+        globalLocationSub.remove();
+      } catch (e) {}
+      globalLocationSub = null;
+    }
+
+    const sub = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
         timeInterval: 1000,
         distanceInterval: 1,
       },
       async (location) => {
-        // 🚀 [안전장치] 운행 중이 아니면 즉시 리턴
-        if (!isDrivingRef.current) return;
+        // 🚨 [자폭 프로그래밍] 스위치가 꺼졌거나, 내가 현재 활성화된 최신 추적 세션이 아니라면
+        if (!globalIsDriving || currentTrackingSessionId !== mySessionId) {
+          try {
+            sub.remove(); // 🎯 엉뚱한 녀석을 죽이지 않고, "좀비 자신"을 확실하게 쏴서 파괴합니다!
+            console.log(
+              "💀 [좀비 퇴치] 오래된 유령 추적기가 스스로 자폭하여 소멸했습니다.",
+            );
+          } catch (e) {}
+          return;
+        }
 
         const { latitude, longitude } = location.coords;
 
-        // 💡 [테스트용 로그] 1초마다 찍히는지 확인
         console.log(
           `📍 [GPS 테스트 중] ${new Date().toLocaleTimeString()} - 위도: ${latitude.toFixed(6)}, 경도: ${longitude.toFixed(6)}`,
         );
@@ -117,10 +129,11 @@ export default function DriverDashboardScreen({ navigation }: any) {
         else console.log("✅ DB 업데이트 성공");
       },
     );
-    return subscription;
+
+    globalLocationSub = sub;
   };
 
-  // 🚀 [수정] 로그인한 기사님의 지점 정보 및 기존 운행 상태 확인 (profile null 체크 추가)
+  // 🚀 본부장님 말씀대로 꼼수 부리지 않고, 100% 정직하게 DB에 적힌 참/거짓 상태를 그대로 긁어와 동기화합니다!
   const fetchDriverInfoAndPickups = async () => {
     try {
       setLoading(true);
@@ -136,30 +149,28 @@ export default function DriverDashboardScreen({ navigation }: any) {
         .single();
 
       if (profile) {
-        // 💡 [TS 해결] profile이 확실히 존재할 때만 아래 로직 실행
         setDriverInfo(profile);
 
-        // 💡 [핵심] DB에서 현재 운행 상태를 조회하여 상태 복구
         const { data: statusData, error: statusError } = await supabase
           .from("shuttle_status")
           .select("is_driving")
           .eq("shuttle_id", profile.id)
           .maybeSingle();
 
-        const drivingNow = !!statusData?.is_driving;
+        // 데이터가 없거나 에러면 강제로 false 처리, 있으면 DB 값 그대로 사용!
+        const drivingNow = statusData ? Boolean(statusData.is_driving) : false;
+
+        globalIsDriving = drivingNow;
         setIsDriving(drivingNow);
         isDrivingRef.current = drivingNow;
 
-        // 운행 중이라면 위치 추적 자동 재개
-        if (drivingNow) {
+        if (drivingNow && !globalLocationSub) {
           console.log(
             "🚐 [운행 복구] 기존 운행 상태를 감지하여 위치 추적을 자동 재개합니다.",
           );
-          const sub = await startLocationTracking(profile);
-          if (sub) setLocationSubscription(sub);
+          await startLocationTracking(profile);
         }
 
-        // 타겟 지점: 어드민이면 Context의 전역 지점, 기사면 본인 소속 지점
         const targetBranch =
           profile.role === "admin" || role === "admin"
             ? branchId
@@ -171,6 +182,9 @@ export default function DriverDashboardScreen({ navigation }: any) {
       }
     } catch (e) {
       console.error("❌ 기사님 정보 로드 실패:", e);
+      globalIsDriving = false;
+      setIsDriving(false);
+      isDrivingRef.current = false;
     } finally {
       setLoading(false);
     }
@@ -195,7 +209,7 @@ export default function DriverDashboardScreen({ navigation }: any) {
         `,
         )
         .eq("is_active", true)
-        .eq("branch_id", targetBranchId); // 💡 지점 필터링
+        .eq("branch_id", targetBranchId);
 
       if (error) throw error;
 
@@ -220,7 +234,6 @@ export default function DriverDashboardScreen({ navigation }: any) {
         }, {});
 
         const newGroups = Object.values(grouped);
-        // 🚀 [핵심] JSON으로 변환하여 값이 진짜 바뀐 경우에만 상태 업데이트
         if (JSON.stringify(newGroups) !== JSON.stringify(pickupGroups)) {
           setPickupGroups(newGroups);
         }
@@ -234,41 +247,44 @@ export default function DriverDashboardScreen({ navigation }: any) {
     }
   };
 
-  // 🚀 [수정] 운행 상태 토글 스위치 핸들러: 종료 시 확실한 false 처리
   const toggleDrivingStatus = async (nextStatus: boolean) => {
     if (!driverInfo) return;
 
     try {
       if (nextStatus) {
-        // 🟢 운행 시작
+        globalIsDriving = true;
         setIsDriving(true);
-        isDrivingRef.current = true;
 
         await supabase.from("shuttle_status").upsert({
           shuttle_id: driverInfo.id,
+          driver_id: driverInfo.id,
           is_driving: true,
-          updated_at: new Date().toISOString(),
+          branch_id: isDeveloper ? branchId : driverInfo.branch_id,
+          last_update: new Date().toISOString(),
         });
 
-        const sub = await startLocationTracking(driverInfo);
-        if (sub) setLocationSubscription(sub);
+        await startLocationTracking(driverInfo);
         Alert.alert("운행 시작", "운행이 시작되었습니다.");
       } else {
-        // 🛑 [강력한 종료]
+        // 🛑 [종료 절차 엄격화]
+        globalIsDriving = false;
         setIsDriving(false);
-        isDrivingRef.current = false; // GPS 추적기 차단
+        currentTrackingSessionId = null; // 모든 구형 세션 무효화
 
-        // 1. 모든 구독 객체를 찾아서 강제로 remove
-        if (locationSubscription) {
-          locationSubscription.remove();
-          setLocationSubscription(null);
+        if (globalLocationSub) {
+          try {
+            globalLocationSub.remove();
+          } catch (e) {}
+          globalLocationSub = null;
         }
 
-        // 2. DB를 FALSE로 강제 업데이트
-        const { error } = await supabase
-          .from("shuttle_status")
-          .update({ is_driving: false, updated_at: new Date().toISOString() })
-          .eq("shuttle_id", driverInfo.id);
+        const { error } = await supabase.from("shuttle_status").upsert({
+          shuttle_id: driverInfo.id,
+          driver_id: driverInfo.id,
+          is_driving: false,
+          branch_id: isDeveloper ? branchId : driverInfo.branch_id,
+          last_update: new Date().toISOString(),
+        });
 
         if (error) {
           console.error("DB 업데이트 실패:", error);
