@@ -100,13 +100,13 @@ export default function OrganizationPage() {
         title: "스포테인먼트",
         icon: <Trophy size={16} />,
         leader: "Agent Team",
-        teams: ["V.O.G 운영", "콘텐츠 기획"],
+        teams: ["매니지먼트", "콘텐츠 기획", "에이전트"],
       },
       {
         title: "의류사업부",
         icon: <Shirt size={16} />,
         leader: "Apparel Team",
-        teams: ["브랜드 디자인", "유통 물류"],
+        teams: ["브랜드 디자인", "유통 물류", "V.O.G 운영"],
       },
       {
         title: "대외협력",
