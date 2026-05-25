@@ -52,11 +52,10 @@ export default function HomePage() {
     {
       id: "vogsports",
       category: "Sports Wear",
-      title: "온라인 쇼핑몰",
+      title: "쇼핑몰",
       description:
         "퍼포먼스 향상을 위한 자체 설계 프리미엄 스포츠 브랜드 'V.O.G SPORTS' 전개 및 용품 유통",
-      image:
-        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=1600",
+      image: "/resource/image/vogsports_image.png",
       link: "http://vog-sports.com/",
       icon: <ShoppingBag size={28} />,
     },
