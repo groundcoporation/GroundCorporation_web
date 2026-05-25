@@ -80,14 +80,19 @@ export default function IPassCarePage() {
             </p>
 
             <div className="flex flex-wrap gap-4 mb-12 relative z-10">
-              <Link href="#" className="hover:opacity-80 transition-opacity">
-                <img
-                  src="/resource/image/app_store_btn.png"
-                  alt="App Store"
-                  className="h-[52px]"
-                />
-              </Link>
-              <Link href="#" className="hover:opacity-80 transition-opacity">
+              {/* <Link href="#" className="hover:opacity-80 transition-opacity">
+    <img
+      src="/resource/image/app_store_btn.png"
+      alt="App Store"
+      className="h-[52px]"
+    />
+  </Link> */}
+              <Link
+                href="https://play.google.com/store/apps/details?id=com.goundcorp.ipasscare&pcampaignid=web_share"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:opacity-80 transition-opacity"
+              >
                 <img
                   src="/resource/image/google_play_btn.png"
                   alt="Google Play"

@@ -91,7 +91,7 @@ export default function GreetingPage() {
                   size={80}
                 />
                 <h3 className="relative z-10 text-2xl md:text-3xl font-black leading-snug tracking-tight text-[#050a14] break-keep">
-                  "나만의 인프라와 노하우로 <br className="hidden md:block" />
+                  "저희의 인프라와 노하우로 <br className="hidden md:block" />
                   선수들의{" "}
                   <span className="text-blue-600">꿈과 목표를 함께</span>{" "}
                   이뤄냅니다."
@@ -112,7 +112,7 @@ export default function GreetingPage() {
                 </p>
 
                 <p>
-                  저만의 인프라와 노하우로 선수들의 축구 인생의 컨설팅과 함께
+                  저희의 인프라와 노하우로 선수들의 축구 인생의 컨설팅과 함께
                   선수들의 꿈과 목표를 함께 이뤄내고 있습니다.
                 </p>
 
