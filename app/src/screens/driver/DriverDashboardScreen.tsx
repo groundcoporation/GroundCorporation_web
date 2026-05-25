@@ -94,8 +94,8 @@ export default function DriverDashboardScreen({ navigation }: any) {
     const sub = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
-        timeInterval: 1000,
-        distanceInterval: 1,
+        timeInterval: 5000,   // 💡 현재 5000ms (5초) 마다 전송 시도
+        distanceInterval: 1,  // 💡 현재 1m 움직일 때마다 전송 시도
       },
       async (location) => {
         // 🚨 [자폭 프로그래밍] 스위치가 꺼졌거나, 내가 현재 활성화된 최신 추적 세션이 아니라면
