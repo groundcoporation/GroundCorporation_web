@@ -11,7 +11,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import MapView, { Marker } from "react-native-maps";
 import { supabase } from "../../lib/supabase";
-import * as Location from "expo-location"; // 🚀 [추가] 내 위치 권한을 얻기 위해 추가
+import * as Location from "expo-location"; 
+
+// =========================================================================
+// 🚀 [GPS 추적 주기 수정 메뉴얼] 
+// 본부장님, GPS 위치를 언제 한 번씩 보낼지(10초, 5미터 등) 수정하시려면 
+// 이 파일이 아니라 기사님 화면인 "DriverDashboardScreen.tsx" 파일을 여셔야 합니다!
+// 
+// [수정 위치] DriverDashboardScreen.tsx 의 startLocationTracking 함수 내부:
+// await Location.watchPositionAsync(
+//   { 
+//     accuracy: Location.Accuracy.High, 
+//     timeInterval: 10000,     // 💡 시간 기준: 10000 = 10초마다 위치 전송 시도
+//     distanceInterval: 5      // 💡 거리 기준: 5 = 5미터 이상 이동하면 즉시 위치 전송
+//   }, ...
+// 
+// ※ 참고: 10초로 맞춰두어도, 차량이 신호대기 등으로 아예 움직임이 없으면 스마트폰 자체 
+// 배터리 절약 모드 때문에 10초가 지나도 위치를 쏘지 않을 수 있습니다 (정상적인 OS 작동 방식입니다).
+// =========================================================================
 
 const RealtimeMapScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
@@ -27,7 +44,7 @@ const RealtimeMapScreen = ({ navigation }: any) => {
       const { data, error } = await supabase
         .from("shuttle_status")
         .select("*")
-        .eq("is_driving", true) // 운행 중(true)인 셔틀만 찾습니다.
+        .eq("is_driving", true) 
         .limit(1)
         .maybeSingle();
 
@@ -47,16 +64,13 @@ const RealtimeMapScreen = ({ navigation }: any) => {
   // 2. [실시간 구독 & 권한 설정] 위치 권한을 묻고, Supabase 실시간 데이터를 구독합니다.
   // =========================================================================
   useEffect(() => {
-    // 💡 내 위치(파란 점)를 띄우려면 지도를 보는 사람도 위치 권한이 필요합니다.
     const requestPermission = async () => {
       await Location.requestForegroundPermissionsAsync();
     };
     requestPermission();
 
-    // 초기 데이터 불러오기
     fetchShuttleStatus();
 
-    // 💡 Supabase Realtime 설정: 기사님이 위치를 쏠 때마다 즉시 감지하여 지도를 움직입니다.
     const subscription = supabase
       .channel("shuttle_move")
       .on(
@@ -74,25 +88,25 @@ const RealtimeMapScreen = ({ navigation }: any) => {
           );
 
           if (payload.new && payload.new.is_driving) {
-            setShuttle({ ...payload.new }); // 🚀 새로운 객체로 주입하여 지도가 마커를 강제로 다시 그리게 만듭니다.
-            // 💡 버스가 움직이면 지도 카메라도 버스를 따라 부드럽게 이동(animate)합니다.
+            setShuttle({ ...payload.new }); 
+            
+            // 💡 상단 헤더에 마커가 짤리지 않도록 카메라 중심(위도)을 살짝 아래로 보정합니다.
             mapRef.current?.animateToRegion(
               {
-                latitude: Number(payload.new.lat),
+                latitude: Number(payload.new.lat) + 0.0004, 
                 longitude: Number(payload.new.lng),
-                latitudeDelta: 0.002, // 숫자가 작을수록 지도가 확대됩니다.
+                latitudeDelta: 0.002, 
                 longitudeDelta: 0.002,
               },
               1000,
-            ); // 1초(1000ms) 동안 부드럽게 이동
+            ); 
           } else {
-            setShuttle(null); // 운행이 종료되면 버스를 화면에서 지웁니다.
+            setShuttle(null); 
           }
         },
       )
       .subscribe();
 
-    // 화면을 나갈 때 실시간 구독을 끊어줍니다 (메모리 누수 방지)
     return () => {
       supabase.removeChannel(subscription);
     };
@@ -119,29 +133,36 @@ const RealtimeMapScreen = ({ navigation }: any) => {
             ref={mapRef}
             style={StyleSheet.absoluteFill}
             initialRegion={{
-              latitude: Number(shuttle.lat),
+              latitude: Number(shuttle.lat) + 0.0004, // 진입 시에도 상단 헤더 짤림 방지 보정
               longitude: Number(shuttle.lng),
               latitudeDelta: 0.002,
               longitudeDelta: 0.002,
             }}
-            // 🚀 [핵심 수정] 내 위치 및 조작 버튼 활성화
-            showsUserLocation={true} // 내 위치를 파란색 점으로 표시합니다.
-            showsMyLocationButton={true} // 내 위치로 카메라를 돌리는 버튼을 띄웁니다.
-            mapPadding={{ top: 0, right: 0, bottom: 180, left: 0 }} // 하단 카드에 가려지지 않게 여백을 180으로 확대합니다.
+            showsUserLocation={true} 
+            showsMyLocationButton={true} 
+            mapPadding={{ top: 80, right: 0, bottom: 200, left: 0 }} 
           >
             {/* 🚀 [버스 마커] 셔틀버스의 현재 위치를 나타내는 아이콘입니다. */}
             <Marker
-              key={`${shuttle.shuttle_id}-${shuttle.lat}-${shuttle.lng}`} // 💡 고유 키값을 매칭하여 마커가 유령처럼 사라지지 않고 강제 렌더링되게 만듭니다.
+              key={`${shuttle.shuttle_id}-${shuttle.lat}-${shuttle.lng}`} 
               coordinate={{
                 latitude: Number(shuttle.lat),
                 longitude: Number(shuttle.lng),
               }}
               title="셔틀버스"
-              tracksViewChanges={true} // 🚨 [버그 수정] false에서 true로 변경하여 실시간 움직임이 지도에 즉시 반영되도록 고쳤습니다!
+              tracksViewChanges={true} 
             >
-              <View style={styles.markerContainer}>
-                <Ionicons name="bus" size={24} color="#6366F1" />
-              </View>
+              {/* 🚀 [수정] 촌스러운 동그라미 테두리를 없애고 깔끔하게 버스 아이콘만 크게 띄웁니다! */}
+              <Ionicons 
+                name="bus" 
+                size={40} 
+                color="#6366F1" 
+                style={{ 
+                  textShadowColor: 'rgba(0, 0, 0, 0.4)', // 지도 위에서 잘 보이도록 살짝 그림자만 추가
+                  textShadowOffset: { width: 0, height: 2 }, 
+                  textShadowRadius: 4 
+                }} 
+              />
             </Marker>
           </MapView>
         ) : (
@@ -176,7 +197,6 @@ const RealtimeMapScreen = ({ navigation }: any) => {
                 </Text>
               </View>
             </View>
-            {/* 기사님께 전화 거는 버튼 (현재는 알림창만 띄움) */}
             <TouchableOpacity
               style={styles.callBtn}
               onPress={() =>
@@ -216,26 +236,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
+    zIndex: 10,
   },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#111827" },
   mapArea: { flex: 1, backgroundColor: "#E2E8F0" },
   emptyMap: { flex: 1, justifyContent: "center", alignItems: "center" },
   mapText: { fontSize: 16, color: "#94A3B8", marginTop: 10, fontWeight: "600" },
-
-  // 버스 마커 (아이콘 테두리) 디자인
-  markerContainer: {
-    backgroundColor: "#FFF",
-    padding: 6,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: "#6366F1",
-    elevation: 5, // 안드로이드 그림자
-    shadowColor: "#000", // iOS 그림자
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-
   loadingBox: { position: "absolute", bottom: 50, alignSelf: "center" },
   // 하단 정보 카드 디자인
   driverCard: {
@@ -247,6 +253,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 20,
     elevation: 10,
+    zIndex: 10,
   },
   cardHeader: {
     flexDirection: "row",
