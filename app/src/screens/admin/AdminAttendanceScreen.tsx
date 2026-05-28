@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import dayjs from "dayjs";
 import { useAuth } from "../../context/AuthContext"; // Import useAuth to get branchId
+import { sendGlobalPushNotification } from "../../services/notificationService"; // 🚀 푸시 알림 서비스 추가
 
 interface AttendeeInfo {
   id: string; // child_id or user_id
@@ -56,6 +57,128 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
     setSelectedAttendee(null);
   };
 
+  // Helper function to check for valid reservations for an attendee
+  const checkValidReservationForAttendee = useCallback(
+    async (attendee: AttendeeInfo): Promise<boolean> => {
+      const today = dayjs().tz().format("YYYY-MM-DD");
+      const now = dayjs().tz();
+
+      const { data: reservations, error: resError } = await supabase
+        .from("reservations")
+        .select("*, class_schedules(start_time, end_time)")
+        .eq(attendee.type === "child" ? "child_id" : "user_id", attendee.id)
+        .eq("class_date", today)
+        .neq("status", "canceled"); // Only consider non-canceled reservations
+
+      if (resError) {
+        console.error("Error checking reservation for attendee:", resError);
+        return false;
+      }
+
+      const validReservation = reservations?.find((res: any) => {
+        const sched = res.class_schedules;
+        if (!sched) return false;
+
+        const startTime = dayjs(`${today} ${sched.start_time}`);
+        const endTime = dayjs(`${today} ${sched.end_time}`);
+
+        // Check if current time is within 10 minutes before start or 10 minutes after end
+        return (
+          now.isAfter(startTime.subtract(10, "minute")) &&
+          now.isBefore(endTime.add(10, "minute"))
+        );
+      });
+
+      return !!validReservation;
+    },
+    [],
+  ); // Dependencies: none, as supabase and dayjs are stable, and attendee is passed as argument.
+
+  const searchAttendees = useCallback(
+    async (last4Digits: string) => {
+      setSearchLoading(true);
+      setSearchResults([]);
+      setSelectedAttendee(null);
+
+      try {
+        const potentialResults: AttendeeInfo[] = [];
+
+        // 1. 'users' 테이블에서 전화번호 뒷 4자리가 일치하는 사용자 검색 (부모님)
+        const { data: usersData, error: usersError } = await supabase
+          .from("users")
+          .select("id, name, phone, birth_date, target_class")
+          .eq("branch_id", selectedBranchId)
+          .ilike("phone", `%${last4Digits}`);
+
+        if (usersError) throw usersError;
+
+        if (usersData && usersData.length > 0) {
+          for (const user of usersData) {
+            // 해당 부모의 자녀 정보도 함께 검색
+            const { data: childrenData, error: childrenError } = await supabase
+              .from("children")
+              .select("id, child_name, child_birth, target_class")
+              .eq("parent_id", user.id);
+
+            if (childrenError) throw childrenError;
+
+            if (childrenData && childrenData.length > 0) {
+              for (const child of childrenData) {
+                potentialResults.push({
+                  id: child.id,
+                  name: child.child_name,
+                  birthDate: child.child_birth,
+                  type: "child",
+                  parentId: user.id,
+                  parentName: user.name,
+                  targetClass: child.target_class,
+                });
+              }
+            } else {
+              // 자녀가 없는 부모는 본인으로 간주 (성인반 등)
+              potentialResults.push({
+                id: user.id,
+                name: user.name,
+                birthDate: user.birth_date,
+                type: "parent",
+                targetClass: user.target_class,
+              });
+            }
+          }
+        }
+
+        // Filter potential results based on valid reservations
+        const filteredResults: AttendeeInfo[] = [];
+        for (const attendee of potentialResults) {
+          const hasValidReservation =
+            await checkValidReservationForAttendee(attendee);
+          if (hasValidReservation) {
+            filteredResults.push(attendee);
+          }
+        }
+
+        // Remove duplicates (same id + type combination) from filtered results
+        const uniqueResults = Array.from(
+          new Map(
+            filteredResults.map((item) => [item.id + item.type, item]),
+          ).values(),
+        );
+        setSearchResults(uniqueResults);
+
+        // 🚀 [추가] 검색 결과가 하나일 경우 자동으로 선택
+        if (uniqueResults.length === 1) {
+          setSelectedAttendee(uniqueResults[0]);
+        }
+      } catch (error: any) {
+        console.error("Attendee search failed:", error.message);
+        Alert.alert("오류", "사용자 검색 중 문제가 발생했습니다.");
+      } finally {
+        setSearchLoading(false);
+      }
+    },
+    [selectedBranchId, checkValidReservationForAttendee],
+  ); // Dependencies for useCallback
+
   useEffect(() => {
     if (keypadInput.length === 4) {
       searchAttendees(keypadInput);
@@ -63,7 +186,7 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
       setSearchResults([]);
       setSelectedAttendee(null);
     }
-  }, [keypadInput, selectedBranchId]);
+  }, [keypadInput, selectedBranchId, searchAttendees]); // Add searchAttendees to dependencies
 
   const calculateAge = (birthDate: string | null | undefined) => {
     if (!birthDate || birthDate.length !== 8) return 0;
@@ -74,72 +197,7 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
     } catch (e) {
       return 0;
     }
-  };
-
-  const searchAttendees = async (last4Digits: string) => {
-    setSearchLoading(true);
-    setSearchResults([]);
-    setSelectedAttendee(null);
-
-    try {
-      const results: AttendeeInfo[] = [];
-
-      // 1. 'users' 테이블에서 전화번호 뒷 4자리가 일치하는 사용자 검색 (부모님)
-      const { data: usersData, error: usersError } = await supabase
-        .from("users")
-        .select("id, name, phone, birth_date, target_class") // Add target_class for parent
-        .eq("branch_id", selectedBranchId)
-        .ilike("phone", `%${last4Digits}`);
-
-      if (usersError) throw usersError;
-
-      if (usersData && usersData.length > 0) {
-        for (const user of usersData) {
-          // 해당 부모의 자녀 정보도 함께 검색
-          const { data: childrenData, error: childrenError } = await supabase
-            .from("children")
-            .select("id, child_name, child_birth, target_class") // Add target_class for child
-            .eq("parent_id", user.id);
-
-          if (childrenError) throw childrenError;
-
-          if (childrenData && childrenData.length > 0) {
-            for (const child of childrenData) {
-              results.push({
-                id: child.id,
-                name: child.child_name,
-                birthDate: child.child_birth,
-                type: "child",
-                parentId: user.id,
-                parentName: user.name,
-                targetClass: child.target_class, // Add child's target_class
-              });
-            }
-          } else {
-            // 자녀가 없는 부모는 본인으로 간주 (성인반 등)
-            results.push({
-              id: user.id,
-              name: user.name,
-              birthDate: user.birth_date,
-              type: "parent",
-              targetClass: user.target_class, // Add parent's target_class
-            });
-          }
-        }
-      }
-
-      // 중복 제거 (동일한 id + type 조합)
-      const uniqueResults = Array.from(
-        new Map(results.map((item) => [item.id + item.type, item])).values(),
-      );
-      setSearchResults(uniqueResults);
-    } catch (error: any) {
-      console.error("Attendee search failed:", error.message);
-      Alert.alert("오류", "사용자 검색 중 문제가 발생했습니다.");
-    } finally {
-      setSearchLoading(false);
-    }
-  };
+  }; // Missing closing brace added here
 
   const handleAttendanceAction = async (status: "등원" | "하원") => {
     if (!selectedAttendee) {
@@ -155,6 +213,52 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
     try {
       const today = dayjs().tz().format("YYYY-MM-DD");
       const currentTime = dayjs().tz().toISOString();
+      const now = dayjs().tz();
+
+      // =========================================================================
+      // 🚀 [핵심] 현재 시간대 예약 확인 로직 (10분 버퍼 적용)
+      // =========================================================================
+      const { data: reservations, error: resError } = await supabase
+        .from("reservations")
+        .select("*, class_schedules(start_time, end_time)")
+        .eq(
+          selectedAttendee.type === "child" ? "child_id" : "user_id",
+          selectedAttendee.id,
+        )
+        .eq("class_date", today)
+        .neq("status", "canceled");
+
+      if (resError) throw resError;
+
+      // 현재 시간과 대조하여 유효한 예약 찾기
+      const validReservation = reservations?.find((res: any) => {
+        const sched = res.class_schedules;
+        if (!sched) return false;
+
+        // 시작 시간 10분 전 ~ 종료 시간 10분 후까지 허용
+        const startTime = dayjs(`${today} ${sched.start_time}`);
+        const endTime = dayjs(`${today} ${sched.end_time}`);
+
+        return (
+          now.isAfter(startTime.subtract(10, "minute")) &&
+          now.isBefore(endTime.add(10, "minute"))
+        );
+      });
+
+      if (!validReservation) {
+        Alert.alert(
+          "출결 불가",
+          "현재 시간대에 예약된 수업이 없거나 출결 가능 시간이 아닙니다.\n(수업 시작/종료 10분 전후만 가능)",
+        );
+        return;
+      }
+      // =========================================================================
+
+      // 1. 예약 테이블 상태 업데이트 (학부모 앱 연동)
+      await supabase
+        .from("reservations")
+        .update({ attendance_status: status })
+        .eq("id", validReservation.id);
 
       // Check for existing attendance log for today
       const { data: existingLog, error: fetchError } = await supabase
@@ -208,6 +312,16 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
 
         if (insertError) throw insertError;
       }
+
+      // 🚀 [추가] 학부모에게 실시간 푸시 발송
+      await sendGlobalPushNotification({
+        targetBranchId: null,
+        targetUserId: selectedAttendee.parentId || selectedAttendee.id,
+        title: `🔔 출결 안내`,
+        body: `${selectedAttendee.name} 학생이 안전하게 ${status} 완료하였습니다.`,
+        type: "attendance",
+        relatedId: validReservation.id,
+      });
 
       Alert.alert("성공", `${selectedAttendee.name} ${status} 처리 완료!`);
       handleClear(); // Clear input and selection after successful logging
