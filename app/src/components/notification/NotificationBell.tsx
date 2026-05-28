@@ -27,31 +27,66 @@ export default function NotificationBell() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    getUserIdAndInit();
+    // 1. 유저 ID가 없으면 초기화만 하고 리턴
+    if (!currentUserId) {
+      getUserIdAndInit();
+      return;
+    }
 
-    // 🚀 실시간 알림 구독
-    const channel = supabase
-      .channel("bell_realtime_channel")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        () => {
-          console.log(
-            "🔔 [알림 종 실시간 감지] 배지 카운트와 리스트를 즉시 동기화합니다.",
-          );
-          fetchUnreadCount();
-          if (modalVisible) {
-            reloadNotificationsOnly();
-          }
-        },
-      )
-      .subscribe();
+    // 2. 이 이펙트 턴에서 사용할 일회용 해제 플래그
+    let isCleanedUp = false;
+    let activeChannel: any = null;
 
+    console.log(`🔔 [알림 종] 실시간 채널 구독 시도... (${currentUserId})`);
+
+    // 3. 무조건 고유한 무작위 ID를 채널명 뒤에 붙여서 이전 채널과 완전히 격리시킵니다.
+    // 이렇게 하면 이전 채널이 삭제 중이더라도 절대 충돌이 나지 않습니다.
+    const uniqueChannelName = `bell_realtime:${currentUserId}:${Math.random().toString(36).substring(7)}`;
+
+    const channel = supabase.channel(uniqueChannelName).on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${currentUserId}`,
+      },
+      () => {
+        // 클린업이 이미 일어났다면 이벤트를 무시합니다.
+        if (isCleanedUp) return;
+
+        console.log(
+          "🔔 [알림 종 실시간 감지] 배지 카운트와 리스트를 즉시 동기화합니다.",
+        );
+        fetchUnreadCount(currentUserId);
+        reloadNotificationsOnly();
+      },
+    );
+
+    // 4. 안전하게 설정을 마친 후 subscribe를 호출하고 변수에 할당합니다.
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        activeChannel = channel;
+        // subscribe 성공 직후 혹시 모를 클린업 타이밍 체크
+        if (isCleanedUp && activeChannel) {
+          supabase.removeChannel(activeChannel);
+        }
+      }
+    });
+
+    // 5. 클린업 함수
     return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUserId, modalVisible]);
+      console.log(`🔔 [알림 종] 실시간 채널 구독 해제 요청 (${currentUserId})`);
+      isCleanedUp = true;
 
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+      } else {
+        // 아직 subscribe 프로세스 중일 때를 대비해 생성된 인스턴스 자체를 날림
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [currentUserId]);
   const getUserIdAndInit = async () => {
     const {
       data: { user },
