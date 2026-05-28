@@ -345,8 +345,14 @@ export default function MyPageScreen({ navigation }: any) {
               {showAdminDash &&
                 renderMenuItem(
                   "shield-checkmark-outline",
-                  "관리자 대시보드",
-                  () => navigation.navigate("AdminHome"),
+                  "키패드 출결 체크",
+                  () => navigation.navigate("AdminAttendance"),
+                )}
+              {showAdminDash && <View style={styles.divider} />}
+
+              {showAdminDash &&
+                renderMenuItem("settings-outline", "관리자 대시보드", () =>
+                  navigation.navigate("AdminHome"),
                 )}
               {showAdminDash && showDriverDash && (
                 <View style={styles.divider} />
