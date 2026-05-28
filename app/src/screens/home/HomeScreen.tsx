@@ -15,6 +15,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+// 🚀 dayjs 플러그인 설정
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // 🚀 [추가] 지점 정보를 가져오기 위해 useAuth 임포트
 import { useAuth } from "../../context/AuthContext";
@@ -68,8 +75,11 @@ export default function HomeScreen({ navigation }: any) {
   useEffect(() => {
     if (branchId && isFocused) {
       console.log(
-        "🏠 [포커스 감지] 홈 화면 진입 또는 리턴이 확인되어 최신 데이터를 새로고침합니다.",
+        `🏠 [포커스 감지] 홈 화면(${branchId}) 진입. 최신 데이터를 새로고침합니다.`,
       );
+      fetchData();
+    } else if (!branchId && isFocused) {
+      // branchId가 없을 경우를 대비해 초기 로딩 다시 트리거
       fetchData();
     }
   }, [branchId, isFocused]);
@@ -122,7 +132,7 @@ export default function HomeScreen({ navigation }: any) {
         setChildren(childrenList || []);
 
         // 💡 3. [수정] 다가오는 예약 로드 (오늘 이후의 가장 빠른 예약 1건 + 수업 상세 정보 JOIN)
-        const today = new Date().toISOString().split("T")[0];
+        const today = dayjs().tz().format("YYYY-MM-DD");
 
         const { data: reservation } = await supabase
           .from("reservations")
@@ -138,7 +148,7 @@ export default function HomeScreen({ navigation }: any) {
         `,
           )
           .eq("user_id", user.id)
-          .gte("class_date", today)
+          .eq("class_date", today) // 오늘 수업만 우선 노출하거나 gte 사용
           .eq("status", "pending")
           .order("class_date", { ascending: true })
           .limit(1)
