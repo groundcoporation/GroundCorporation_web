@@ -25,14 +25,14 @@ const formatCurrency = (amount: number | null) => {
 // 🚀 [수정] 컴포넌트 이름을 InvoiceScreen으로 변경
 export default function InvoiceScreen({ navigation }: any) {
   const { branchId } = useAuth();
-  
+
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentBranch, setCurrentBranch] = useState<any>(null);
-  
+
   // DB에서 불러온 청구서 목록
   const [invoices, setInvoices] = useState<any[]>([]);
-  
+
   // 결제 관련 상태
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [showKSPay, setShowKSPay] = useState(false);
@@ -46,15 +46,25 @@ export default function InvoiceScreen({ navigation }: any) {
     setLoading(true);
     try {
       // 1. 현재 접속한 유저 정보 가져오기
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("로그인이 필요합니다.");
 
-      const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single();
+      const { data: profile } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", user.id)
+        .single();
       setCurrentUser(profile);
 
       // 2. 지점 정보 가져오기 (KSPay MID 등)
       if (profile?.branch_id) {
-        const { data: branchData } = await supabase.from("branches").select("*").eq("id", profile.branch_id).single();
+        const { data: branchData } = await supabase
+          .from("branches")
+          .select("*")
+          .eq("id", profile.branch_id)
+          .single();
         setCurrentBranch(branchData);
       }
 
@@ -68,7 +78,6 @@ export default function InvoiceScreen({ navigation }: any) {
 
       if (reqError) throw reqError;
       setInvoices(requests || []);
-
     } catch (e: any) {
       console.error("[Invoice] 데이터 로드 실패:", e.message);
       Alert.alert("오류", "데이터를 불러오지 못했습니다.");
@@ -98,6 +107,11 @@ export default function InvoiceScreen({ navigation }: any) {
   const processCompletePayment = async (payKey: string, invoice: any) => {
     setIsProcessing(true);
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const userToken = session?.access_token;
+
       const rawKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
       const cleanKey = rawKey.replace(/['"]+/g, "").trim();
       const authUrl = process.env.EXPO_PUBLIC_SERVER_AUTH_URL || "";
@@ -107,7 +121,7 @@ export default function InvoiceScreen({ navigation }: any) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${cleanKey}`,
+          Authorization: `Bearer ${userToken || cleanKey}`,
           apikey: cleanKey,
         },
         body: JSON.stringify({
@@ -127,11 +141,11 @@ export default function InvoiceScreen({ navigation }: any) {
       // 2. 청구서(payment_requests) 상태를 'paid'로 업데이트 및 결제 데이터 기록
       await supabase
         .from("payment_requests")
-        .update({ 
-          status: "paid", 
-          kspay_tr_no: authResult.trno || null, 
+        .update({
+          status: "paid",
+          kspay_tr_no: authResult.trno || null,
           kspay_auth_no: authResult.authno || null,
-          paid_at: new Date().toISOString()
+          paid_at: new Date().toISOString(),
         })
         .eq("id", invoice.id);
 
@@ -142,24 +156,37 @@ export default function InvoiceScreen({ navigation }: any) {
           user_id: currentUser.id,
           package_id: item.pkg.id,
           package_name: item.pkg.name,
-          total_count: item.pkg.package_options?.[item.optIndex]?.total_count || 10,
-          remaining_count: item.pkg.package_options?.[item.optIndex]?.total_count || 10,
+          total_count:
+            item.pkg.package_options?.[item.optIndex]?.total_count || 10,
+          remaining_count:
+            item.pkg.package_options?.[item.optIndex]?.total_count || 10,
           branch_id: invoice.branch_id,
           child_id: null, // 공용 지갑 시스템
           child_name: "공용 이용권",
-          price: item.pkg.package_options?.[item.optIndex]?.price || item.pkg.price || 0,
+          price:
+            item.pkg.package_options?.[item.optIndex]?.price ||
+            item.pkg.price ||
+            0,
           status: "active",
           is_shuttle: item.pkg.is_shuttle || false,
-        })
+        }),
       );
 
-      const { error: dbError } = await supabase.from("user_packages").insert(dbInserts);
+      const { error: dbError } = await supabase
+        .from("user_packages")
+        .insert(dbInserts);
       if (dbError) throw dbError;
 
-      Alert.alert("결제 완료", "이용권 결제가 완료되었습니다!\n마이페이지에서 확인해 주세요.", [
-        { text: "확인", onPress: () => navigation.replace("PurchaseSuccess") } 
-      ]);
-
+      Alert.alert(
+        "결제 완료",
+        "이용권 결제가 완료되었습니다!\n마이페이지에서 확인해 주세요.",
+        [
+          {
+            text: "확인",
+            onPress: () => navigation.replace("PurchaseSuccess"),
+          },
+        ],
+      );
     } catch (e: any) {
       console.error("[Invoice] ❌ 최종 에러:", e.message);
       Alert.alert("결제 실패", e.message);
@@ -189,24 +216,34 @@ export default function InvoiceScreen({ navigation }: any) {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#6366F1" style={{ marginTop: 50 }} />
+          <ActivityIndicator
+            size="large"
+            color="#6366F1"
+            style={{ marginTop: 50 }}
+          />
         ) : invoices.length > 0 ? (
           invoices.map((invoice) => (
             <View key={invoice.id} style={styles.invoiceCard}>
               <View style={styles.invoiceHeader}>
-                <Ionicons name="receipt" size={20} color="#6366F1" style={{ marginRight: 8 }} />
+                <Ionicons
+                  name="receipt"
+                  size={20}
+                  color="#6366F1"
+                  style={{ marginRight: 8 }}
+                />
                 <Text style={styles.invoiceTitle}>청구 내역</Text>
               </View>
-              
+
               <View style={styles.divider} />
-              
+
               {/* 청구 상세 내역 렌더링 */}
               {invoice.cart_items?.map((item: any, idx: number) => {
                 const opt = item.pkg.package_options?.[item.optIndex];
                 return (
                   <View key={idx} style={styles.itemRow}>
                     <Text style={styles.itemName}>
-                      {item.pkg.name} {opt ? `(${opt.label})` : ""} x {item.quantity}
+                      {item.pkg.name} {opt ? `(${opt.label})` : ""} x{" "}
+                      {item.quantity}
                     </Text>
                   </View>
                 );
@@ -216,11 +253,13 @@ export default function InvoiceScreen({ navigation }: any) {
 
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>총 결제 금액</Text>
-                <Text style={styles.totalAmount}>{formatCurrency(invoice.total_amount)}</Text>
+                <Text style={styles.totalAmount}>
+                  {formatCurrency(invoice.total_amount)}
+                </Text>
               </View>
 
-              <TouchableOpacity 
-                style={styles.payBtn} 
+              <TouchableOpacity
+                style={styles.payBtn}
                 onPress={() => handleOpenPayment(invoice)}
               >
                 <Text style={styles.payBtnText}>안전하게 결제하기</Text>
@@ -229,8 +268,14 @@ export default function InvoiceScreen({ navigation }: any) {
           ))
         ) : (
           <View style={styles.emptyContainer}>
-            <Ionicons name="checkmark-circle-outline" size={60} color="#CBD5E1" />
-            <Text style={styles.emptyText}>현재 대기 중인 결제 요청이 없습니다.</Text>
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={60}
+              color="#CBD5E1"
+            />
+            <Text style={styles.emptyText}>
+              현재 대기 중인 결제 요청이 없습니다.
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -242,16 +287,17 @@ export default function InvoiceScreen({ navigation }: any) {
           onClose={handleCloseKSPay}
           paymentData={{
             amount: selectedInvoice.total_amount,
-            packageName: selectedInvoice.cart_items.length > 1 
-              ? `${selectedInvoice.cart_items[0].pkg.name} 외 ${selectedInvoice.cart_items.length - 1}건` 
-              : selectedInvoice.cart_items[0].pkg.name,
+            packageName:
+              selectedInvoice.cart_items.length > 1
+                ? `${selectedInvoice.cart_items[0].pkg.name} 외 ${selectedInvoice.cart_items.length - 1}건`
+                : selectedInvoice.cart_items[0].pkg.name,
             userName: currentUser.name,
             userPhone: currentUser.phone || "01000000000",
             kspay_mid: currentBranch?.kspay_mid || "2999199999",
             userId: currentUser.id,
             branchId: selectedInvoice.branch_id,
             branchName: currentBranch?.name || "지점",
-            storeId: currentBranch?.kspay_mid,
+            storeId: currentBranch?.kspay_mid || "2999199999",
           }}
         />
       )}
@@ -269,13 +315,24 @@ export default function InvoiceScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, backgroundColor: "#FFF" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: "#FFF",
+  },
   headerTitle: { fontSize: 18, fontWeight: "800", color: "#111827" },
   scrollContent: { padding: 20, paddingBottom: 100 },
   topSection: { marginBottom: 24, marginTop: 10 },
-  welcomeText: { fontSize: 16, color: "#64748B", fontWeight: "600", marginBottom: 4 },
+  welcomeText: {
+    fontSize: 16,
+    color: "#64748B",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
   titleText: { fontSize: 24, fontWeight: "800", color: "#1E293B" },
-  
+
   invoiceCard: {
     backgroundColor: "#FFF",
     borderRadius: 24,
@@ -287,21 +344,60 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 3,
   },
-  invoiceHeader: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
+  invoiceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
   invoiceTitle: { fontSize: 18, fontWeight: "800", color: "#1E1B4B" },
   divider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 16 },
-  itemRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
+  itemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
   itemName: { fontSize: 15, color: "#475569", fontWeight: "600" },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8, marginBottom: 24 },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 24,
+  },
   totalLabel: { fontSize: 15, fontWeight: "700", color: "#94A3B8" },
   totalAmount: { fontSize: 24, fontWeight: "900", color: "#6366F1" },
-  
-  payBtn: { backgroundColor: "#6366F1", paddingVertical: 16, borderRadius: 16, alignItems: "center" },
+
+  payBtn: {
+    backgroundColor: "#6366F1",
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: "center",
+  },
   payBtnText: { color: "#FFF", fontSize: 16, fontWeight: "800" },
-  
-  emptyContainer: { alignItems: "center", justifyContent: "center", marginTop: 60 },
-  emptyText: { marginTop: 16, fontSize: 16, color: "#94A3B8", fontWeight: "600" },
-  
-  processingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.9)", justifyContent: "center", alignItems: "center", zIndex: 9999 },
-  processingText: { marginTop: 15, fontSize: 16, fontWeight: "bold", color: "#111827" },
+
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 60,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#94A3B8",
+    fontWeight: "600",
+  },
+
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 9999,
+  },
+  processingText: {
+    marginTop: 15,
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#111827",
+  },
 });
