@@ -154,7 +154,12 @@ export default function PassPurchaseScreen({ navigation }: any) {
       if (branchData) {
         console.log("[Purchase] 🔍 DB에서 가져온 MID:", branchData.kspay_mid); // 이 로그가 찍히는지 확인
         setCurrentBranch(branchData);
-        setBranchMid(branchData.kspay_mid || "2999199999"); // 테스트 아이디라도 강제 주입
+        const mid = branchData.kspay_mid?.trim();
+        setBranchMid(mid || "2999199999"); // 실결제 MID가 없으면 테스트 아이디 사용
+        setBranchContact({
+          phone: branchData.phone || "",
+          kakao: branchData.kakao_url || "",
+        });
       }
 
       const { data, error } = await supabase
@@ -190,7 +195,13 @@ export default function PassPurchaseScreen({ navigation }: any) {
     console.log("[Payment] 🚀 결제 승인 프로세스 시작");
 
     try {
-      // 💡 [핵심] .env에서 가져온 키값의 양끝 따옴표("), 홑따옴표('), 공백을 완전히 제거
+      // 🚀 실제 사용자 세션 토큰 가져오기 (보안 및 서버 승인 확률 높임)
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const userToken = session?.access_token;
+
+      //  [핵심] .env에서 가져온 키값의 양끝 따옴표("), 홑따옴표('), 공백을 완전히 제거
       const rawKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
       const cleanKey = rawKey.replace(/['"]+/g, "").trim();
       const authUrl = process.env.EXPO_PUBLIC_SERVER_AUTH_URL || "";
@@ -208,8 +219,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // 🚀 Bearer 뒤에 반드시 한 칸 띄우기가 되어야 함
-          Authorization: `Bearer ${cleanKey}`,
+          Authorization: `Bearer ${userToken || cleanKey}`,
           apikey: cleanKey,
         },
         body: JSON.stringify({
@@ -248,7 +258,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
             // =========================================================================
             // 🚀 [추가] 결제 내역(user_packages)에 셔틀 이용권 여부(is_shuttle) 도장 꽝!
             // =========================================================================
-            is_shuttle: item.pkg.is_shuttle || false, 
+            is_shuttle: item.pkg.is_shuttle || false,
           }),
         );
 
@@ -801,7 +811,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
             userId: currentUser.id,
             branchId: branchId, // 🚀 결제창 호출 시에도 Context의 지점 전달
             branchName: currentBranch?.name || "지점",
-            storeId: currentBranch?.kspay_mid,
+            storeId: branchMid, // 🚀 확실한 MID 전달
           }}
         />
       )}
