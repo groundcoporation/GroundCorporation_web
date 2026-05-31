@@ -7,10 +7,14 @@ import {
   Platform,
 } from "react-native";
 // 경고 제거 및 일관성을 위해 react-native-safe-area-context 사용
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ReservationFailScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   return (
     <SafeAreaView style={styles.container}>
       {/* 1. 실패 메시지 영역 */}
@@ -35,7 +39,12 @@ export default function ReservationFailScreen({ navigation }: any) {
       </View>
 
       {/* 2. 하단 버튼 영역 */}
-      <View style={styles.buttonGroup}>
+      <View
+        style={[
+          styles.buttonGroup,
+          { paddingBottom: Math.max(insets.bottom, 20) },
+        ]}
+      >
         <TouchableOpacity
           style={styles.retryButton}
           // 이전 화면(수업 선택 화면)으로 돌아가서 다시 선택하게 합니다.

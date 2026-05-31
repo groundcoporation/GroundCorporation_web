@@ -12,7 +12,10 @@ import {
   Modal,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import KSPayService from "../../services/payment/KSPayService";
@@ -57,7 +60,7 @@ const formatCurrency = (amount: number | null) => {
 export default function PassPurchaseScreen({ navigation }: any) {
   // 🚀 [수정] 기존에 수동으로 관리하던 selectedBranchId를 삭제하고 Context에서 가져옵니다.
   const { branchId, role, setBranch } = useAuth();
-
+  const insets = useSafeAreaInsets();
   // --- 상태 관리 ---
   const [categories, setCategories] = useState<any[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("regular");
@@ -563,7 +566,12 @@ export default function PassPurchaseScreen({ navigation }: any) {
       </ScrollView>
 
       {/* 배민 스타일 통합 하단 푸터 */}
-      <View style={styles.integratedFooterWrapper}>
+      <View
+        style={[
+          styles.integratedFooterWrapper,
+          { paddingBottom: (insets.bottom || 16) + 8 },
+        ]}
+      >
         <TouchableOpacity
           style={styles.cartToggleHeader}
           onPress={() =>
@@ -958,7 +966,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 16,
-    paddingBottom: Platform.OS === "ios" ? 34 : 20,
+    // paddingBottom: Platform.OS === "ios" ? 34 : 20, // ❌ 이 줄을 삭제하거나 주석 처리하세요.
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,

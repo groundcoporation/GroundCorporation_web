@@ -8,9 +8,11 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  Platform, // 🚀 에러 해결: Platform 추가
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Calendar, LocaleConfig } from "react-native-calendars";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
@@ -52,6 +54,8 @@ LocaleConfig.defaultLocale = "ko";
 export default function ReservationScreen({ navigation }: any) {
   // 🚀 [추가] 전역 지점 ID 호출
   const { branchId } = useAuth();
+
+  const insets = useSafeAreaInsets(); // 🚀 하단 안전 영역 값 가져오기
 
   const [selectedDate, setSelectedDate] = useState(
     dayjs().tz().format("YYYY-MM-DD"),
@@ -387,7 +391,8 @@ export default function ReservationScreen({ navigation }: any) {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingBottom: isCartExpanded && cart.length > 0 ? 320 : 140,
+          paddingBottom:
+            (isCartExpanded && cart.length > 0 ? 320 : 140) + insets.bottom,
         }}
       >
         <Calendar
@@ -487,7 +492,12 @@ export default function ReservationScreen({ navigation }: any) {
       </ScrollView>
 
       {/* 🚀 스택 장바구니 + 예약 푸터 통합 UI */}
-      <View style={styles.footerWrapper}>
+      <View
+        style={[
+          styles.footerWrapper,
+          { paddingBottom: Math.max(insets.bottom, 20) },
+        ]}
+      >
         {/* 장바구니 헤더 (토글) */}
         <TouchableOpacity
           style={styles.cartToggleHeader}
@@ -734,7 +744,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 16,
-    paddingBottom: Platform.OS === "ios" ? 34 : 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,

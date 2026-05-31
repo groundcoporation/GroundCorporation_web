@@ -7,30 +7,34 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import MapView, { Marker } from "react-native-maps";
 import { supabase } from "../../lib/supabase";
-import * as Location from "expo-location"; 
+import * as Location from "expo-location";
 
 // =========================================================================
-// 🚀 [GPS 추적 주기 수정 메뉴얼] 
-// 본부장님, GPS 위치를 언제 한 번씩 보낼지(10초, 5미터 등) 수정하시려면 
+// 🚀 [GPS 추적 주기 수정 메뉴얼]
+// 본부장님, GPS 위치를 언제 한 번씩 보낼지(10초, 5미터 등) 수정하시려면
 // 이 파일이 아니라 기사님 화면인 "DriverDashboardScreen.tsx" 파일을 여셔야 합니다!
-// 
+//
 // [수정 위치] DriverDashboardScreen.tsx 의 startLocationTracking 함수 내부:
 // await Location.watchPositionAsync(
-//   { 
-//     accuracy: Location.Accuracy.High, 
+//   {
+//     accuracy: Location.Accuracy.High,
 //     timeInterval: 10000,     // 💡 시간 기준: 10000 = 10초마다 위치 전송 시도
 //     distanceInterval: 5      // 💡 거리 기준: 5 = 5미터 이상 이동하면 즉시 위치 전송
 //   }, ...
-// 
-// ※ 참고: 10초로 맞춰두어도, 차량이 신호대기 등으로 아예 움직임이 없으면 스마트폰 자체 
+//
+// ※ 참고: 10초로 맞춰두어도, 차량이 신호대기 등으로 아예 움직임이 없으면 스마트폰 자체
 // 배터리 절약 모드 때문에 10초가 지나도 위치를 쏘지 않을 수 있습니다 (정상적인 OS 작동 방식입니다).
 // =========================================================================
 
 const RealtimeMapScreen = ({ navigation }: any) => {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [shuttle, setShuttle] = useState<any>(null);
   const mapRef = useRef<MapView>(null);
@@ -44,7 +48,7 @@ const RealtimeMapScreen = ({ navigation }: any) => {
       const { data, error } = await supabase
         .from("shuttle_status")
         .select("*")
-        .eq("is_driving", true) 
+        .eq("is_driving", true)
         .limit(1)
         .maybeSingle();
 
@@ -88,20 +92,20 @@ const RealtimeMapScreen = ({ navigation }: any) => {
           );
 
           if (payload.new && payload.new.is_driving) {
-            setShuttle({ ...payload.new }); 
-            
+            setShuttle({ ...payload.new });
+
             // 💡 상단 헤더에 마커가 짤리지 않도록 카메라 중심(위도)을 살짝 아래로 보정합니다.
             mapRef.current?.animateToRegion(
               {
-                latitude: Number(payload.new.lat) + 0.0004, 
+                latitude: Number(payload.new.lat) + 0.0004,
                 longitude: Number(payload.new.lng),
-                latitudeDelta: 0.002, 
+                latitudeDelta: 0.002,
                 longitudeDelta: 0.002,
               },
               1000,
-            ); 
+            );
           } else {
-            setShuttle(null); 
+            setShuttle(null);
           }
         },
       )
@@ -138,30 +142,30 @@ const RealtimeMapScreen = ({ navigation }: any) => {
               latitudeDelta: 0.002,
               longitudeDelta: 0.002,
             }}
-            showsUserLocation={true} 
-            showsMyLocationButton={true} 
-            mapPadding={{ top: 80, right: 0, bottom: 200, left: 0 }} 
+            showsUserLocation={true}
+            showsMyLocationButton={true}
+            mapPadding={{ top: 80, right: 0, bottom: 200, left: 0 }}
           >
             {/* 🚀 [버스 마커] 셔틀버스의 현재 위치를 나타내는 아이콘입니다. */}
             <Marker
-              key={`${shuttle.shuttle_id}-${shuttle.lat}-${shuttle.lng}`} 
+              key={`${shuttle.shuttle_id}-${shuttle.lat}-${shuttle.lng}`}
               coordinate={{
                 latitude: Number(shuttle.lat),
                 longitude: Number(shuttle.lng),
               }}
               title="셔틀버스"
-              tracksViewChanges={true} 
+              tracksViewChanges={true}
             >
               {/* 🚀 [수정] 촌스러운 동그라미 테두리를 없애고 깔끔하게 버스 아이콘만 크게 띄웁니다! */}
-              <Ionicons 
-                name="bus" 
-                size={40} 
-                color="#6366F1" 
-                style={{ 
-                  textShadowColor: 'rgba(0, 0, 0, 0.4)', // 지도 위에서 잘 보이도록 살짝 그림자만 추가
-                  textShadowOffset: { width: 0, height: 2 }, 
-                  textShadowRadius: 4 
-                }} 
+              <Ionicons
+                name="bus"
+                size={40}
+                color="#6366F1"
+                style={{
+                  textShadowColor: "rgba(0, 0, 0, 0.4)", // 지도 위에서 잘 보이도록 살짝 그림자만 추가
+                  textShadowOffset: { width: 0, height: 2 },
+                  textShadowRadius: 4,
+                }}
               />
             </Marker>
           </MapView>
@@ -180,7 +184,9 @@ const RealtimeMapScreen = ({ navigation }: any) => {
           <ActivityIndicator color="#6366F1" />
         </View>
       ) : shuttle ? (
-        <View style={styles.driverCard}>
+        <View
+          style={[styles.driverCard, { bottom: Math.max(insets.bottom, 20) }]}
+        >
           <View style={styles.cardHeader}>
             <View style={styles.driverProfile}>
               <View style={styles.avatar}>
@@ -246,7 +252,6 @@ const styles = StyleSheet.create({
   // 하단 정보 카드 디자인
   driverCard: {
     position: "absolute",
-    bottom: 30,
     left: 20,
     right: 20,
     backgroundColor: "#FFF",
