@@ -62,6 +62,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
   // 🚀 [수정] 기존에 수동으로 관리하던 selectedBranchId를 삭제하고 Context에서 가져옵니다.
   const { branchId, role, setBranch } = useAuth();
   const insets = useSafeAreaInsets();
+  
   // --- 상태 관리 ---
   const [categories, setCategories] = useState<any[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("regular");
@@ -81,6 +82,10 @@ export default function PassPurchaseScreen({ navigation }: any) {
   const [showConsultModal, setShowConsultModal] = useState(false);
   const [branchContact, setBranchContact] = useState({ phone: "", kakao: "" });
   const [branchMid, setBranchMid] = useState<string>("");
+  
+  // 🚀 [핵심 추가] 상담 대기 중인 상태를 관리하는 변수
+  const [hasPendingConsult, setHasPendingConsult] = useState(false);
+  const [pendingConsultType, setPendingConsultType] = useState<string | null>(null); // 👈 타입 저장용
 
   // --- 초기 데이터 로딩 ---
   useEffect(() => {
@@ -140,6 +145,18 @@ export default function PassPurchaseScreen({ navigation }: any) {
             child.target_class && String(child.target_class).trim() !== "",
         );
         setIsClassAssigned(!!(isAdultAssigned || isChildAssigned));
+
+        // 🚀 [추가] 상담 신청 내역 확인 (PENDING 상태인 게 하나라도 있으면 true)
+        const { data: consultData } = await supabase
+          .from("consultation_requests")
+          .select("id, request_type") // 👈 request_type 추가
+          .eq("user_id", user.id)
+          .eq("branch_id", branchId)
+          .eq("status", "PENDING")
+          .maybeSingle();
+
+        setHasPendingConsult(!!consultData);
+        setPendingConsultType(consultData?.request_type || null); // 👈 타입 저장
       }
     } catch (e) {
       console.error("[Purchase] ❌ 초기 데이터 로드 실패:", e);
@@ -193,24 +210,72 @@ export default function PassPurchaseScreen({ navigation }: any) {
     }
   };
 
+  // 🚀 [핵심 추가] 카카오/전화 버튼 클릭 로직 통합 (중복 신청 방지)
+  const handleConsultRequest = async (type: "KAKAO" | "PHONE") => {
+    try {
+      const { data: existing } = await supabase
+        .from("consultation_requests")
+        .select("id, request_type")
+        .eq("user_id", currentUser.id)
+        .eq("branch_id", branchId)
+        .eq("status", "PENDING")
+        .maybeSingle();
+
+      if (!existing) {
+        // 첫 신청 시
+        await supabase.from("consultation_requests").insert({
+          user_id: currentUser.id,
+          branch_id: branchId,
+          request_type: type, // 최초 선택한 채널 타입 저장
+          status: "PENDING",
+        });
+        setHasPendingConsult(true);
+        Alert.alert("상담 신청 완료", "관리자가 확인 후 연락드리겠습니다.");
+        // 첫 신청 후 연결
+        if (type === "KAKAO") Linking.openURL(branchContact.kakao || "https://pf.kakao.com/_xxxxxx");
+        else Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`);
+      } else {
+        // 이미 신청한 경우: 이전 신청 타입과 다른 수단을 제안
+        const prevType = existing.request_type === "KAKAO" ? "카카오톡" : "전화";
+        const otherType = type === "KAKAO" ? "전화" : "카카오톡";
+        
+        Alert.alert(
+          "상담 접수 중", 
+          `이미 ${prevType}(으)로 상담 신청이 접수되었습니다.\n\n다른 방법으로 급히 연락하시겠어요?`,
+          [
+            { text: "닫기", style: "cancel" },
+            { 
+              text: `${otherType} 연결`, 
+              onPress: () => {
+                if (type === "KAKAO") Linking.openURL(branchContact.kakao || "https://pf.kakao.com/_xxxxxx");
+                else Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`);
+              }
+            }
+          ]
+        );
+      }
+      setShowConsultModal(false);
+    } catch (error) {
+      console.error("상담 신청 에러:", error);
+      Alert.alert("오류", "연결 중 문제가 발생했습니다.");
+    }
+  };
+
   // --- 결제 프로세스 ---
   const processCompletePayment = async (payKey: string) => {
     setIsProcessing(true);
     console.log("[Payment] 🚀 결제 승인 프로세스 시작");
 
     try {
-      // 🚀 실제 사용자 세션 토큰 가져오기 (보안 및 서버 승인 확률 높임)
       const {
         data: { session },
       } = await supabase.auth.getSession();
       const userToken = session?.access_token;
 
-      //  [핵심] .env에서 가져온 키값의 양끝 따옴표("), 홑따옴표('), 공백을 완전히 제거
       const rawKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
       const cleanKey = rawKey.replace(/['"]+/g, "").trim();
       const authUrl = process.env.EXPO_PUBLIC_SERVER_AUTH_URL || "";
 
-      // 서버로 보내는 데이터 확인 로그
       console.log("[Payment] 📤 서버로 보내는 데이터:", {
         payKey: payKey,
         amount: finalPrice,
@@ -233,7 +298,6 @@ export default function PassPurchaseScreen({ navigation }: any) {
         }),
       });
 
-      // 💡 텍스트로 먼저 받아서 파싱 에러 방지
       const resText = await response.text();
       console.log("[Payment] 📥 서버 원본 응답:", resText);
 
@@ -661,23 +725,43 @@ export default function PassPurchaseScreen({ navigation }: any) {
                   "알림",
                   "원하시는 상품에서 [담기] 버튼을 눌러주세요.",
                 );
-              if (hasConsult)
-                Linking.openURL(
-                  `tel:${branchContact.phone || "010-0000-0000"}`,
-                );
-              else if (!isClassAssigned) setShowConsultModal(true);
-              else if (popupOptions.length > 0) setShowOptionModal(true);
-              else setShowKSPay(true);
+
+              if (hasConsult) {
+                Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`);
+              } else if (!isClassAssigned) {
+                // 🚀 상담 신청 중일 때 결제 버튼을 누르면 나오는 안내 메시지 (전화 버튼 추가)
+                if (hasPendingConsult) {
+  const prevType = pendingConsultType === "KAKAO" ? "카카오톡" : "전화";
+  Alert.alert(
+    "상담 접수 중", 
+    `이미 ${prevType}(으)로 상담 신청이 접수되었습니다.\n관리자의 연락을 기다려주세요!`,
+    [
+      { text: "닫기", style: "cancel" },
+      { text: "전화 연결", onPress: () => Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`) },
+      { text: "카카오톡 문의", onPress: () => Linking.openURL(branchContact.kakao || "https://pf.kakao.com/_xxxxxx") }
+    ]
+  );
+} else {
+                  setShowConsultModal(true);
+                }
+              } else if (popupOptions.length > 0) {
+                setShowOptionModal(true);
+              } else {
+                setShowKSPay(true);
+              }
             }}
           >
             <Text style={styles.mainActionText}>
-              {hasConsult ? "상담 전화하기" : "결제하기"}
+              {hasConsult 
+                ? "상담 전화하기" 
+                : (!isClassAssigned && hasPendingConsult) 
+                  ? "상담 대기 중" 
+                  : "결제하기"}
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* 상담 유도 모달 */}
       <Modal visible={showConsultModal} transparent animationType="fade">
         <View style={styles.consultModalOverlay}>
           <View style={styles.consultModalContent}>
@@ -686,24 +770,12 @@ export default function PassPurchaseScreen({ navigation }: any) {
             </View>
             <Text style={styles.consultModalTitle}>상담이 필요합니다!</Text>
             <Text style={styles.consultModalDesc}>
-              첫 수강생은 원활한 수업을 위해{"\n"}반 배정 상담 후 결제가
-              가능합니다.
+              첫 수강생은 원활한 수업을 위해{"\n"}반 배정 상담 후 결제가 가능합니다.
             </Text>
             <View style={styles.consultModalBtnContainer}>
               <TouchableOpacity
                 style={styles.consultKakaoBtn}
-                onPress={async () => {
-                  if (currentUser)
-                    await supabase.from("consultation_requests").insert({
-                      user_id: currentUser.id,
-                      branch_id: branchId, // 🚀 여기도 Context의 branchId로 수정
-                      request_type: "KAKAO",
-                      status: "PENDING",
-                    });
-                  Linking.openURL(
-                    branchContact.kakao || "https://pf.kakao.com/_xxxxxx",
-                  );
-                }}
+                onPress={() => handleConsultRequest("KAKAO")}
               >
                 <Ionicons
                   name="chatbubble"
@@ -715,18 +787,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.consultCallBtn}
-                onPress={async () => {
-                  if (currentUser)
-                    await supabase.from("consultation_requests").insert({
-                      user_id: currentUser.id,
-                      branch_id: branchId, // 🚀 여기도 Context의 branchId로 수정
-                      request_type: "PHONE",
-                      status: "PENDING",
-                    });
-                  Linking.openURL(
-                    `tel:${branchContact.phone || "010-0000-0000"}`,
-                  );
-                }}
+                onPress={() => handleConsultRequest("PHONE")}
               >
                 <Ionicons
                   name="call"
@@ -747,7 +808,6 @@ export default function PassPurchaseScreen({ navigation }: any) {
         </View>
       </Modal>
 
-      {/* 추가 옵션 팝업 모달 */}
       <Modal visible={showOptionModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -804,7 +864,6 @@ export default function PassPurchaseScreen({ navigation }: any) {
         </View>
       </Modal>
 
-      {/* 결제 서비스 컴포넌트 */}
       {showKSPay && currentUser && cartItems.length > 0 && (
         <KSPayService
           isVisible={showKSPay}
@@ -819,14 +878,13 @@ export default function PassPurchaseScreen({ navigation }: any) {
             userPhone: currentUser.phone || "01000000000",
             kspay_mid: branchMid,
             userId: currentUser.id,
-            branchId: branchId, // 🚀 결제창 호출 시에도 Context의 지점 전달
+            branchId: branchId,
             branchName: currentBranch?.name || "지점",
-            storeId: branchMid, // 🚀 확실한 MID 전달
+            storeId: branchMid,
           }}
         />
       )}
 
-      {/* 로딩 오버레이 */}
       {isProcessing && (
         <View style={styles.processingOverlay}>
           <ActivityIndicator size="large" color="#6366F1" />
@@ -968,7 +1026,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 16,
-    // paddingBottom: Platform.OS === "ios" ? 34 : 20, // ❌ 이 줄을 삭제하거나 주석 처리하세요.
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
