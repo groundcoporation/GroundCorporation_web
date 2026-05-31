@@ -392,6 +392,8 @@ export default function ReservationScreen({ navigation }: any) {
       >
         <Calendar
           current={selectedDate}
+          // 🚀 [추가] 오늘 날짜를 구해서 minDate로 설정합니다.
+          minDate={dayjs().tz().format("YYYY-MM-DD")} 
           onDayPress={(day: any) => setSelectedDate(day.dateString)}
           markedDates={{
             [selectedDate]: { selected: true, selectedColor: "#6366F1" },
