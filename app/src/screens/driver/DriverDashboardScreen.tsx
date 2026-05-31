@@ -24,10 +24,10 @@ import { useAuth } from "../../context/AuthContext";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-// 🚀 [좀비 원천 봉쇄] 앱 전체에서 딱 하나씩만 존재하도록 통제하는 글로벌 변수들
+// 🚀 [좀비 원천 봉쇄]
 let globalLocationSub: Location.LocationSubscription | null = null;
 let globalIsDriving = false;
-let currentTrackingSessionId: string | null = null; // 💡 좀비 추적기를 감별할 고유 고스트 세션 ID
+let currentTrackingSessionId: string | null = null;
 
 export default function DriverDashboardScreen({ navigation }: any) {
   const { branchId, role, setBranch } = useAuth();
@@ -80,7 +80,6 @@ export default function DriverDashboardScreen({ navigation }: any) {
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") return null;
 
-    // 🚀 새로운 추적 세션 번호를 발급합니다.
     const mySessionId = Math.random().toString(36).substring(7);
     currentTrackingSessionId = mySessionId;
 
@@ -94,26 +93,18 @@ export default function DriverDashboardScreen({ navigation }: any) {
     const sub = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
-        timeInterval: 5000,   // 💡 현재 5000ms (5초) 마다 전송 시도
-        distanceInterval: 1,  // 💡 현재 1m 움직일 때마다 전송 시도
+        timeInterval: 5000,
+        distanceInterval: 1,
       },
       async (location) => {
-        // 🚨 [자폭 프로그래밍] 스위치가 꺼졌거나, 내가 현재 활성화된 최신 추적 세션이 아니라면
         if (!globalIsDriving || currentTrackingSessionId !== mySessionId) {
           try {
-            sub.remove(); // 🎯 엉뚱한 녀석을 죽이지 않고, "좀비 자신"을 확실하게 쏴서 파괴합니다!
-            console.log(
-              "💀 [좀비 퇴치] 오래된 유령 추적기가 스스로 자폭하여 소멸했습니다.",
-            );
+            sub.remove();
           } catch (e) {}
           return;
         }
 
         const { latitude, longitude } = location.coords;
-
-        console.log(
-          `📍 [GPS 테스트 중] ${new Date().toLocaleTimeString()} - 위도: ${latitude.toFixed(6)}, 경도: ${longitude.toFixed(6)}`,
-        );
 
         const { error } = await supabase.from("shuttle_status").upsert({
           shuttle_id: profile.id,
@@ -124,16 +115,12 @@ export default function DriverDashboardScreen({ navigation }: any) {
           last_update: new Date().toISOString(),
           branch_id: isDeveloper ? branchId : profile.branch_id,
         });
-
-        if (error) console.log("🚨 DB 저장 에러:", error.message);
-        else console.log("✅ DB 업데이트 성공");
       },
     );
 
     globalLocationSub = sub;
   };
 
-  // 🚀 본부장님 말씀대로 꼼수 부리지 않고, 100% 정직하게 DB에 적힌 참/거짓 상태를 그대로 긁어와 동기화합니다!
   const fetchDriverInfoAndPickups = async () => {
     try {
       setLoading(true);
@@ -151,13 +138,12 @@ export default function DriverDashboardScreen({ navigation }: any) {
       if (profile) {
         setDriverInfo(profile);
 
-        const { data: statusData, error: statusError } = await supabase
+        const { data: statusData } = await supabase
           .from("shuttle_status")
           .select("is_driving")
           .eq("shuttle_id", profile.id)
           .maybeSingle();
 
-        // 데이터가 없거나 에러면 강제로 false 처리, 있으면 DB 값 그대로 사용!
         const drivingNow = statusData ? Boolean(statusData.is_driving) : false;
 
         globalIsDriving = drivingNow;
@@ -165,9 +151,6 @@ export default function DriverDashboardScreen({ navigation }: any) {
         isDrivingRef.current = drivingNow;
 
         if (drivingNow && !globalLocationSub) {
-          console.log(
-            "🚐 [운행 복구] 기존 운행 상태를 감지하여 위치 추적을 자동 재개합니다.",
-          );
           await startLocationTracking(profile);
         }
 
@@ -196,9 +179,13 @@ export default function DriverDashboardScreen({ navigation }: any) {
     }, []),
   );
 
+  // 🚀 [완벽 수술 1] 고장난 shuttle_logs 대신, attendance_logs를 보고 상태를 완벽 복원합니다!
   const fetchTodayPickups = async (targetBranchId: string) => {
     try {
-      const { data, error } = await supabase
+      const todayDateStr = dayjs().tz().format("YYYY-MM-DD");
+
+      // 1. 오늘 셔틀 탈 아이들 명단 가져오기
+      const { data: settingsData, error: settingsError } = await supabase
         .from("pickup_settings")
         .select(
           `
@@ -211,10 +198,17 @@ export default function DriverDashboardScreen({ navigation }: any) {
         .eq("is_active", true)
         .eq("branch_id", targetBranchId);
 
-      if (error) throw error;
+      if (settingsError) throw settingsError;
 
-      if (data && data.length > 0) {
-        const grouped = data.reduce((acc: any, curr: any) => {
+      // 2. 오늘 출석 기록 가져오기 (버튼 상태 복원용)
+      const { data: attData } = await supabase
+        .from("attendance_logs")
+        .select("child_id, shuttle_ride_time, shuttle_drop_time")
+        .eq("branch_id", targetBranchId)
+        .eq("date", todayDateStr);
+
+      if (settingsData && settingsData.length > 0) {
+        const grouped = settingsData.reduce((acc: any, curr: any) => {
           const spotId = curr.pickup_spots?.id || "unknown";
           const spotName = curr.pickup_spots?.name || "지정되지 않은 정류장";
 
@@ -222,21 +216,32 @@ export default function DriverDashboardScreen({ navigation }: any) {
             acc[spotId] = { id: spotId, spotName: spotName, students: [] };
           }
 
+          // 💡 버튼 상태 복원 로직
+          let currentStatus = "pending";
+          if (attData) {
+            const childAtt = attData.find((log: any) => log.child_id === curr.child_id);
+            if (childAtt) {
+              if (childAtt.shuttle_drop_time) {
+                currentStatus = "dropped_off"; // 하차 완료
+              } else if (childAtt.shuttle_ride_time) {
+                currentStatus = "boarded";     // 승차 완료
+              }
+            }
+          }
+
           acc[spotId].students.push({
             child_id: curr.child_id,
             parent_id: curr.children?.parent_id,
             name: curr.children?.child_name || "이름 확인 필요",
             detail: curr.detail_location,
-            status: "pending",
+            status: currentStatus, // 복원된 상태 적용
           });
 
           return acc;
         }, {});
 
         const newGroups = Object.values(grouped);
-        if (JSON.stringify(newGroups) !== JSON.stringify(pickupGroups)) {
-          setPickupGroups(newGroups);
-        }
+        setPickupGroups(newGroups);
       } else {
         setPickupGroups([]);
       }
@@ -266,10 +271,9 @@ export default function DriverDashboardScreen({ navigation }: any) {
         await startLocationTracking(driverInfo);
         Alert.alert("운행 시작", "운행이 시작되었습니다.");
       } else {
-        // 🛑 [종료 절차 엄격화]
         globalIsDriving = false;
         setIsDriving(false);
-        currentTrackingSessionId = null; // 모든 구형 세션 무효화
+        currentTrackingSessionId = null;
 
         if (globalLocationSub) {
           try {
@@ -286,12 +290,6 @@ export default function DriverDashboardScreen({ navigation }: any) {
           last_update: new Date().toISOString(),
         });
 
-        if (error) {
-          console.error("DB 업데이트 실패:", error);
-        } else {
-          console.log("🛑 성공: DB 상태가 false로 고정되었습니다.");
-        }
-
         Alert.alert("운행 종료", "운행이 종료되었습니다.");
       }
     } catch (e) {
@@ -299,6 +297,7 @@ export default function DriverDashboardScreen({ navigation }: any) {
     }
   };
 
+  // 🚀 [완벽 수술 2] 버튼 누를 때 에러 없이 완벽하게 저장하는 로직
   const handleStudentBoarding = async (
     groupId: string,
     student: any,
@@ -309,13 +308,16 @@ export default function DriverDashboardScreen({ navigation }: any) {
       return;
     }
 
+    // 🛑 이미 하차까지 한 아이는 클릭 원천 봉쇄
     if (status === "dropped_off") return;
 
     const nextStatus = status === "pending" ? "boarded" : "dropped_off";
     const eventType = nextStatus === "boarded" ? "승차" : "하차";
 
-    const nowKST = dayjs().tz().format("YYYY-MM-DDTHH:mm:ssZ");
+    const nowISO = new Date().toISOString(); 
+    const todayDateStr = dayjs().tz().format("YYYY-MM-DD");
 
+    // UI 즉시 변경 (빠른 반응)
     setPickupGroups((prevGroups) =>
       prevGroups.map((group) => {
         if (group.id === groupId) {
@@ -334,15 +336,55 @@ export default function DriverDashboardScreen({ navigation }: any) {
 
     try {
       const targetBranch = isDeveloper ? branchId : driverInfo.branch_id;
-      await supabase.from("shuttle_logs").insert([
+      
+      // 🚀 1. 셔틀 로그 기록 (branch_id 포함)
+      // ⚠️ 주의: 이 코드가 작동하려면 Supabase의 shuttle_logs 테이블에 반드시 'branch_id' 컬럼(text)이 있어야 합니다!
+      const { error: shuttleError } = await supabase.from("shuttle_logs").insert([
         {
           child_id: student.child_id,
           event_type: eventType,
-          event_time: nowKST,
-          branch_id: targetBranch,
+          event_time: nowISO,
+          branch_id: targetBranch, 
         },
       ]);
 
+      if (shuttleError) throw new Error("셔틀 로그 에러: " + shuttleError.message);
+
+      // 🚀 2. 출석 현황판(attendance_logs) 안전 업데이트
+      const { data: existingAtt } = await supabase
+        .from("attendance_logs")
+        .select("id")
+        .eq("child_id", student.child_id)
+        .eq("date", todayDateStr)
+        .maybeSingle();
+
+      const attPayload: any = {};
+      if (nextStatus === "boarded") {
+        attPayload.shuttle_ride_time = nowISO;
+      } else {
+        attPayload.shuttle_drop_time = nowISO;
+      }
+
+      if (existingAtt) {
+        // 기존 줄이 있으면 Update
+        const { error: updateErr } = await supabase
+          .from("attendance_logs")
+          .update(attPayload)
+          .eq("id", existingAtt.id);
+        if (updateErr) throw new Error("출석 업데이트 에러: " + updateErr.message);
+      } else {
+        // 기존 줄이 없으면 Insert
+        attPayload.child_id = student.child_id;
+        attPayload.date = todayDateStr;
+        attPayload.branch_id = targetBranch;
+        
+        const { error: insertErr } = await supabase
+          .from("attendance_logs")
+          .insert([attPayload]);
+        if (insertErr) throw new Error("출석 생성 에러: " + insertErr.message);
+      }
+
+      // 학부모 푸시 알림
       if (student.parent_id) {
         await sendGlobalPushNotification({
           targetBranchId: null,
@@ -353,8 +395,11 @@ export default function DriverDashboardScreen({ navigation }: any) {
           relatedId: student.child_id,
         });
       }
-    } catch (err) {
-      Alert.alert("오류", "기록 저장에 실패했습니다.");
+
+    } catch (err: any) {
+      console.error("DB 저장 전체 에러:", err);
+      Alert.alert("저장 실패", err.message); 
+      // 만약 실패하면 UI를 롤백하는 로직을 추가할 수도 있지만, 일단 알림창으로 인지시킵니다.
     }
   };
 
@@ -443,8 +488,13 @@ export default function DriverDashboardScreen({ navigation }: any) {
                       onPress={() =>
                         handleStudentBoarding(group.id, student, student.status)
                       }
+                      // 🛑 여기서 하차 완료면 버튼 자체를 먹통으로 만듦!
+                      disabled={student.status === "dropped_off"} 
                     >
-                      <Text style={styles.statusBtnText}>
+                      <Text style={[
+                          styles.statusBtnText, 
+                          student.status === "dropped_off" && {color: "#FFF"}
+                      ]}>
                         {student.status === "pending"
                           ? "승차 처리"
                           : student.status === "boarded"
