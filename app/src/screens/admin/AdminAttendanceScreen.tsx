@@ -10,28 +10,33 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StatusBar,
+  Dimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+// 🚀 중요: SafeAreaView를 걷어내고 기기별 두께를 계산할 useSafeAreaInsets만 사용합니다.
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import dayjs from "dayjs";
-import { useAuth } from "../../context/AuthContext"; // Import useAuth to get branchId
-import { sendGlobalPushNotification } from "../../services/notificationService"; // 🚀 푸시 알림 서비스 추가
+import { useAuth } from "../../context/AuthContext";
+import { sendGlobalPushNotification } from "../../services/notificationService";
 
 interface AttendeeInfo {
-  id: string; // child_id or user_id
-  name: string; // child_name or user_name
-  birthDate: string; // child_birth or user_birth_date (YYYYMMDD format)
+  id: string;
+  name: string;
+  birthDate: string;
   type: "child" | "parent";
-  parentId?: string; // parent_id if type is child
-  parentName?: string; // parent_name if type is child
-  targetClass?: string; // Add targetClass to display
+  parentId?: string;
+  parentName?: string;
+  targetClass?: string;
 }
 
+const { height } = Dimensions.get("window");
+
 const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
-  const { branchId: selectedBranchId } = useAuth(); // Get branchId from AuthContext
+  const { branchId: selectedBranchId } = useAuth();
+  // 🚀 안전 영역 픽셀 인셋 계산 훅 선언
+  const insets = useSafeAreaInsets();
 
   const [keypadInput, setKeypadInput] = useState("");
   const [searchResults, setSearchResults] = useState<AttendeeInfo[]>([]);
@@ -57,7 +62,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
     setSelectedAttendee(null);
   };
 
-  // Helper function to check for valid reservations for an attendee
   const checkValidReservationForAttendee = useCallback(
     async (attendee: AttendeeInfo): Promise<boolean> => {
       const today = dayjs().tz().format("YYYY-MM-DD");
@@ -68,7 +72,7 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
         .select("*, class_schedules(start_time, end_time)")
         .eq(attendee.type === "child" ? "child_id" : "user_id", attendee.id)
         .eq("class_date", today)
-        .neq("status", "canceled"); // Only consider non-canceled reservations
+        .neq("status", "canceled");
 
       if (resError) {
         console.error("Error checking reservation for attendee:", resError);
@@ -82,7 +86,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
         const startTime = dayjs(`${today} ${sched.start_time}`);
         const endTime = dayjs(`${today} ${sched.end_time}`);
 
-        // Check if current time is within 10 minutes before start or 10 minutes after end
         return (
           now.isAfter(startTime.subtract(10, "minute")) &&
           now.isBefore(endTime.add(10, "minute"))
@@ -92,7 +95,7 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
       return !!validReservation;
     },
     [],
-  ); // Dependencies: none, as supabase and dayjs are stable, and attendee is passed as argument.
+  );
 
   const searchAttendees = useCallback(
     async (last4Digits: string) => {
@@ -103,7 +106,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
       try {
         const potentialResults: AttendeeInfo[] = [];
 
-        // 1. 'users' 테이블에서 전화번호 뒷 4자리가 일치하는 사용자 검색 (부모님)
         const { data: usersData, error: usersError } = await supabase
           .from("users")
           .select("id, name, phone, birth_date, target_class")
@@ -114,7 +116,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
 
         if (usersData && usersData.length > 0) {
           for (const user of usersData) {
-            // 해당 부모의 자녀 정보도 함께 검색
             const { data: childrenData, error: childrenError } = await supabase
               .from("children")
               .select("id, child_name, child_birth, target_class")
@@ -135,7 +136,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
                 });
               }
             } else {
-              // 자녀가 없는 부모는 본인으로 간주 (성인반 등)
               potentialResults.push({
                 id: user.id,
                 name: user.name,
@@ -147,7 +147,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
           }
         }
 
-        // Filter potential results based on valid reservations
         const filteredResults: AttendeeInfo[] = [];
         for (const attendee of potentialResults) {
           const hasValidReservation =
@@ -157,7 +156,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
           }
         }
 
-        // Remove duplicates (same id + type combination) from filtered results
         const uniqueResults = Array.from(
           new Map(
             filteredResults.map((item) => [item.id + item.type, item]),
@@ -165,7 +163,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
         );
         setSearchResults(uniqueResults);
 
-        // 🚀 [추가] 검색 결과가 하나일 경우 자동으로 선택
         if (uniqueResults.length === 1) {
           setSelectedAttendee(uniqueResults[0]);
         }
@@ -177,7 +174,7 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
       }
     },
     [selectedBranchId, checkValidReservationForAttendee],
-  ); // Dependencies for useCallback
+  );
 
   useEffect(() => {
     if (keypadInput.length === 4) {
@@ -186,18 +183,18 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
       setSearchResults([]);
       setSelectedAttendee(null);
     }
-  }, [keypadInput, selectedBranchId, searchAttendees]); // Add searchAttendees to dependencies
+  }, [keypadInput, selectedBranchId, searchAttendees]);
 
   const calculateAge = (birthDate: string | null | undefined) => {
     if (!birthDate || birthDate.length !== 8) return 0;
     try {
-      const year = parseInt(birthDate.substring(0, 4), 10); // Specify radix
-      const currentYear = dayjs().tz().year(); // 한국 시간 기준 현재 연도
-      return currentYear - year + 1; // 한국 나이
+      const year = parseInt(birthDate.substring(0, 4), 10);
+      const currentYear = dayjs().tz().year();
+      return currentYear - year + 1;
     } catch (e) {
       return 0;
     }
-  }; // Missing closing brace added here
+  };
 
   const handleAttendanceAction = async (status: "등원" | "하원") => {
     if (!selectedAttendee) {
@@ -215,9 +212,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
       const currentTime = dayjs().tz().toISOString();
       const now = dayjs().tz();
 
-      // =========================================================================
-      // 🚀 [핵심] 현재 시간대 예약 확인 로직 (10분 버퍼 적용)
-      // =========================================================================
       const { data: reservations, error: resError } = await supabase
         .from("reservations")
         .select("*, class_schedules(start_time, end_time)")
@@ -230,12 +224,10 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
 
       if (resError) throw resError;
 
-      // 현재 시간과 대조하여 유효한 예약 찾기
       const validReservation = reservations?.find((res: any) => {
         const sched = res.class_schedules;
         if (!sched) return false;
 
-        // 시작 시간 10분 전 ~ 종료 시간 10분 후까지 허용
         const startTime = dayjs(`${today} ${sched.start_time}`);
         const endTime = dayjs(`${today} ${sched.end_time}`);
 
@@ -252,15 +244,12 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
         );
         return;
       }
-      // =========================================================================
 
-      // 1. 예약 테이블 상태 업데이트 (학부모 앱 연동)
       await supabase
         .from("reservations")
         .update({ attendance_status: status })
         .eq("id", validReservation.id);
 
-      // Check for existing attendance log for today
       const { data: existingLog, error: fetchError } = await supabase
         .from("attendance_logs")
         .select("*")
@@ -269,12 +258,10 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
         .single();
 
       if (fetchError && fetchError.code !== "PGRST116") {
-        // PGRST116 means no rows found
         throw fetchError;
       }
 
       if (existingLog) {
-        // Update existing log
         const updateData: {
           check_in?: string;
           check_out?: string;
@@ -284,9 +271,8 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
           updateData.check_in = currentTime;
           updateData.status = "등원";
         } else {
-          // status === "하원"
           updateData.check_out = currentTime;
-          updateData.status = "하원"; // Or a more complex status logic
+          updateData.status = "하원";
         }
 
         const { error: updateError } = await supabase
@@ -296,7 +282,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
 
         if (updateError) throw updateError;
       } else {
-        // Insert new log
         const insertData = {
           child_id: selectedAttendee.id,
           date: today,
@@ -313,7 +298,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
         if (insertError) throw insertError;
       }
 
-      // 🚀 [추가] 학부모에게 실시간 푸시 발송
       await sendGlobalPushNotification({
         targetBranchId: null,
         targetUserId: selectedAttendee.parentId || selectedAttendee.id,
@@ -324,7 +308,7 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
       });
 
       Alert.alert("성공", `${selectedAttendee.name} ${status} 처리 완료!`);
-      handleClear(); // Clear input and selection after successful logging
+      handleClear();
     } catch (error: any) {
       console.error("Attendance logging failed:", error.message);
       Alert.alert("오류", `출결 처리 중 문제가 발생했습니다: ${error.message}`);
@@ -344,8 +328,11 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
           <Text style={styles.keypadButtonText}>{num}</Text>
         </TouchableOpacity>
       ))}
-      <TouchableOpacity style={styles.keypadButton} onPress={handleClear}>
-        <Text style={styles.keypadButtonText}>C</Text>
+      <TouchableOpacity
+        style={[styles.keypadButton, styles.clearButton]}
+        onPress={handleClear}
+      >
+        <Text style={[styles.keypadButtonText, { color: "#EF4444" }]}>C</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.keypadButton}
@@ -354,14 +341,16 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
         <Text style={styles.keypadButtonText}>0</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.keypadButton} onPress={handleBackspace}>
-        <Ionicons name="backspace-outline" size={24} color="#333" />
+        <Ionicons name="backspace-outline" size={30} color="#475569" />
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.safeArea, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
+
+      {/* 상단 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -369,270 +358,336 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
         >
           <Ionicons name="arrow-back" size={26} color="#1E293B" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>키패드 출결 관리</Text>
+        <Text style={styles.headerTitle}>아이패스케어 출결 키오스크</Text>
         <View style={{ width: 26 }} />
       </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
+        style={styles.flexContainer}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Text style={styles.sectionTitle}>전화번호 뒷 4자리 입력</Text>
-          <TextInput
-            style={styles.keypadDisplay}
-            value={keypadInput}
-            editable={false}
-            placeholder="****"
-            placeholderTextColor="#999"
-            maxLength={4}
-          />
-          {renderKeypad()}
-          {searchLoading ? (
-            <ActivityIndicator
-              size="large"
-              color="#6366F1"
-              style={{ marginTop: 20 }}
+        {/* 기기별 하단 안전영역 바닥 패딩 동적 적용 */}
+        <View
+          style={[
+            styles.mainContainer,
+            { paddingBottom: Math.max(insets.bottom, 16) },
+          ]}
+        >
+          {/* 1️⃣ 전화번호 입력 디스플레이 구역 */}
+          <View style={styles.displaySection}>
+            <Text style={styles.sectionTitle}>
+              전화번호 뒷 4자리를 눌러주세요
+            </Text>
+            <TextInput
+              style={styles.keypadDisplay}
+              value={keypadInput}
+              editable={false}
+              placeholder="・ ・ ・ ・"
+              placeholderTextColor="#CBD5E1"
+              maxLength={4}
             />
-          ) : keypadInput.length === 4 ? (
-            searchResults.length > 0 ? (
-              <View style={styles.resultsContainer}>
-                <Text style={styles.resultsHeader}>출결 대상 선택:</Text>
-                <FlatList
-                  data={searchResults}
-                  keyExtractor={(item) => item.id + item.type}
-                  renderItem={({ item }) => (
+          </View>
+
+          {/* 2️⃣ [UX 개선] 상단으로 끌어올려진 출결 대상 선택 및 결과 확인 구역 */}
+          <View style={styles.resultTopSection}>
+            {searchLoading ? (
+              <View style={styles.centeredView}>
+                <ActivityIndicator size="large" color="#6366F1" />
+                <Text style={styles.loadingText}>
+                  정보를 확인하고 있어요...
+                </Text>
+              </View>
+            ) : keypadInput.length === 4 ? (
+              searchResults.length > 0 ? (
+                <View style={styles.resultsWrapper}>
+                  <Text style={styles.resultsHeader}>
+                    이름이 맞는지 확인해 주세요!
+                  </Text>
+
+                  <View style={styles.listContainer}>
+                    <FlatList
+                      data={searchResults}
+                      keyExtractor={(item) => item.id + item.type}
+                      showsVerticalScrollIndicator={false}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={[
+                            styles.attendeeItem,
+                            selectedAttendee?.id === item.id &&
+                              selectedAttendee?.type === item.type &&
+                              styles.selectedAttendeeItem,
+                          ]}
+                          onPress={() => setSelectedAttendee(item)}
+                        >
+                          <View style={styles.attendeeTextGroup}>
+                            <Text style={styles.attendeeName}>
+                              {item.name}{" "}
+                              <Text style={styles.ageText}>
+                                ({calculateAge(item.birthDate)}세)
+                              </Text>
+                            </Text>
+                            {!!item.targetClass && (
+                              <Text style={styles.attendeeClass}>
+                                수업: {item.targetClass}
+                              </Text>
+                            )}
+                          </View>
+                          <Ionicons
+                            name={
+                              selectedAttendee?.id === item.id &&
+                              selectedAttendee?.type === item.type
+                                ? "checkbox"
+                                : "square-outline"
+                            }
+                            size={28}
+                            color={
+                              selectedAttendee?.id === item.id &&
+                              selectedAttendee?.type === item.type
+                                ? "#6366F1"
+                                : "#94A3B8"
+                            }
+                          />
+                        </TouchableOpacity>
+                      )}
+                    />
+                  </View>
+
+                  {/* 등원 / 하원 처리 액션 버튼 구역 (중간에 배치되어 하단 바 겹침 원천 방지) */}
+                  <View style={styles.actionButtonsContainer}>
                     <TouchableOpacity
                       style={[
-                        styles.attendeeItem,
-                        selectedAttendee?.id === item.id &&
-                          selectedAttendee?.type === item.type &&
-                          styles.selectedAttendeeItem,
+                        styles.actionButton,
+                        styles.checkInButton,
+                        !selectedAttendee && styles.disabledButton,
                       ]}
-                      onPress={() => setSelectedAttendee(item)}
+                      onPress={() => handleAttendanceAction("등원")}
+                      disabled={!selectedAttendee || isLoggingAttendance}
                     >
-                      <View>
-                        <Text style={styles.attendeeName}>
-                          {item.name} ({calculateAge(item.birthDate)}세)
-                          {item.type === "child" &&
-                            item.parentName &&
-                            ` (학부모: ${item.parentName})`}
-                        </Text>
-                        {!!item.targetClass && (
-                          <Text style={styles.attendeeClass}>
-                            수업반: {item.targetClass}
-                          </Text>
-                        )}
-                      </View>
-                      <Ionicons
-                        name={
-                          selectedAttendee?.id === item.id &&
-                          selectedAttendee?.type === item.type
-                            ? "radio-button-on"
-                            : "radio-button-off"
-                        }
-                        size={20}
-                        color={
-                          selectedAttendee?.id === item.id &&
-                          selectedAttendee?.type === item.type
-                            ? "#6366F1"
-                            : "#999"
-                        }
-                      />
+                      {isLoggingAttendance ? (
+                        <ActivityIndicator color="#FFF" />
+                      ) : (
+                        <Text style={styles.actionButtonText}>등 원</Text>
+                      )}
                     </TouchableOpacity>
-                  )}
-                />
-                <View style={styles.actionButtonsContainer}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.checkInButton]}
-                    onPress={() => handleAttendanceAction("등원")}
-                    disabled={!selectedAttendee || isLoggingAttendance}
-                  >
-                    {isLoggingAttendance ? (
-                      <ActivityIndicator color="#FFF" />
-                    ) : (
-                      <Text style={styles.actionButtonText}>등원 처리</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.checkOutButton]}
-                    onPress={() => handleAttendanceAction("하원")}
-                    disabled={!selectedAttendee || isLoggingAttendance}
-                  >
-                    {isLoggingAttendance ? (
-                      <ActivityIndicator color="#FFF" />
-                    ) : (
-                      <Text style={styles.actionButtonText}>하원 처리</Text>
-                    )}
-                  </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        styles.checkOutButton,
+                        !selectedAttendee && styles.disabledButton,
+                      ]}
+                      onPress={() => handleAttendanceAction("하원")}
+                      disabled={!selectedAttendee || isLoggingAttendance}
+                    >
+                      {isLoggingAttendance ? (
+                        <ActivityIndicator color="#FFF" />
+                      ) : (
+                        <Text style={styles.actionButtonText}>하 원</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
+              ) : (
+                <View style={styles.centeredView}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={44}
+                    color="#94A3B8"
+                  />
+                  <Text style={styles.noResultsText}>
+                    예약된 수업이 없거나 번호가 틀렸습니다.
+                  </Text>
+                </View>
+              )
             ) : (
-              <Text style={styles.noResultsText}>
-                일치하는 사용자를 찾을 수 없습니다.
-              </Text>
-            )
-          ) : null}
-        </ScrollView>
+              <View style={styles.centeredView}>
+                <Ionicons
+                  name="finger-print-outline"
+                  size={48}
+                  color="#E2E8F0"
+                />
+                <Text style={styles.guideSubText}>
+                  출결 패드에 번호를 채워주세요.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* 3️⃣ [UX 개선] 하단에 안정감 있게 고정된 키패드 구역 */}
+          <View style={styles.keypadBottomSection}>{renderKeypad()}</View>
+        </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
+  flexContainer: { flex: 1 },
+  mainContainer: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 20,
+    justifyContent: "space-between", // 컴포넌트들을 위아래 균형감 있게 분산 배치
   },
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40, // Ensure content is not cut off by keyboard
-  },
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 16,
     backgroundColor: "#FFF",
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
-  backBtn: {
-    padding: 5,
-  },
+  backBtn: { padding: 5 },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "800",
     color: "#1E293B",
+    letterSpacing: -0.5,
   },
+
+  displaySection: { marginTop: 16, alignItems: "center" },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 15,
-    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#64748B",
+    marginBottom: 10,
   },
   keypadDisplay: {
     backgroundColor: "#FFF",
-    borderRadius: 12,
-    padding: 20,
-    fontSize: 32,
-    fontWeight: "bold",
+    borderRadius: 16,
+    width: "100%",
+    paddingVertical: 14,
+    fontSize: 38,
+    fontWeight: "900",
     textAlign: "center",
-    marginBottom: 25,
-    color: "#333",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    color: "#1E293B",
+    borderWidth: 2,
+    borderColor: "#6366F1",
+    letterSpacing: 4,
+  },
+
+  /* 🚀 [변경] 상단으로 이동한 결과 및 출결 액션 카드 디자인 스타일 */
+  resultTopSection: {
+    flex: 1,
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginVertical: 14,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOpacity: 0.02,
+    shadowRadius: 8,
     elevation: 2,
   },
-  keypadContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    marginBottom: 30,
-    backgroundColor: "#FFF",
-    borderRadius: 15,
-    padding: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  keypadButton: {
-    width: "30%", // Roughly 3 buttons per row
-    aspectRatio: 1.2, // Make buttons slightly rectangular
-    justifyContent: "center",
-    alignItems: "center",
-    margin: "1.5%",
-    backgroundColor: "#F1F5F9",
-    borderRadius: 12,
-  },
-  keypadButtonText: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  resultsContainer: {
-    marginTop: 20,
-    backgroundColor: "#FFF",
-    borderRadius: 15,
-    padding: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
+  resultsWrapper: { flex: 1, justifyContent: "space-between" },
   resultsHeader: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 15,
-    color: "#333",
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#475569",
+    marginBottom: 10,
     textAlign: "center",
   },
+  listContainer: { flex: 1, maxHeight: 120 },
+
   attendeeItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 15,
-    paddingHorizontal: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     backgroundColor: "#F8FAFC",
-    borderRadius: 10,
-    marginBottom: 10,
-    borderWidth: 1,
+    borderRadius: 14,
+    marginBottom: 8,
+    borderWidth: 2,
     borderColor: "#E2E8F0",
   },
-  selectedAttendeeItem: {
-    borderColor: "#6366F1",
-    backgroundColor: "#EEF2FF",
-  },
-  attendeeName: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#333",
-  },
+  selectedAttendeeItem: { borderColor: "#6366F1", backgroundColor: "#EEF2FF" },
+  attendeeTextGroup: { flex: 1 },
+  attendeeName: { fontSize: 18, fontWeight: "800", color: "#1E293B" },
+  ageText: { fontSize: 14, fontWeight: "500", color: "#64748B" },
   attendeeClass: {
-    fontSize: 14,
-    color: "#64748B",
-    marginTop: 4,
+    fontSize: 13,
+    color: "#4F46E5",
+    fontWeight: "600",
+    marginTop: 2,
   },
+
   actionButtonsContainer: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 20,
+    justifyContent: "space-between",
+    marginTop: 10,
   },
   actionButton: {
     flex: 1,
-    paddingVertical: 18,
-    borderRadius: 12,
+    height: 54,
+    borderRadius: 14,
     alignItems: "center",
-    marginHorizontal: 5,
+    justifyContent: "center",
+    marginHorizontal: 4,
   },
-  checkInButton: {
-    backgroundColor: "#22C55E", // Green for check-in
+  checkInButton: { backgroundColor: "#22C55E" },
+  checkOutButton: { backgroundColor: "#EF4444" },
+  disabledButton: { backgroundColor: "#CBD5E1", opacity: 0.6 },
+  actionButtonText: { color: "#FFF", fontSize: 18, fontWeight: "900" },
+
+  /* 🚀 [변경] 하단에 안착한 키패드 구역 레이아웃 스타일 */
+  keypadBottomSection: {
+    marginBottom: 4,
+    width: "100%",
   },
-  checkOutButton: {
-    backgroundColor: "#EF4444", // Red for check-out
+  keypadContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  actionButtonText: {
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: "bold",
+  keypadButton: {
+    width: "31%",
+    aspectRatio: 1.5, // 기종 편차 최소화를 위해 콤팩트한 비율 유지
+    justifyContent: "center",
+    alignItems: "center",
+    marginVertical: 4,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+  },
+  clearButton: { backgroundColor: "#FEF2F2" },
+  keypadButtonText: { fontSize: 26, fontWeight: "800", color: "#1E293B" },
+
+  centeredView: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 15,
+    color: "#6366F1",
+    fontWeight: "600",
   },
   noResultsText: {
     textAlign: "center",
-    marginTop: 20,
-    fontSize: 16,
-    color: "#999",
+    marginTop: 10,
+    fontSize: 14,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  guideSubText: {
+    fontSize: 14,
+    color: "#94A3B8",
+    marginTop: 8,
+    fontWeight: "500",
   },
 });
 
