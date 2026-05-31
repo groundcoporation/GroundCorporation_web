@@ -62,7 +62,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
   // 🚀 [수정] 기존에 수동으로 관리하던 selectedBranchId를 삭제하고 Context에서 가져옵니다.
   const { branchId, role, setBranch } = useAuth();
   const insets = useSafeAreaInsets();
-  
+
   // --- 상태 관리 ---
   const [categories, setCategories] = useState<any[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("regular");
@@ -82,10 +82,12 @@ export default function PassPurchaseScreen({ navigation }: any) {
   const [showConsultModal, setShowConsultModal] = useState(false);
   const [branchContact, setBranchContact] = useState({ phone: "", kakao: "" });
   const [branchMid, setBranchMid] = useState<string>("");
-  
+
   // 🚀 [핵심 추가] 상담 대기 중인 상태를 관리하는 변수
   const [hasPendingConsult, setHasPendingConsult] = useState(false);
-  const [pendingConsultType, setPendingConsultType] = useState<string | null>(null); // 👈 타입 저장용
+  const [pendingConsultType, setPendingConsultType] = useState<string | null>(
+    null,
+  ); // 👈 타입 저장용
 
   // --- 초기 데이터 로딩 ---
   useEffect(() => {
@@ -178,8 +180,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
         const mid = branchData.kspay_mid?.trim();
         setBranchMid(mid || "2999199999"); // 실결제 MID가 없으면 테스트 아이디 사용
         setBranchContact({
-          phone: branchData.phone || "",
-          kakao: branchData.kakao_url || "",
+          phone: branchData.phone_number || "",
+          kakao: branchData.kakao_link || "",
         });
       }
 
@@ -232,26 +234,36 @@ export default function PassPurchaseScreen({ navigation }: any) {
         setHasPendingConsult(true);
         Alert.alert("상담 신청 완료", "관리자가 확인 후 연락드리겠습니다.");
         // 첫 신청 후 연결
-        if (type === "KAKAO") Linking.openURL(branchContact.kakao || "https://pf.kakao.com/_xxxxxx");
+        if (type === "KAKAO")
+          Linking.openURL(
+            branchContact.kakao || "https://pf.kakao.com/_xxxxxx",
+          );
         else Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`);
       } else {
         // 이미 신청한 경우: 이전 신청 타입과 다른 수단을 제안
-        const prevType = existing.request_type === "KAKAO" ? "카카오톡" : "전화";
+        const prevType =
+          existing.request_type === "KAKAO" ? "카카오톡" : "전화";
         const otherType = type === "KAKAO" ? "전화" : "카카오톡";
-        
+
         Alert.alert(
-          "상담 접수 중", 
+          "상담 접수 중",
           `이미 ${prevType}(으)로 상담 신청이 접수되었습니다.\n\n다른 방법으로 급히 연락하시겠어요?`,
           [
             { text: "닫기", style: "cancel" },
-            { 
-              text: `${otherType} 연결`, 
+            {
+              text: `${otherType} 연결`,
               onPress: () => {
-                if (type === "KAKAO") Linking.openURL(branchContact.kakao || "https://pf.kakao.com/_xxxxxx");
-                else Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`);
-              }
-            }
-          ]
+                if (type === "KAKAO")
+                  Linking.openURL(
+                    branchContact.kakao || "https://pf.kakao.com/_xxxxxx",
+                  );
+                else
+                  Linking.openURL(
+                    `tel:${branchContact.phone || "010-0000-0000"}`,
+                  );
+              },
+            },
+          ],
         );
       }
       setShowConsultModal(false);
@@ -727,21 +739,37 @@ export default function PassPurchaseScreen({ navigation }: any) {
                 );
 
               if (hasConsult) {
-                Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`);
+                Linking.openURL(
+                  `tel:${branchContact.phone || "010-0000-0000"}`,
+                );
               } else if (!isClassAssigned) {
                 // 🚀 상담 신청 중일 때 결제 버튼을 누르면 나오는 안내 메시지 (전화 버튼 추가)
                 if (hasPendingConsult) {
-  const prevType = pendingConsultType === "KAKAO" ? "카카오톡" : "전화";
-  Alert.alert(
-    "상담 접수 중", 
-    `이미 ${prevType}(으)로 상담 신청이 접수되었습니다.\n관리자의 연락을 기다려주세요!`,
-    [
-      { text: "닫기", style: "cancel" },
-      { text: "전화 연결", onPress: () => Linking.openURL(`tel:${branchContact.phone || "010-0000-0000"}`) },
-      { text: "카카오톡 문의", onPress: () => Linking.openURL(branchContact.kakao || "https://pf.kakao.com/_xxxxxx") }
-    ]
-  );
-} else {
+                  const prevType =
+                    pendingConsultType === "KAKAO" ? "카카오톡" : "전화";
+                  Alert.alert(
+                    "상담 접수 중",
+                    `이미 ${prevType}(으)로 상담 신청이 접수되었습니다.\n관리자의 연락을 기다려주세요!`,
+                    [
+                      { text: "닫기", style: "cancel" },
+                      {
+                        text: "전화 연결",
+                        onPress: () =>
+                          Linking.openURL(
+                            `tel:${branchContact.phone || "010-0000-0000"}`,
+                          ),
+                      },
+                      {
+                        text: "카카오톡 문의",
+                        onPress: () =>
+                          Linking.openURL(
+                            branchContact.kakao ||
+                              "https://pf.kakao.com/_xxxxxx",
+                          ),
+                      },
+                    ],
+                  );
+                } else {
                   setShowConsultModal(true);
                 }
               } else if (popupOptions.length > 0) {
@@ -752,10 +780,10 @@ export default function PassPurchaseScreen({ navigation }: any) {
             }}
           >
             <Text style={styles.mainActionText}>
-              {hasConsult 
-                ? "상담 전화하기" 
-                : (!isClassAssigned && hasPendingConsult) 
-                  ? "상담 대기 중" 
+              {hasConsult
+                ? "상담 전화하기"
+                : !isClassAssigned && hasPendingConsult
+                  ? "상담 대기 중"
                   : "결제하기"}
             </Text>
           </TouchableOpacity>
@@ -770,7 +798,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
             </View>
             <Text style={styles.consultModalTitle}>상담이 필요합니다!</Text>
             <Text style={styles.consultModalDesc}>
-              첫 수강생은 원활한 수업을 위해{"\n"}반 배정 상담 후 결제가 가능합니다.
+              첫 수강생은 원활한 수업을 위해{"\n"}반 배정 상담 후 결제가
+              가능합니다.
             </Text>
             <View style={styles.consultModalBtnContainer}>
               <TouchableOpacity

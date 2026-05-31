@@ -20,7 +20,7 @@ import { supabase } from "../../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
-// 🚀 [신규 연동] 콕 집어서 학부모에게 알림을 쏴줄 전역 배달부 임포트!
+// 🚀 콕 집어서 학부모에게 알림을 쏴줄 전역 배달부 임포트!
 import { sendGlobalPushNotification } from "../../services/notificationService";
 
 import dayjs from "dayjs";
@@ -44,9 +44,16 @@ export default function AdminScheduleScreen() {
   const [loading, setLoading] = useState(false);
 
   // --- 출석 체크 전용 상태 추가 ---
-  const [currentDate, setCurrentDate] = useState(dayjs().tz().toDate()); // 한국 시간 기준 Date 객체로 관리
+  const [currentDate, setCurrentDate] = useState(
+    dayjs().tz("Asia/Seoul").toDate(),
+  ); // 한국 시간 기준 초기화
   const [showDatePicker, setShowDatePicker] = useState(false); // 달력 모달 상태
   const [combinedData, setCombinedData] = useState<any[]>([]); // 시간표 + 예약자 통합 데이터
+
+  // --- 시간 선택기(TimePicker) 전용 상태 추가 ---
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [pickerTarget, setPickerTarget] = useState<"start" | "end">("start");
+  const [pickerTime, setPickerTime] = useState(new Date());
 
   // --- 모달 상태 ---
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -95,35 +102,29 @@ export default function AdminScheduleScreen() {
 
   // [Status 탭] 세로형 타임라인 데이터 (수업 + 예약자)
   const getKoreaDayName = (date: Date) => {
-    // 1. 날짜를 YYYY-MM-DD 문자열로 변환
-    const dateString = dayjs(date).format("YYYY-MM-DD");
-
-    // 2. 해당 날짜로 강제 생성 (타임존 오차 제거)
-    const [y, m, d] = dateString.split("-").map(Number);
-    const dateFixed = new Date(y, m - 1, d);
-
-    // 3. 정확한 요일 반환
-    return days[dateFixed.getDay()];
+    // 🚀 시차 고정 보정: 타임존 오차를 dayjs 객체 수동 결합을 통해 원천 차단
+    return dayjs(date).tz("Asia/Seoul").format("ddd");
   };
 
   const fetchStatusData = async () => {
     setLoading(true);
     try {
-      const dateString = dayjs(currentDate).format("YYYY-MM-DD");
-      const dayName = getKoreaDayName(currentDate); // 🚀 [필수] 정확한 요일 추출
+      // 🚀 모든 쿼리 파라미터를 명시적으로 Asia/Seoul 기준으로 고정 추출합니다.
+      const dateString = dayjs(currentDate)
+        .tz("Asia/Seoul")
+        .format("YYYY-MM-DD");
+      const dayName = getKoreaDayName(currentDate);
 
-      // 1. 지점 + 요일 필터 적용 (이제 18시, 21시 목요일 수업이 다 뜹니다)
       const { data: scheduleData, error: schedError } = await supabase
         .from("class_schedules")
         .select("*")
         .eq("branch_id", selectedBranch)
-        .eq("day_of_week", dayName) // 💡 21일(목)이면 '목'만 가져옴
+        .eq("day_of_week", dayName)
         .eq("is_active", true)
         .order("start_time", { ascending: true });
 
       if (schedError) throw schedError;
 
-      // 2. 예약 데이터는 오늘 날짜인 것만 가져옴
       const { data: resData, error: resError } = await supabase
         .from("reservations")
         .select("*")
@@ -132,7 +133,6 @@ export default function AdminScheduleScreen() {
 
       if (resError) throw resError;
 
-      // 3. 통합 매칭
       const formatted = (scheduleData || []).map((sched) => ({
         ...sched,
         reservations: (resData || []).filter((r) => r.schedule_id === sched.id),
@@ -159,8 +159,6 @@ export default function AdminScheduleScreen() {
     setLoading(false);
   };
 
-  // 🚀 3. [핵심수정] 출결 핸들러 (등원, 하원 시 개별 학부모에게 푸시 팝업 발송!)
-  // 💡 기존 resId만 받던 구조에서, 알림 발송을 위해 이름과 부모ID가 있는 res 전체 객체를 받도록 수정했습니다.
   const handleAttendance = async (
     res: any,
     attStatus: string,
@@ -168,7 +166,6 @@ export default function AdminScheduleScreen() {
   ) => {
     const updateData: any = { attendance_status: attStatus };
 
-    // 보강 버튼 클릭 시 status 컬럼을 makeup으로 강제 지정
     if (isMakeup) {
       updateData.status = "makeup";
       updateData.attendance_status = "보강";
@@ -177,25 +174,19 @@ export default function AdminScheduleScreen() {
     const { error } = await supabase
       .from("reservations")
       .update(updateData)
-      .eq("id", res.id); // 💡 파라미터 변경에 따른 속성 접근
+      .eq("id", res.id);
 
     if (!error) {
-      fetchStatusData(); // 화면 즉시 새로고침
-
-      // =========================================================================
-      // 🔔 [알림 발송 및 DB 기록] 코치님이 '등원' 또는 '하원'을 눌렀을 때 작동!
-      // =========================================================================
+      fetchStatusData();
       if (attStatus === "등원" || attStatus === "하원") {
-        // 🚀 [추가됨: 출석 동선 로그 기록 로직]
         try {
           const todayDateStr = dayjs(currentDate)
             .tz("Asia/Seoul")
             .format("YYYY-MM-DD");
           const currentIsoTimestamp = dayjs()
             .tz()
-            .format("YYYY-MM-DDTHH:mm:ssZ"); // 명시적으로 KST 오프셋 포함
+            .format("YYYY-MM-DDTHH:mm:ssZ");
 
-          // 1. 오늘 날짜의 아이 기록이 있는지 먼저 찾습니다.
           const { data: existingLog } = await supabase
             .from("attendance_logs")
             .select("id")
@@ -204,7 +195,6 @@ export default function AdminScheduleScreen() {
             .maybeSingle();
 
           if (existingLog) {
-            // 2-A. 기록이 있으면 (예: 아까 기사님이 승차 처리해서 만들어진 기록) 업데이트!
             await supabase
               .from("attendance_logs")
               .update({
@@ -214,7 +204,6 @@ export default function AdminScheduleScreen() {
               })
               .eq("id", existingLog.id);
           } else {
-            // 2-B. 셔틀 안 타고 자가등원해서 기록이 아예 없다면 새로 생성 (Insert)
             await supabase.from("attendance_logs").insert([
               {
                 child_id: res.child_id,
@@ -227,29 +216,24 @@ export default function AdminScheduleScreen() {
               },
             ]);
           }
-          console.log(
-            `[센터출결 DB기록 완료] ${res.child_name} - ${attStatus}`,
-          );
         } catch (logError) {
           console.error("출석 동선 DB 기록 실패:", logError);
         }
 
-        // 🚀 [기존 로직 유지: 학부모에게 푸시 팝업 발송]
         await sendGlobalPushNotification({
-          targetBranchId: null, // 지점 전체 ❌
-          targetUserId: res.user_id, // 💡 해당 아이의 학부모 1명에게만 전송 ⭕
+          targetBranchId: null,
+          targetUserId: res.user_id,
           title: `🔔 출결 안내`,
           body: `${res.child_name} 학생이 안전하게 ${attStatus} 완료하였습니다.`,
-          type: "attendance", // 클릭 시 AttendanceScreen으로 점프
+          type: "attendance",
           relatedId: res.id,
         });
       }
     } else {
-      Alert.alert("오류", "업데이트 실패");
+      Alert.alert("오류", "updates 실패");
     }
   };
 
-  // 🚀 4. 취소 승인 및 수강권 자동 복구 핸들러
   const handleApproveCancel = async (reservation: any) => {
     Alert.alert(
       "취소 승인",
@@ -260,7 +244,6 @@ export default function AdminScheduleScreen() {
           text: "승인 및 복구",
           onPress: async () => {
             try {
-              // 1. 예약 상태를 canceled로, 출결상태를 취소완료로 변경
               const { error: resError } = await supabase
                 .from("reservations")
                 .update({ status: "canceled", attendance_status: "취소완료" })
@@ -268,7 +251,6 @@ export default function AdminScheduleScreen() {
 
               if (resError) throw resError;
 
-              // 2. 수강권 복구 (예약 시 사용했던 패키지 ID가 있는 경우)
               if (reservation.user_package_id) {
                 const { data: pkg, error: pkgFetchError } = await supabase
                   .from("user_packages")
@@ -295,22 +277,28 @@ export default function AdminScheduleScreen() {
     );
   };
 
-  // 🚀 5. 달력 핸들러 및 날짜 이동 로직
+  // 🚀 [수정 완벽 해결] 달력 팝업 결과 바인딩 로직 보정
   const onDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
-    if (selectedDate) {
-      setCurrentDate(selectedDate);
+    if (selectedDate && event.type !== "dismissed") {
+      // 💡 핵심: 안드로이드 네이티브 피커가 던져준 Date 객체를 타임존 오프셋을 적용해 가공하여 하루 밀림 버그 원천 차단!
+      const fixedDate = dayjs(selectedDate)
+        .tz("Asia/Seoul")
+        .startOf("day")
+        .toDate();
+      setCurrentDate(fixedDate);
     }
   };
 
-  // 💡 날짜를 하루씩 앞뒤로 이동하는 함수
+  // 🚀 [수정 완벽 해결] 좌우 화살표 날짜 증감 함수 보정
   const changeDate = (offset: number) => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(currentDate.getDate() + offset);
-    setCurrentDate(newDate);
+    const fixedDate = dayjs(currentDate)
+      .tz("Asia/Seoul")
+      .add(offset, "day")
+      .toDate();
+    setCurrentDate(fixedDate);
   };
 
-  // 🚀 6. 지점 스왑 로직
   const toggleBranch = () => {
     if (branches.length < 2) return;
     const currentIndex = branches.findIndex((b) => b.id === selectedBranch);
@@ -318,7 +306,6 @@ export default function AdminScheduleScreen() {
     setSelectedBranch(branches[nextIndex].id);
   };
 
-  // 🚀 7. 안드로이드 뒤로가기 대응
   useEffect(() => {
     const backAction = () => {
       if (isModalVisible) {
@@ -334,7 +321,6 @@ export default function AdminScheduleScreen() {
     return () => backHandler.remove();
   }, [isModalVisible]);
 
-  // 🚀 8. 저장 로직
   const handleSave = async () => {
     if (!form.target_class)
       return Alert.alert("알림", "반 이름을 입력해주세요.");
@@ -365,6 +351,37 @@ export default function AdminScheduleScreen() {
     setLoading(false);
   };
 
+  const openTimePicker = (target: "start" | "end") => {
+    setPickerTarget(target);
+    const currentFormValue =
+      target === "start" ? form.start_time : form.end_time;
+
+    if (currentFormValue) {
+      const [hh, mm] = currentFormValue.split(":");
+      const tempDate = new Date();
+      tempDate.setHours(parseInt(hh), parseInt(mm), 0);
+      setPickerTime(tempDate);
+    } else {
+      setPickerTime(new Date());
+    }
+    setShowTimePicker(true);
+  };
+
+  const onTimeChange = (event: any, selectedDate?: Date) => {
+    setShowTimePicker(false);
+    if (selectedDate && event.type !== "dismissed") {
+      const hours = String(selectedDate.getHours()).padStart(2, "0");
+      const minutes = String(selectedDate.getMinutes()).padStart(2, "0");
+      const formattedTime = `${hours}:${minutes}:00`;
+
+      if (pickerTarget === "start") {
+        setForm((prev) => ({ ...prev, start_time: formattedTime }));
+      } else {
+        setForm((prev) => ({ ...prev, end_time: formattedTime }));
+      }
+    }
+  };
+
   const openEdit = (item: any) => {
     setForm({
       target_class: item.target_class,
@@ -378,14 +395,13 @@ export default function AdminScheduleScreen() {
     setIsModalVisible(true);
   };
 
-  // 현재 선택된 지점 객체 찾기
   const currentBranch = branches.find((b) => b.id === selectedBranch);
 
   return (
     <View style={styles.mainContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
       <SafeAreaView style={styles.safeArea}>
-        {/* 1. 헤더 (상단 시간 겹침 방지 여백 포함) */}
+        {/* 1. 헤더 */}
         <View style={styles.header}>
           <View>
             <Text style={styles.headerSubtitle}>ADMIN DASHBOARD</Text>
@@ -441,7 +457,7 @@ export default function AdminScheduleScreen() {
 
         {activeTab === "status" ? (
           <View style={{ flex: 1 }}>
-            {/* 📅 날짜 선택 바 (좌우 화살표 + 디자인 개선) */}
+            {/* 날짜 선택 바 */}
             <View style={styles.statusDateHeader}>
               <View style={styles.dateNavigator}>
                 <TouchableOpacity
@@ -498,7 +514,7 @@ export default function AdminScheduleScreen() {
               />
             )}
 
-            {/* 📋 출석 명단 리스트 */}
+            {/* 출석 명단 리스트 */}
             <FlatList
               data={combinedData}
               keyExtractor={(item) => item.id}
@@ -582,7 +598,6 @@ export default function AdminScheduleScreen() {
                             </TouchableOpacity>
                           ) : (
                             <>
-                              {/* 💡 onPress 파라미터를 res 전체 객체로 변경했습니다! */}
                               <TouchableOpacity
                                 onPress={() => handleAttendance(res, "등원")}
                                 style={[
@@ -679,7 +694,7 @@ export default function AdminScheduleScreen() {
           </View>
         ) : (
           <View style={{ flex: 1 }}>
-            {/* 3. 요일 선택 바 */}
+            {/* 요일 선택 바 */}
             <View style={styles.weekBar}>
               {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
                 <TouchableOpacity
@@ -702,7 +717,7 @@ export default function AdminScheduleScreen() {
               ))}
             </View>
 
-            {/* 4. 시간표 리스트 */}
+            {/* 시간표 리스트 */}
             <FlatList
               data={schedules}
               keyExtractor={(item) => item.id}
@@ -783,22 +798,37 @@ export default function AdminScheduleScreen() {
                   placeholder="예: 초등부 저학년반"
                 />
 
+                {/* 시작 시간 / 종료 시간 다이어그램 터치 셀렉터 */}
                 <View style={styles.row}>
                   <View style={{ flex: 1, marginRight: 10 }}>
                     <Text style={styles.label}>시작 시간</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={form.start_time}
-                      onChangeText={(t) => setForm({ ...form, start_time: t })}
-                    />
+                    <TouchableOpacity
+                      style={styles.timePickerSelector}
+                      onPress={() => openTimePicker("start")}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.timePickerSelectorText}>
+                        {form.start_time
+                          ? form.start_time.slice(0, 5)
+                          : "시간 선택"}
+                      </Text>
+                      <Ionicons name="time-outline" size={18} color="#6366F1" />
+                    </TouchableOpacity>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.label}>종료 시간</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={form.end_time}
-                      onChangeText={(t) => setForm({ ...form, end_time: t })}
-                    />
+                    <TouchableOpacity
+                      style={styles.timePickerSelector}
+                      onPress={() => openTimePicker("end")}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.timePickerSelectorText}>
+                        {form.end_time
+                          ? form.end_time.slice(0, 5)
+                          : "시간 선택"}
+                      </Text>
+                      <Ionicons name="time-outline" size={18} color="#6366F1" />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -837,6 +867,17 @@ export default function AdminScheduleScreen() {
               </ScrollView>
             </SafeAreaView>
           </KeyboardAvoidingView>
+
+          {/* 글로벌 시간 피커 인터페이스 */}
+          {showTimePicker && (
+            <DateTimePicker
+              value={pickerTime}
+              mode="time"
+              is24Hour={true}
+              display={Platform.OS === "ios" ? "spinner" : "clock"}
+              onChange={onTimeChange}
+            />
+          )}
         </Modal>
       </SafeAreaView>
     </View>
@@ -1100,4 +1141,20 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   submitBtnText: { color: "#FFF", fontSize: 16, fontWeight: "800" },
+
+  timePickerSelector: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  timePickerSelectorText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1E293B",
+  },
 });

@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   StatusBar,
+  BackHandler,
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -39,7 +40,8 @@ export default function NoticeListScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
 
   // 🚀 [추가] 어드민 전용 지점 필터 상태 (기본값은 'all' 또는 현재 지점)
-  const [selectedFilterBranch, setSelectedFilterBranch] = useState<string>("all");
+  const [selectedFilterBranch, setSelectedFilterBranch] =
+    useState<string>("all");
   const [branches, setBranches] = useState<any[]>([]); // 지점 목록 저장
 
   useEffect(() => {
@@ -48,11 +50,36 @@ export default function NoticeListScreen({ navigation }: any) {
       fetchBranches();
     }
   }, [isAdmin]);
+  useEffect(() => {
+    const handleBackButton = () => {
+      // 이 화면이 눈에 보이고 있을 때(isFocused) 하단 뒤로가기를 누르면
+      if (isFocused) {
+        if (navigation.canGoBack()) {
+          navigation.goBack(); // 안전하게 이전 화면으로 이동
+        } else {
+          navigation.navigate("AdminHome"); // 만약 백스택이 비어있다면 홈이나 지정된 안전한 화면으로 유도
+        }
+        return true; // 튕기지 않고 리액트 네이티브 안에서 처리했음을 OS에 알림
+      }
+      return false; // 이 화면을 안 보고 있을 때는 기본 동작 유지
+    };
 
+    // 안드로이드 하드웨어 뒤로가기 리스너 등록
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      handleBackButton,
+    );
+
+    // 컴포넌트가 사라질 때 리스너 해제 (메모리 누수 방지)
+    return () => backHandler.remove();
+  }, [isFocused, navigation]);
+  // =========================================================================
   useEffect(() => {
     // 🚀 [수정] 지점 필터가 바뀔 때는 물론이고, 유저가 글쓰기를 마치고 이 목록 화면으로 '리턴(포커스)'하는 순간 즉시 새로고침을 실행합니다!
     if (isFocused) {
-      console.log("📢 [포커스 감지] 공지사항 목록 화면이 노출되어 최신 데이터를 실시간 리로드합니다.");
+      console.log(
+        "📢 [포커스 감지] 공지사항 목록 화면이 노출되어 최신 데이터를 실시간 리로드합니다.",
+      );
       fetchNotices();
     }
   }, [branchId, selectedFilterBranch, isFocused]); // 🚀 감시 대상에 isFocused 센서 바인딩 추가!
@@ -70,7 +97,7 @@ export default function NoticeListScreen({ navigation }: any) {
   const fetchNotices = async () => {
     try {
       setLoading(true);
-      
+
       // 💡 [핵심] 권한 및 필터에 따른 쿼리 구성 (완벽합니다!)
       let query = supabase.from("notices").select("*");
 
@@ -88,13 +115,12 @@ export default function NoticeListScreen({ navigation }: any) {
       const { data, error } = await query
         .order("is_important", { ascending: false })
         .order("created_at", { ascending: false });
-      
+
       if (error) throw error;
       if (data) setNotices(data);
-
     } catch (error) {
       console.log("공지사항 로드 에러:", error);
-      
+
       // 🚀 실데이터가 없을 경우를 대비한 테스트용 가짜 데이터 (UI 확인용)
       if (notices.length === 0) {
         setNotices([
@@ -130,14 +156,14 @@ export default function NoticeListScreen({ navigation }: any) {
     const isGlobal = item.branch_id === null;
 
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.noticeCard}
         // 💡 여기서 상세 페이지로 데이터(item)를 싸들고 넘어갑니다!
         onPress={() => navigation.navigate("NoticeDetail", { notice: item })}
         activeOpacity={0.7}
       >
         <View style={styles.cardHeader}>
-          <View style={{flexDirection: "row", alignItems: "center"}}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
             {item.is_important && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>중요</Text>
@@ -145,15 +171,26 @@ export default function NoticeListScreen({ navigation }: any) {
             )}
             {/* 🚀 전체 공지 배지 추가 */}
             {isGlobal && (
-              <View style={[styles.badge, { backgroundColor: "#FEF3C7", marginLeft: 6 }]}>
-                <Text style={[styles.badgeText, { color: "#D97706" }]}>전체공지</Text>
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: "#FEF3C7", marginLeft: 6 },
+                ]}
+              >
+                <Text style={[styles.badgeText, { color: "#D97706" }]}>
+                  전체공지
+                </Text>
               </View>
             )}
           </View>
           <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
         </View>
-        <Text style={styles.titleText} numberOfLines={2}>{item.title}</Text>
-        <Text style={styles.previewText} numberOfLines={1}>{item.content}</Text>
+        <Text style={styles.titleText} numberOfLines={2}>
+          {item.title}
+        </Text>
+        <Text style={styles.previewText} numberOfLines={1}>
+          {item.content}
+        </Text>
       </TouchableOpacity>
     );
   };
@@ -161,7 +198,7 @@ export default function NoticeListScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
-      
+
       {/* 헤더 */}
       <View style={styles.appBar}>
         <View style={styles.headerLeft}>
@@ -210,7 +247,7 @@ export default function NoticeListScreen({ navigation }: any) {
 
       {/* 💡 [핵심 정답] 직원이면(admin 또는 coach) 글쓰기 버튼이 보입니다. */}
       {isStaff && (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.fab}
           onPress={() => navigation.navigate("NoticeEdit")}
           activeOpacity={0.8}
@@ -235,8 +272,13 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F1F5F9",
   },
   headerLeft: { flexDirection: "row", alignItems: "center" },
-  appBarTitle: { fontSize: 18, fontWeight: "800", color: "#111827", marginLeft: 10 },
-  
+  appBarTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+    marginLeft: 10,
+  },
+
   /* 🚀 추가된 필터 스타일 */
   filterContainer: {
     width: 140,
@@ -253,7 +295,7 @@ const styles = StyleSheet.create({
 
   loader: { flex: 1, justifyContent: "center" },
   listContent: { padding: 20, paddingBottom: 100 }, // 버튼에 안 가려지도록 하단 여백 추가
-  
+
   noticeCard: {
     backgroundColor: "#FFFFFF",
     padding: 20,
@@ -300,8 +342,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   emptyContainer: { alignItems: "center", marginTop: 100 },
-  emptyText: { marginTop: 16, fontSize: 15, color: "#94A3B8", fontWeight: "500" },
-  
+  emptyText: {
+    marginTop: 16,
+    fontSize: 15,
+    color: "#94A3B8",
+    fontWeight: "500",
+  },
+
   /* 💡 추가된 플로팅 버튼 스타일 */
   fab: {
     position: "absolute",

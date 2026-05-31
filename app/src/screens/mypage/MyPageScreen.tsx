@@ -9,6 +9,7 @@ import {
   Alert,
   StatusBar,
   Switch,
+  Linking, // 🚀 외부 링크 연결을 위해 추가
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -24,6 +25,7 @@ export default function MyPageScreen({ navigation }: any) {
 
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [branchContact, setBranchContact] = useState({ phone: "", kakao: "" }); // 🚀 지점 연락처 정보 상태 추가
   const [isPushEnabled, setIsPushEnabled] = useState(true); // 💡 알림 설정 상태
 
   useEffect(() => {
@@ -43,6 +45,22 @@ export default function MyPageScreen({ navigation }: any) {
           .eq("id", user.id)
           .single();
         setUserData(userProfile);
+
+        // 🚀 지점의 연락처 정보(전화번호, 카카오링크) 추가 로드
+        if (userProfile?.branch_id) {
+          const { data: branchData } = await supabase
+            .from("branches")
+            .select("phone_number, kakao_link")
+            .eq("id", userProfile.branch_id)
+            .single();
+
+          if (branchData) {
+            setBranchContact({
+              phone: branchData.phone_number || "",
+              kakao: branchData.kakao_link || "",
+            });
+          }
+        }
       }
     } catch (e) {
       console.log("마이페이지 데이터 로드 에러:", e);
@@ -322,16 +340,45 @@ export default function MyPageScreen({ navigation }: any) {
             {renderMenuItem(
               "help-circle-outline",
               "자주 묻는 질문 (FAQ)",
-              () => {},
+              () => {
+                // 🚀 자주 묻는 질문 클릭 시 카카오톡 링크로 바로 연결
+                if (branchContact.kakao) {
+                  Linking.openURL(branchContact.kakao);
+                } else {
+                  Alert.alert("안내", "등록된 문의 채널이 없습니다.");
+                }
+              },
             )}
             <View style={styles.divider} />
-            {renderMenuItem("call-outline", "고객센터 연결", () => {})}
+            {renderMenuItem("call-outline", "고객센터 연결", () => {
+              // 🚀 고객센터 연결 클릭 시 전화 또는 카카오톡 선택 팝업
+              Alert.alert("고객센터 연결", "문의하실 방법을 선택해주세요.", [
+                { text: "취소", style: "cancel" },
+                {
+                  text: "전화 상담",
+                  onPress: () =>
+                    branchContact.phone
+                      ? Linking.openURL(`tel:${branchContact.phone}`)
+                      : Alert.alert("안내", "전화번호가 등록되지 않았습니다."),
+                },
+                {
+                  text: "카카오톡 문의",
+                  onPress: () =>
+                    branchContact.kakao
+                      ? Linking.openURL(branchContact.kakao)
+                      : Alert.alert(
+                          "안내",
+                          "카카오톡 링크가 등록되지 않았습니다.",
+                        ),
+                },
+              ]);
+            })}
             <View style={styles.divider} />
-            {renderMenuItem(
+            {/* {renderMenuItem(
               "document-text-outline",
               "이용약관 및 정책",
               () => {},
-            )}
+            )} */}
           </View>
         </View>
 
