@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   StatusBar,
+  Switch, // 🚀 Switch 컴포넌트 임포트
 } from "react-native";
 import { supabase } from "../../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
@@ -39,7 +40,9 @@ export default function AdminPackageScreen() {
     name: "",
     description: "",
     display_order: "1",
-    is_consult: false,
+    is_consult: false, // 상담 필요 여부
+    is_option: false,  // 🚀 [추가] 팝업 추천 여부
+    is_shuttle: false, // 셔틀 여부
     options: [{ label: "주 1회", price: "", total_count: "1" }],
   });
 
@@ -179,7 +182,9 @@ export default function AdminPackageScreen() {
         name: pkgForm.name,
         description: pkgForm.description,
         display_order: parseInt(pkgForm.display_order),
-        is_consult: pkgForm.is_consult,
+        is_consult: pkgForm.is_consult, // 상담 필요 여부 저장
+        is_option: pkgForm.is_option,   // 🚀 [추가] 팝업 노출 여부 저장
+        is_shuttle: pkgForm.is_shuttle, // 셔틀 여부 저장
       };
       let pkgId = editingPkgId;
       if (editingPkgId) {
@@ -241,7 +246,9 @@ export default function AdminPackageScreen() {
       name: item.name,
       description: item.description || "",
       display_order: String(item.display_order),
-      is_consult: item.is_consult,
+      is_consult: item.is_consult || false,
+      is_option: item.is_option || false,   // 🚀 [추가] 팝업 노출 여부 불러오기
+      is_shuttle: item.is_shuttle || false,
       options:
         item.package_options.length > 0
           ? item.package_options.map((o: any) => ({
@@ -313,7 +320,7 @@ export default function AdminPackageScreen() {
         visible={isPkgListModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setIsPkgListModalVisible(false)}
+        onRequestClose={() => setIsPkgListModalVisible(false)} // 하드웨어 뒤로가기 지원
       >
         <View style={styles.modalFull}>
           <View style={styles.modalHeader}>
@@ -360,6 +367,8 @@ export default function AdminPackageScreen() {
                 description: "",
                 display_order: "1",
                 is_consult: false,
+                is_option: false, // 초기화
+                is_shuttle: false, // 초기화
                 options: [{ label: "주 1회", price: "", total_count: "1" }],
               });
               setIsPkgFormVisible(true);
@@ -370,8 +379,13 @@ export default function AdminPackageScreen() {
         </View>
       </Modal>
 
-      {/* --- 📝 패키지 폼 및 분류 폼 모달은 이전과 동일 (생략 가능하나 유지를 위해 포함) --- */}
-      <Modal visible={isPkgFormVisible} animationType="fade" transparent>
+      {/* --- 📝 패키지 폼 모달 --- */}
+      <Modal 
+        visible={isPkgFormVisible} 
+        animationType="fade" 
+        transparent
+        onRequestClose={() => setIsPkgFormVisible(false)} // 🚀 안드로이드 뒤로가기 버튼 지원 추가!
+      >
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -399,6 +413,35 @@ export default function AdminPackageScreen() {
                 value={pkgForm.description}
                 onChangeText={(t) => setPkgForm({ ...pkgForm, description: t })}
               />
+
+              {/* 🚀 [추가] 특수 기능 3대장 스위치 UI 묶음 */}
+              <View style={styles.switchGroup}>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>📞 상담 필수 여부 (상담 후 결제)</Text>
+                  <Switch
+                    value={pkgForm.is_consult}
+                    onValueChange={(val) => setPkgForm({ ...pkgForm, is_consult: val })}
+                    trackColor={{ false: "#E2E8F0", true: "#6366F1" }}
+                  />
+                </View>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>🛒 결제 팝업 추천 (추가 옵션)</Text>
+                  <Switch
+                    value={pkgForm.is_option}
+                    onValueChange={(val) => setPkgForm({ ...pkgForm, is_option: val })}
+                    trackColor={{ false: "#E2E8F0", true: "#6366F1" }}
+                  />
+                </View>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>🚌 셔틀버스 연동 (셔틀 이용권)</Text>
+                  <Switch
+                    value={pkgForm.is_shuttle}
+                    onValueChange={(val) => setPkgForm({ ...pkgForm, is_shuttle: val })}
+                    trackColor={{ false: "#E2E8F0", true: "#6366F1" }}
+                  />
+                </View>
+              </View>
+
               <View style={styles.optionHeaderRow}>
                 <Text style={styles.label}>세부 옵션</Text>
                 <TouchableOpacity
@@ -446,7 +489,13 @@ export default function AdminPackageScreen() {
         </View>
       </Modal>
 
-      <Modal visible={isCatModalVisible} transparent animationType="fade">
+      {/* --- 카테고리 폼 모달 --- */}
+      <Modal 
+        visible={isCatModalVisible} 
+        transparent 
+        animationType="fade"
+        onRequestClose={() => setIsCatModalVisible(false)} // 🚀 안드로이드 뒤로가기 버튼 지원 추가!
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.alertModal}>
             <Text style={styles.alertTitle}>새 분류 추가</Text>
@@ -618,6 +667,25 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
     fontSize: 13,
     marginRight: 5,
+  },
+  switchGroup: {
+    marginTop: 15,
+    backgroundColor: "#F8FAFC",
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  switchLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#334155",
   },
   optionHeaderRow: {
     flexDirection: "row",
