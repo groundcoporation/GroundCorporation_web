@@ -20,12 +20,16 @@ export default function AdminConsultationScreen({ navigation }: any) {
 
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // 🚀 [수정] 성인(user_id) 혹은 자녀(child_id)를 키값으로 반 배정 상태를 저장합니다.
   const [targetClasses, setTargetClasses] = useState<{ [key: string]: string }>({});
 
   // 🚀 [추가] 반 배정 모달 관련 상태
   const [availableClasses, setAvailableClasses] = useState<any[]>([]);
   const [showClassModal, setShowClassModal] = useState(false);
-  const [currentSelectingUserId, setCurrentSelectingUserId] = useState<string | null>(null);
+  
+  // 🚀 [수정] 유저 ID뿐만 아니라 자녀 ID도 담을 수 있도록 이름 변경
+  const [currentSelectingId, setCurrentSelectingId] = useState<string | null>(null);
 
   useEffect(() => { 
     fetchRequests(); 
@@ -67,7 +71,7 @@ export default function AdminConsultationScreen({ navigation }: any) {
     setLoading(true);
     try {
       // 🚀 상담 요청과 유저 정보를 한 번에 가져옴 (아이디 추적)
-      const { data, error } = await supabase
+      const { data: requestData, error } = await supabase
         .from('consultation_requests')
         .select(`
           *,
@@ -81,7 +85,26 @@ export default function AdminConsultationScreen({ navigation }: any) {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setRequests(data || []);
+
+      if (requestData && requestData.length > 0) {
+        const userIds = requestData.map(req => req.user_id);
+
+        // 🚀 [추가] 해당 학부모들의 '자녀 목록'을 가져옵니다.
+        const { data: childrenData } = await supabase
+          .from('children')
+          .select('*')
+          .in('parent_id', userIds);
+
+        // 🚀 [추가] 상담 데이터 안에 자녀 목록을 매핑해줍니다.
+        const requestsWithChildren = requestData.map(req => ({
+          ...req,
+          children: childrenData?.filter(c => c.parent_id === req.user_id) || []
+        }));
+
+        setRequests(requestsWithChildren);
+      } else {
+        setRequests([]);
+      }
     } catch (e) {
       console.log(e);
       Alert.alert("에러", "목록을 불러오지 못했습니다.");
@@ -90,22 +113,43 @@ export default function AdminConsultationScreen({ navigation }: any) {
     }
   };
 
-  const handleComplete = async (requestId: string, userId: string, reqUser: any) => {
-    const assignedClass = targetClasses[userId];
-    
-    if (!assignedClass || assignedClass.trim() === '') {
-      Alert.alert("알림", "배정할 반을 선택해주세요.");
-      return;
+  // 🚀 [수정] 자녀 목록(children)도 함께 받아서 처리하도록 파라미터 추가
+  const handleComplete = async (requestId: string, userId: string, reqUser: any, children: any[]) => {
+    const isAdult = children.length === 0;
+
+    // 🛑 유효성 검사: 배정할 반을 모두 선택했는지 체크
+    if (isAdult) {
+      if (!targetClasses[userId] || targetClasses[userId].trim() === '') {
+        Alert.alert("알림", "배정할 반을 선택해주세요.");
+        return;
+      }
+    } else {
+      for (const child of children) {
+        if (!targetClasses[child.id] || targetClasses[child.id].trim() === '') {
+          Alert.alert("알림", `${child.child_name} 학생의 배정할 반을 선택해주세요.`);
+          return;
+        }
+      }
     }
 
     try {
       // 1. 유저 테이블의 target_class 업데이트 (결제 락 해제 핵심 로직)
-      const { error: userError } = await supabase
-        .from('users')
-        .update({ target_class: assignedClass })
-        .eq('id', userId);
-
-      if (userError) throw userError;
+      // 🚀 [수정] 성인이면 users 테이블, 자녀면 children 테이블을 업데이트합니다.
+      if (isAdult) {
+        const { error: userError } = await supabase
+          .from('users')
+          .update({ target_class: targetClasses[userId] })
+          .eq('id', userId);
+        if (userError) throw userError;
+      } else {
+        for (const child of children) {
+          const { error: childError } = await supabase
+            .from('children')
+            .update({ target_class: targetClasses[child.id] })
+            .eq('id', child.id);
+          if (childError) throw childError;
+        }
+      }
 
       // 2. 상담 요청 상태를 COMPLETED로 변경
       const { error: requestError } = await supabase
@@ -118,7 +162,7 @@ export default function AdminConsultationScreen({ navigation }: any) {
       // 🚀 [수정] 배정 완료 후, 청구서 발송 여부를 묻는 스마트 팝업!
       Alert.alert(
         "배정 완료", 
-        `${assignedClass}로 배정이 완료되었습니다.\n해당 학부모님께 이용권 청구서를 지금 발송하시겠습니까?`,
+        "모든 반 배정이 완료되었습니다.\n해당 학부모님께 이용권 청구서를 지금 발송하시겠습니까?",
         [
           { 
             text: "나중에 할게요", 
@@ -179,25 +223,48 @@ export default function AdminConsultationScreen({ navigation }: any) {
               
               <View style={styles.divider} />
               
-              <Text style={styles.label}>반 배정 (Target Class)</Text>
-              
-              {/* 🚀 [수정] 직접 입력(TextInput) 대신 모달을 띄우는 버튼으로 변경 */}
-              <TouchableOpacity 
-                style={styles.dropdownButton}
-                onPress={() => {
-                  setCurrentSelectingUserId(req.user_id);
-                  setShowClassModal(true);
-                }}
-              >
-                <Text style={targetClasses[req.user_id] ? styles.dropdownSelectedText : styles.dropdownPlaceholder}>
-                  {targetClasses[req.user_id] || "터치하여 배정할 반을 선택하세요"}
-                </Text>
-                <Ionicons name="chevron-down" size={20} color="#94A3B8" />
-              </TouchableOpacity>
+              {/* 🚀 [수정] 자녀 유무에 따라 드롭다운을 동적으로 생성합니다 */}
+              {req.children.length === 0 ? (
+                <View style={styles.assignRow}>
+                  <Text style={styles.label}>[본인 수강] 반 배정</Text>
+                  {/* 🚀 직접 입력(TextInput) 대신 모달을 띄우는 버튼으로 변경 */}
+                  <TouchableOpacity 
+                    style={styles.dropdownButton}
+                    onPress={() => {
+                      setCurrentSelectingId(req.user_id);
+                      setShowClassModal(true);
+                    }}
+                  >
+                    <Text style={targetClasses[req.user_id] ? styles.dropdownSelectedText : styles.dropdownPlaceholder}>
+                      {targetClasses[req.user_id] || "터치하여 배정할 반을 선택하세요"}
+                    </Text>
+                    <Ionicons name="chevron-down" size={20} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                req.children.map((child: any) => (
+                  <View key={child.id} style={styles.assignRow}>
+                    <Text style={styles.label}>🧒 {child.child_name} 학생 반 배정</Text>
+                    <TouchableOpacity 
+                      style={styles.dropdownButton}
+                      onPress={() => {
+                        setCurrentSelectingId(child.id);
+                        setShowClassModal(true);
+                      }}
+                    >
+                      <Text style={targetClasses[child.id] ? styles.dropdownSelectedText : styles.dropdownPlaceholder}>
+                        {targetClasses[child.id] || "터치하여 배정할 반을 선택하세요"}
+                      </Text>
+                      <Ionicons name="chevron-down" size={20} color="#94A3B8" />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
               
               <TouchableOpacity 
                 style={styles.completeBtn} 
-                onPress={() => handleComplete(req.id, req.user_id, req.user)} // 🚀 학부모 정보 같이 넘김
+                // 🚀 학부모 정보와 자녀 목록을 같이 넘김
+                onPress={() => handleComplete(req.id, req.user_id, req.user, req.children)} 
               >
                 <Text style={styles.completeBtnText}>상담 완료 및 배정 저장</Text>
               </TouchableOpacity>
@@ -222,10 +289,10 @@ export default function AdminConsultationScreen({ navigation }: any) {
                   key={cls.id} 
                   style={styles.classListItem}
                   onPress={() => {
-                    if (currentSelectingUserId) {
+                    if (currentSelectingId) {
                       setTargetClasses({
                         ...targetClasses, 
-                        [currentSelectingUserId]: cls.name
+                        [currentSelectingId]: cls.name
                       });
                     }
                     setShowClassModal(false);
@@ -260,6 +327,7 @@ const styles = StyleSheet.create({
   typeBadgeText: { color: '#6366F1', fontSize: 12, fontWeight: '700' },
   userPhone: { fontSize: 14, color: '#64748B', marginBottom: 16 },
   divider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 16 },
+  assignRow: { marginBottom: 16 }, // 🚀 [추가] 다자녀 리스트 간격을 위한 스타일
   label: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 8 },
   
   // 🚀 [추가/수정] 드롭다운 버튼 스타일
