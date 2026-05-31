@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
+import dayjs from "dayjs";
 
 // 🚀 KSNET 결제 모듈 임포트
 import KSPayService from "../../services/payment/KSPayService";
@@ -202,6 +203,7 @@ export default function InvoiceScreen({ navigation }: any) {
             0,
           status: "active",
           is_shuttle: item.pkg.is_shuttle || false,
+          expiry_date: dayjs().endOf("month").format("YYYY-MM-DD"),
         }),
       );
 

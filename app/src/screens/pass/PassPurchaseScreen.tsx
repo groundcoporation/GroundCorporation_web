@@ -18,6 +18,7 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
+import dayjs from "dayjs";
 import KSPayService from "../../services/payment/KSPayService";
 
 // 🚀 [추가] 전역 상태 보관소에서 useAuth 훅 임포트
@@ -262,6 +263,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
             // 🚀 [추가] 결제 내역(user_packages)에 셔틀 이용권 여부(is_shuttle) 도장 꽝!
             // =========================================================================
             is_shuttle: item.pkg.is_shuttle || false,
+            expiry_date: dayjs().endOf("month").format("YYYY-MM-DD"),
           }),
         );
 
