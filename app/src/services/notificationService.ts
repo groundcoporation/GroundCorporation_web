@@ -117,6 +117,10 @@ export const sendGlobalPushNotification = async ({
         title: title,
         body: body,
         data: { type, relatedId }, 
+        // 🚀 안드로이드 배포 앱 필수 규격 추가
+        android: {
+          channelId: "default"
+        }
       }));
 
       await fetch("https://exp.host/--/api/v2/push/send", {
