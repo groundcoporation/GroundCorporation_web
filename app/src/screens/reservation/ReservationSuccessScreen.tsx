@@ -7,10 +7,14 @@ import {
   Platform,
 } from "react-native";
 // 경고 해결을 위해 react-native-safe-area-context 사용
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ReservationSuccessScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -20,7 +24,7 @@ export default function ReservationSuccessScreen({ navigation }: any) {
         </View>
 
         <Text style={styles.title}>수업 예약 완료! 📅</Text>
-        
+
         <Text style={styles.subtitle}>
           선택하신 수업의 예약이 확정되었습니다.{"\n"}
           아이와 함께 늦지 않게 방문해 주세요!
@@ -29,12 +33,17 @@ export default function ReservationSuccessScreen({ navigation }: any) {
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>
             상세 예약 내역 및 스케줄 확인은{"\n"}
-            마이페이지 {'>'} 내 활동 메뉴에서 가능합니다.
+            마이페이지 {">"} 내 활동 메뉴에서 가능합니다.
           </Text>
         </View>
       </View>
 
-      <View style={styles.buttonGroup}>
+      <View
+        style={[
+          styles.buttonGroup,
+          { paddingBottom: Math.max(insets.bottom, 20) },
+        ]}
+      >
         <TouchableOpacity
           style={styles.primaryButton}
           // 메인으로 돌아가서 다른 활동을 하도록 유도
@@ -92,7 +101,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     width: "100%",
   },
-  infoText: { color: "#94A3B8", fontSize: 13, textAlign: "center", lineHeight: 18 },
+  infoText: {
+    color: "#94A3B8",
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
+  },
   buttonGroup: {
     padding: 20,
     gap: 12,

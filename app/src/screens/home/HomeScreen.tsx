@@ -10,7 +10,6 @@ import {
   FlatList,
   Linking,
   ImageBackground,
-  ActivityIndicator, // 🚀 로딩 표시를 위해 추가
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -23,10 +22,10 @@ import timezone from "dayjs/plugin/timezone";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-// 🚀 [추가] 지점 정보를 가져오기 위해 useAuth 임포트
+// 🚀 지점 정보를 가져오기 위해 useAuth 임포트
 import { useAuth } from "../../context/AuthContext";
 
-// 🚀 [추가] 화면이 유저 눈에 보일 때마다 자동 새로고침을 수행하기 위해 useIsFocused 임포트
+// 🚀 화면이 유저 눈에 보일 때마다 자동 새로고침을 수행하기 위해 useIsFocused 임포트
 import { useIsFocused } from "@react-navigation/native";
 
 // 🚀 [팝업 관리자 임포트] 유니폼 및 공지사항 통제
@@ -39,40 +38,30 @@ interface BizInfo {
   ceo: string;
   biz_no: string;
   address: string;
-  contact: string; // 👈 고객센터 연락처 추가
+  contact: string;
   tongshin_no: string;
   company_name: string;
-
-  terms_url?: string; // 👈 지점별 이용약관 링크 (선택형 폴백 처리)
-  privacy_url?: string; // 👈 지점별 개인정보 처리방침 링크 (선택형 폴백 처리)
+  terms_url?: string;
+  privacy_url?: string;
   escrow_no?: string;
 }
 
 const { width } = Dimensions.get("window");
+// 🚀 메인 패딩 좌우 값(24 * 2 = 48)을 제외한 정확한 카드의 가로 폭
+const CARD_WIDTH = width - 48;
 
 export default function HomeScreen({ navigation }: any) {
-  // 🚀 [추가] 전역 지점 ID 호출
   const { branchId } = useAuth();
-
-  // 🚀 [추가] 화면 포커스 여부 감시 센서 선언 (유저 눈에 홈 화면이 띄워져 있는지 감지)
   const isFocused = useIsFocused();
 
   const [userData, setUserData] = useState<any>(null);
   const [children, setChildren] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeChildIndex, setActiveChildIndex] = useState(0);
-
-  // 💡 새로 추가된 상태: 가장 가까운 예약 데이터
-  // 🚀 [수정] 여러 개의 예약을 담아야 하므로 null 대신 배열([])로 초기화합니다.
   const [upcomingReservation, setUpcomingReservation] = useState<any[]>([]);
-
-  // 💡 지점별 사업자 정보를 저장할 상태 추가
   const [bizInfo, setBizInfo] = useState<BizInfo | null>(null);
-
-  // 🚀 [추가] 홈 화면에 표시할 공지사항 상태 (최신 2개)
   const [homeNotices, setHomeNotices] = useState<any[]>([]);
 
-  // 🚀 [수정] branchId가 변경되거나 화면이 유저 눈앞에 다시 포커스될 때마다 데이터를 실시간 갱신합니다.
   useEffect(() => {
     if (branchId && isFocused) {
       console.log(
@@ -80,7 +69,6 @@ export default function HomeScreen({ navigation }: any) {
       );
       fetchData();
     } else if (!branchId && isFocused) {
-      // branchId가 없을 경우를 대비해 초기 로딩 다시 트리거
       fetchData();
     }
   }, [branchId, isFocused]);
@@ -92,7 +80,7 @@ export default function HomeScreen({ navigation }: any) {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        // 1. 유저 정보 로드 (소속 지점 포함)
+        // 1. 유저 정보 로드
         const { data: userProfile } = await supabase
           .from("users")
           .select("*, branches(name)")
@@ -100,17 +88,14 @@ export default function HomeScreen({ navigation }: any) {
           .single();
         setUserData(userProfile);
 
-        // 💡 1-2. 유저의 지점 ID를 기반으로 지점의 biz_info(사업자 정보) 로드
-        // 🚀 [수정] 전역 branchId를 우선적으로 사용하도록 변경
+        // 1-2. 지점의 biz_info 로드
         const targetBranchId = branchId || userProfile?.branch_id || "main";
-
         let { data: branchData } = await supabase
           .from("branches")
           .select("biz_info")
           .eq("id", targetBranchId)
           .single();
 
-        // 만약 해당 지점 ID로 데이터를 못 찾았다면 첫 번째 지점 정보 자동 로드
         if (!branchData || !branchData.biz_info) {
           const { data: fallbackBranch } = await supabase
             .from("branches")
@@ -132,38 +117,35 @@ export default function HomeScreen({ navigation }: any) {
           .order("created_at", { ascending: true });
         setChildren(childrenList || []);
 
-        // 💡 3. [수정] 다가오는 예약 로드 (오늘 이후의 가장 빠른 예약 1건 + 수업 상세 정보 JOIN)
-        // 💡 3. [수정] 다가오는 예약 로드 (오늘 이후의 가장 빠른 예약 '전체'를 가져옴)
+        // 3. 다가오는 예약 로드
         const today = dayjs().tz().format("YYYY-MM-DD");
-
         const { data: reservations } = await supabase
           .from("reservations")
           .select(
             `
-          *,
-          branches ( name ), 
-          class_schedules (
-            target_class,
-            start_time,
-            end_time
-          )
-        `,
+            *,
+            branches ( name ), 
+            class_schedules (
+              target_class,
+              start_time,
+              end_time
+            )
+          `,
           )
           .eq("user_id", user.id)
-          .gte("class_date", today) // 🚀 오늘 '이후' 예약 모두 (gte 사용)
+          .gte("class_date", today)
           .eq("status", "pending")
           .order("class_date", { ascending: true })
-          .order("class_schedules(start_time)", { ascending: true }); // 날짜 다음엔 시간순 정렬
+          .order("class_schedules(start_time)", { ascending: true });
 
-        // 배열 전체를 상태에 저장합니다.
         setUpcomingReservation(reservations || []);
 
-        // 🚀 [추가] 4. 홈 화면 공지사항 로드 (is_on_home이 true인 것 중 최신 2개)
+        // 4. 홈 화면 공지사항 로드
         const { data: notices } = await supabase
           .from("notices")
           .select("*")
-          .eq("is_on_home", true) // 홈 노출 설정된 것만
-          .or(`branch_id.eq.${branchId},branch_id.is.null`) // 내 지점이거나 전체공지
+          .eq("is_on_home", true)
+          .or(`branch_id.eq.${branchId},branch_id.is.null`)
           .order("is_important", { ascending: false })
           .order("created_at", { ascending: false })
           .limit(2);
@@ -177,7 +159,6 @@ export default function HomeScreen({ navigation }: any) {
     }
   };
 
-  // 💡 예약 날짜와 수업 시간을 합쳐서 포맷 (예: 05.01 WED 14:00)
   const formatReservationDate = (dateString: string, startTime: string) => {
     if (!dateString) return "";
     const date = new Date(dateString);
@@ -185,15 +166,15 @@ export default function HomeScreen({ navigation }: any) {
     const day = String(date.getDate()).padStart(2, "0");
     const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
     const dayOfWeek = days[date.getDay()];
-
     const time = startTime ? startTime.slice(0, 5) : "";
-
     return `${month}.${day} ${dayOfWeek} ${time}`;
   };
 
-  // 🚀 [수정] specificReservation 파라미터를 추가로 받아옵니다.
-  const renderLessonCard = (targetName: string, isChild: boolean, specificReservation: any) => {
-    // 💡 이제 전역 상태가 아니라, 매칭되어 들어온 특정 예약(specificReservation) 유무를 기준으로 판단
+  const renderLessonCard = (
+    targetName: string,
+    isChild: boolean,
+    specificReservation: any,
+  ) => {
     const hasReservation = !!specificReservation;
 
     return (
@@ -212,7 +193,6 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={styles.tag}>
                   <Text style={styles.tagText}>UPCOMING</Text>
                 </View>
-                {/* 💡 [수정] specificReservation의 데이터를 사용하도록 교체 */}
                 <Text style={styles.cardDateText}>
                   {formatReservationDate(
                     specificReservation.class_date,
@@ -220,12 +200,12 @@ export default function HomeScreen({ navigation }: any) {
                   )}
                 </Text>
                 <Text style={styles.cardChildText}>
-                  {specificReservation.class_schedules?.target_class} |{" "}
+                  {specificReservation.class_schedules?.target_class
+                    ? `${specificReservation.class_schedules.target_class} | `
+                    : ""}
                   {targetName} {isChild ? "학생" : "회원님"}
                 </Text>
-                {/* 💡 [수정] '미정' 방지: 예약 데이터의 지점 정보를 먼저 보여줌 */}
                 <Text style={styles.branchText}>
-                  {/* 1순위: 예약된 수업의 지점 한글명 / 2순위: 내 소속 지점 한글명 / 3순위: 기본값 */}
                   {specificReservation?.branches?.name ||
                     userData?.branches?.name ||
                     "시흥본점"}
@@ -275,9 +255,7 @@ export default function HomeScreen({ navigation }: any) {
           </Text>
         </View>
         <View style={styles.appBarActions}>
-          {/* 🚀 [변경] 기존 단순 아이콘+배지 코드를 NotificationBell 컴포넌트로 교체 */}
           <NotificationBell />
-
           <TouchableOpacity
             style={[styles.iconCircle, { marginLeft: 12 }]}
             onPress={() => navigation.navigate("MyPage")}
@@ -302,40 +280,38 @@ export default function HomeScreen({ navigation }: any) {
             <FlatList
               data={children.length > 0 ? children : [userData]}
               horizontal
-              pagingEnabled
+              pagingEnabled={true} // 🚀 자석처럼 한 페이지씩 딱딱 들어맞도록 스냅 활성화
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={(e) => {
                 const index = Math.round(
-                  e.nativeEvent.contentOffset.x / (width - 48),
+                  e.nativeEvent.contentOffset.x / CARD_WIDTH,
                 );
                 setActiveChildIndex(index);
               }}
               renderItem={({ item }) => {
-                // 🚀 핵심 로직: 불러온 모든 예약 중에서 '현재 자녀'의 예약만 필터링해서 찾기
                 let targetReservation = null;
 
                 if (upcomingReservation && upcomingReservation.length > 0) {
                   if (item?.id && item.id !== userData?.id) {
-                    // 자녀 카드일 경우: child_id가 일치하는 가장 첫 번째(빠른) 예약 찾기
                     targetReservation = upcomingReservation.find(
-                      (res: any) => res.child_id === item.id
+                      (res: any) => res.child_id === item.id,
                     );
                   } else {
-                    // 본인(성인) 카드일 경우: child_id가 null이거나 내 id와 일치하는 예약 찾기
                     targetReservation = upcomingReservation.find(
-                      (res: any) => res.child_id === null || res.child_id === userData?.id
+                      (res: any) =>
+                        res.child_id === null || res.child_id === userData?.id,
                     );
                   }
                 }
 
                 return (
-                  <View style={styles.cardWrapper}>
+                  // 🚀 카드 한 장이 메인 여백을 제외한 너비를 꽉 채우도록 설정하여 밀림과 짤림 방지
+                  <View style={{ width: CARD_WIDTH }}>
                     {item ? (
-                      // 🚀 찾은 개별 예약 데이터를 renderLessonCard로 넘겨줍니다.
                       renderLessonCard(
                         item.name || item.child_name,
                         children.length > 0,
-                        targetReservation // 세 번째 인자로 추가 전달
+                        targetReservation,
                       )
                     ) : (
                       <View style={[styles.cardInner, styles.emptyCard]}>
@@ -366,7 +342,6 @@ export default function HomeScreen({ navigation }: any) {
 
           {/* 2. Quick Menu */}
           <View style={styles.quickMenuGrid}>
-            {/* 1. 수업 예약 - 빨강 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("Reservation")}
@@ -385,7 +360,6 @@ export default function HomeScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* 2. 이용권 구매 - 주황 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("Pass")}
@@ -404,7 +378,6 @@ export default function HomeScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* 3. 이용권 확인 - 노랑 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("MyPackage")}
@@ -423,7 +396,6 @@ export default function HomeScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* 4. 쇼핑몰 - 초록 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => Linking.openURL("http://vog-sports.com/")}
@@ -442,7 +414,6 @@ export default function HomeScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* 5. 갤러리 - 파랑 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("GalleryList")}
@@ -461,7 +432,6 @@ export default function HomeScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* 6. 픽업 - 남색 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("PickupMain")}
@@ -478,7 +448,6 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={[styles.menuLabel, { color: "#3D56B2" }]}>픽업</Text>
             </TouchableOpacity>
 
-            {/* 7. 출석확인 - 보라 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("Attendance")}
@@ -497,7 +466,6 @@ export default function HomeScreen({ navigation }: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* 8. 추천하기 - 핑크 */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("Referral")}
@@ -541,7 +509,6 @@ export default function HomeScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
-          {/* 공지사항 DB 연동 및 전체공지 분기 처리 */}
           <View style={styles.noticeBox}>
             {homeNotices.length > 0 ? (
               homeNotices.map((notice, index) => (
@@ -598,37 +565,27 @@ export default function HomeScreen({ navigation }: any) {
               </Text>
             )}
 
-            {/* 🚀 주소 앞에 '주소 :' 추가 및 DB 연동 */}
             <Text style={styles.footerText}>
               {bizInfo?.address || "경기도 시흥시 서울대학로278번길 61, 7층"}
             </Text>
 
-            {/* 🚀 [추가] 고객센터 연락처 표시 구역 */}
             <Text style={styles.footerText}>
               고객센터 : {bizInfo?.contact || "010-0000-0000"}
             </Text>
 
-            {/* 💡 [수정됨] 이용약관 및 개인정보 처리방침 DB 다이나믹 링크 구현 구역 */}
             <View style={styles.footerLinks}>
               <TouchableOpacity
                 onPress={() =>
-                  Linking.openURL(
-                    bizInfo?.terms_url ||
-                      "링크가 설정되지 않았습니다. 지점 관리자에게 문의하세요.",
-                  )
+                  Linking.openURL(bizInfo?.terms_url || "https://google.com")
                 }
               >
                 <Text style={styles.footerLink}>이용약관</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() =>
-                  Linking.openURL(
-                    bizInfo?.privacy_url ||
-                      "링크가 설정되지 않았습니다. 지점 관리자에게 문의하세요.",
-                  )
+                  Linking.openURL(bizInfo?.privacy_url || "https://google.com")
                 }
               >
-                {/* 💡 기존 코드의 괄호 에러 수정: 스타일 배열 구조 변경 */}
                 <Text style={[styles.footerLink, { marginLeft: 16 }]}>
                   개인정보 처리방침
                 </Text>
@@ -641,7 +598,6 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* 🚀 PopupManager */}
       <PopupManager />
     </SafeAreaView>
   );
@@ -692,10 +648,28 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: "500",
   },
-  pageViewSection: { marginBottom: 32 },
-  cardWrapper: { width: width - 48, marginRight: 24 },
-  cardShadow: { borderRadius: 16, backgroundColor: "#fff" },
-  cardInner: { height: 150, justifyContent: "flex-end" },
+  pageViewSection: {
+    marginBottom: 32,
+    // 🚀 대폭 수정: 부모 패딩(24)을 무력화하고 좌우로 완전히 100% 밀착시키는 마법의 코드
+    marginHorizontal: -24,
+    paddingHorizontal: 24, // 안쪽 카드의 정렬 위치는 그대로 유지
+  },
+  cardShadow: {
+    borderRadius: 0,
+    backgroundColor: "#fff",
+    // 🚀 양옆 마진을 0으로 꽉 채우거나 미세한 조정을 통해 그림자 찌꺼기 노출을 완벽 차단합니다.
+    marginHorizontal: 0,
+    // 그림자 농도를 살짝 부드럽게 조절
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardInner: {
+    height: 160, // 🚀 좀 더 시원하고 와이드하게 보이도록 세로 높이 살짝 확장
+    justifyContent: "flex-end",
+  },
   cardOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
@@ -776,7 +750,7 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     backgroundColor: "#F9FAFB",
-    height: 150,
+    height: 160,
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 16,
@@ -810,7 +784,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   noticeBox: {
-    marginHorizontal: 24, // 🚀 좌우 여백 추가하여 카드 형태 유지
+    marginHorizontal: 0,
     backgroundColor: "#F9FAFB",
     borderRadius: 12,
     paddingVertical: 4,

@@ -12,15 +12,35 @@ export default function PopupManager() {
   const [pendingChildren, setPendingChildren] = useState<any[]>([]); // 🚀 유니폼 대기 자녀 목록
 
   useEffect(() => {
-    startPopupFlow();
+    console.log("🚀 PopupManager가 마운트되었습니다.");
+  }, []);
+
+  useEffect(() => {
+    // 🚀 [개선] 세션 상태 변화를 감지하여 유저가 확인되었을 때 팝업 체크를 시작합니다.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        console.log("👤 [Auth] 인증 확인됨 (Event):", event);
+        startPopupFlow();
+      }
+    });
+
+    // 이미 세션이 있는 경우를 위한 초기 실행
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        console.log("👤 [Auth] 기존 유저 세션 확인됨:", user.id);
+        startPopupFlow();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // 🚀 [팝업 흐름 제어] 순차적으로 팝업을 체크합니다.
   const startPopupFlow = async () => {
-    // 1단계: 유니폼 신청 대상자 체크
+    console.log("🔄 팝업 흐름 체크 시작...");
     const hasUniformTarget = await checkUniformRequired();
-
-    // 💡 만약 유니폼 팝업 대상이 아니라면, 바로 공지사항 체크로 넘어감
     if (!hasUniformTarget) {
       await checkNoticePopup();
     }
@@ -32,17 +52,36 @@ export default function PopupManager() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return false;
+      if (!user) {
+        console.log("⚠️ 유저 정보가 없어 유니폼 체크를 중단합니다.");
+        return false;
+      }
 
       const { data: children } = await supabase
         .from("children")
         .select("*")
         .eq("parent_id", user.id);
 
+      console.log("📊 [DB] 조회된 자녀 데이터 수:", children?.length || 0);
+
+      if (!children || children.length === 0) {
+        return false;
+      }
+
+      // 상세 조건 디버깅 로그
+      children.forEach((c) => {
+        console.log(
+          `👶 자녀: ${c.child_name}, 반: ${c.target_class}, 사이즈: ${c.uniform_size}`,
+        );
+      });
+
       const needsUniformChildren =
         children?.filter((c) => c.target_class && !c.uniform_size) || [];
 
       if (needsUniformChildren.length > 0) {
+        console.log(
+          `👕 [대상 발견] 유니폼 신청이 필요한 자녀: ${needsUniformChildren.length}명`,
+        );
         setPendingChildren(needsUniformChildren);
         setTargetChild(needsUniformChildren[0]);
         setShowUniform(true);
@@ -50,6 +89,7 @@ export default function PopupManager() {
       }
       return false; // 대상자 없음
     } catch (e) {
+      console.error("❌ 유니폼 체크 중 오류 발생:", e);
       return false;
     }
   };

@@ -9,12 +9,16 @@ import {
   ActivityIndicator,
   Modal,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase"; // 👈 팀장님 프로젝트의 supabase 설정 경로
 
 export default function PickupMainScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   // 💡 이용권 보유 상태 (null: 확인 중, false: 없음, true: 있음)
   const [hasPickupPass, setHasPickupPass] = useState<boolean | null>(null);
 
@@ -83,20 +87,29 @@ export default function PickupMainScreen({ navigation }: any) {
         .limit(1)
         .maybeSingle();
 
-      if (shuttleError) console.error("❌ [디버그] 운행상태 조회 에러:", shuttleError);
+      if (shuttleError)
+        console.error("❌ [디버그] 운행상태 조회 에러:", shuttleError);
       console.log("🚐 [디버그] 운행 중 여부:", !!shuttleData);
       setIsDriving(!!shuttleData);
 
       // (3) 본인 및 자녀 목록 조회
-      const { data: profile } = await supabase.from("users").select("name").eq("id", user.id).single();
-      const { data: kids } = await supabase.from("children").select("id, child_name").eq("parent_id", user.id);
+      const { data: profile } = await supabase
+        .from("users")
+        .select("name")
+        .eq("id", user.id)
+        .single();
+      const { data: kids } = await supabase
+        .from("children")
+        .select("id, child_name")
+        .eq("parent_id", user.id);
 
       // (4) 대상자 리스트 구성 (자녀가 있으면 자녀들, 없으면 본인)
-      const targets = (kids && kids.length > 0) 
-        ? kids.map(k => ({ id: k.id, name: k.child_name, type: "자녀" }))
-        : [{ id: user.id, name: profile?.name || "학부모님", type: "본인" }];
+      const targets =
+        kids && kids.length > 0
+          ? kids.map((k) => ({ id: k.id, name: k.child_name, type: "자녀" }))
+          : [{ id: user.id, name: profile?.name || "학부모님", type: "본인" }];
 
-      const targetIds = targets.map(t => t.id);
+      const targetIds = targets.map((t) => t.id);
 
       // (5) 해당 대상들의 픽업 설정 일괄 조회
       const { data: pickups } = await supabase
@@ -106,13 +119,12 @@ export default function PickupMainScreen({ navigation }: any) {
         .eq("is_active", true);
 
       // (6) 화면용 데이터 결합
-      const finalList = targets.map(t => ({
+      const finalList = targets.map((t) => ({
         ...t,
-        info: pickups?.find(p => p.child_id === t.id) || null
+        info: pickups?.find((p) => p.child_id === t.id) || null,
       }));
 
       setPickupList(finalList);
-
     } catch (error) {
       console.log("❌ [디버그] 데이터 조회 중 예외 발생:", error);
     } finally {
@@ -157,17 +169,21 @@ export default function PickupMainScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.container}>
-      
       {/* 🚀 이용권 구매 유도 팝업 */}
       <Modal visible={isPassModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalIconBg}>
-              <MaterialCommunityIcons name="bus-alert" size={40} color="#6366F1" />
+              <MaterialCommunityIcons
+                name="bus-alert"
+                size={40}
+                color="#6366F1"
+              />
             </View>
             <Text style={styles.modalTitle}>셔틀버스 이용권 필요</Text>
             <Text style={styles.modalDesc}>
-              셔틀버스 이용을 위해서는{"\n"}셔틀버스 월 이용권 구매를{"\n"}해야합니다.
+              셔틀버스 이용을 위해서는{"\n"}셔틀버스 월 이용권 구매를{"\n"}
+              해야합니다.
             </Text>
 
             <TouchableOpacity
@@ -177,7 +193,9 @@ export default function PickupMainScreen({ navigation }: any) {
                 navigation.navigate("Pass");
               }}
             >
-              <Text style={styles.modalPrimaryBtnText}>셔틀버스 이용권 구매하러 가기</Text>
+              <Text style={styles.modalPrimaryBtnText}>
+                셔틀버스 이용권 구매하러 가기
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -204,8 +222,12 @@ export default function PickupMainScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: 20 + insets.bottom },
+        ]}
+      >
         {/* 운행 상태 카드 */}
         <View
           style={[
@@ -271,9 +293,15 @@ export default function PickupMainScreen({ navigation }: any) {
               ) : (
                 <TouchableOpacity
                   style={styles.emptyInfoContainer}
-                  onPress={() => navigation.navigate("PickupApply", { targetId: item.id })}
+                  onPress={() =>
+                    navigation.navigate("PickupApply", { targetId: item.id })
+                  }
                 >
-                  <Ionicons name="add-circle-outline" size={32} color="#6366F1" />
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={32}
+                    color="#6366F1"
+                  />
                   <Text style={styles.emptyInfoText}>
                     등록된 픽업 정보가 없습니다.{"\n"}여기를 눌러 정보를
                     설정해주세요.
@@ -282,7 +310,12 @@ export default function PickupMainScreen({ navigation }: any) {
               )}
             </View>
             {item.info && (
-              <TouchableOpacity style={styles.editBtn} onPress={() => navigation.navigate("PickupApply", { targetId: item.id })}>
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() =>
+                  navigation.navigate("PickupApply", { targetId: item.id })
+                }
+              >
                 <Text style={styles.editBtnText}>변경</Text>
               </TouchableOpacity>
             )}
@@ -393,7 +426,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
     lineHeight: 20,
   },
-  editBtn: { backgroundColor: "#F1F5F9", padding: 10, borderRadius: 8, marginLeft: 10 },
+  editBtn: {
+    backgroundColor: "#F1F5F9",
+    padding: 10,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
   editBtnText: { color: "#4F46E5", fontWeight: "700" },
   actionBtn: {
     flexDirection: "row",

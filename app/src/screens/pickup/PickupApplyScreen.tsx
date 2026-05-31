@@ -11,12 +11,16 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import { supabase } from "../../lib/supabase";
 
 export default function PickupApplyScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   // 💡 [추가] 다자녀 관리를 위한 자녀 상태
   const [childrenList, setChildrenList] = useState<any[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>("");
@@ -54,7 +58,7 @@ export default function PickupApplyScreen({ navigation }: any) {
         .select("branch_id")
         .eq("id", user.id)
         .single();
-      
+
       if (profile?.branch_id) {
         setUserBranchId(profile.branch_id);
       }
@@ -76,7 +80,7 @@ export default function PickupApplyScreen({ navigation }: any) {
       if (profile?.branch_id) {
         spotQuery = spotQuery.eq("branch_id", profile.branch_id);
       }
-      
+
       const { data: spotData, error: spotError } = await spotQuery;
 
       if (!spotError && spotData) {
@@ -366,7 +370,12 @@ export default function PickupApplyScreen({ navigation }: any) {
         </ScrollView>
 
         {/* 하단 저장 버튼 */}
-        <View style={styles.footer}>
+        <View
+          style={[
+            styles.footer,
+            { paddingBottom: Math.max(insets.bottom, 20) },
+          ]}
+        >
           <TouchableOpacity
             style={[
               styles.saveBtn,

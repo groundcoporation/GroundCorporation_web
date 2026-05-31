@@ -116,7 +116,7 @@ export default function InvoiceScreen({ navigation }: any) {
       const cleanKey = rawKey.replace(/['"]+/g, "").trim();
       const authUrl = process.env.EXPO_PUBLIC_SERVER_AUTH_URL || "";
 
-      // 1. KSPAY 서버 최종 승인 API 호출
+      // 1. KSPAY 서버 최종 승인 API 호출 (Edge Function 호출)
       const response = await fetch(authUrl, {
         method: "POST",
         headers: {
@@ -127,27 +127,60 @@ export default function InvoiceScreen({ navigation }: any) {
         body: JSON.stringify({
           payKey: payKey,
           amount: invoice.total_amount,
-          branch_id: invoice.branch_id,
+          branch_id: currentBranch?.id || invoice.branch_id,
         }),
       });
 
       const resText = await response.text();
-      const authResult = JSON.parse(resText);
+      console.log("[Invoice] 📥 엣지 펑션 응답 원본:", resText);
 
-      if (!response.ok) throw new Error(authResult.message || "결제 승인 실패");
+      let authResult;
+      try {
+        authResult = JSON.parse(resText);
+      } catch (parseError) {
+        console.error("JSON 파싱 에러! 서버 응답이 JSON이 아닙니다:", resText);
+        throw new Error(
+          `서버 통신 오류가 발생했습니다.\n응답: ${resText.substring(0, 50)}...`,
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          authResult.error || authResult.message || "결제 승인 실패",
+        );
+      }
 
       console.log("[Invoice] ✅ 승인 성공 - DB 기록 중...");
 
+      // 🚀 [핵심 보정] KSNET 백틱 구분자 문자열 파싱
+      // KSNET 표준 데이터 포맷: `O`거래번호(12자리)`승인일시(14자리)`금액`승인번호...
+      let extractedTrNo = null;
+      let extractedAuthNo = null;
+
+      if (authResult.rawText) {
+        const segments = authResult.rawText.split("`");
+        // 백틱으로 쪼갠 후 공백이나 빈 요소를 제거하여 배열 색인 불일치 방지
+        const cleanSegments = segments.filter((s: string) => s.trim() !== "");
+
+        if (cleanSegments.length >= 5) {
+          extractedTrNo = cleanSegments[1]; // 거래번호 추출
+          extractedAuthNo = cleanSegments[4]; // 승인번호(결제확인용 고유코드) 추출
+        }
+      }
+
       // 2. 청구서(payment_requests) 상태를 'paid'로 업데이트 및 결제 데이터 기록
-      await supabase
+      const { error: updateError } = await supabase
         .from("payment_requests")
         .update({
           status: "paid",
-          kspay_tr_no: authResult.trno || null,
-          kspay_auth_no: authResult.authno || null,
+          // 🚀 파싱 결과를 우선 적용하고 없는 경우 기존 객체 매핑으로 폴백
+          kspay_tr_no: extractedTrNo || authResult.trno || null,
+          kspay_auth_no: extractedAuthNo || authResult.authno || null,
           paid_at: new Date().toISOString(),
         })
         .eq("id", invoice.id);
+
+      if (updateError) throw updateError;
 
       // 3. 지갑(user_packages)에 공용 이용권 인서트!
       const cartItems = invoice.cart_items || [];
@@ -161,7 +194,7 @@ export default function InvoiceScreen({ navigation }: any) {
           remaining_count:
             item.pkg.package_options?.[item.optIndex]?.total_count || 10,
           branch_id: invoice.branch_id,
-          child_id: null, // 공용 지갑 시스템
+          child_id: null,
           child_name: "공용 이용권",
           price:
             item.pkg.package_options?.[item.optIndex]?.price ||
