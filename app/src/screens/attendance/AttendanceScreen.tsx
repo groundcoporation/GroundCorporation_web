@@ -49,10 +49,8 @@ export default function AttendanceScreen({ navigation }: any) {
     try {
       setLoading(true);
       const dateStr = dayjs(selectedDate).format('YYYY-MM-DD');
-      const dateStart = dayjs(selectedDate).startOf('day').toISOString();
-      const dateEnd = dayjs(selectedDate).endOf('day').toISOString();
       
-      // 1. 센터 출결 로그 조회
+      // 💡 1. attendance_logs 테이블 하나만 조회하면 승하차/출결 다 가져옵니다!
       const { data: attData } = await supabase
         .from('attendance_logs')
         .select('*')
@@ -60,37 +58,29 @@ export default function AttendanceScreen({ navigation }: any) {
         .eq('date', dateStr)
         .maybeSingle();
 
-      // 2. 셔틀 로그 조회
-      const { data: shuttleData } = await supabase
-        .from('shuttle_logs')
-        .select('*')
-        .eq('child_id', activeChildId)
-        .gte('event_time', dateStart)
-        .lte('event_time', dateEnd)
-        .order('event_time', { ascending: true });
-
-      // 3. 타임라인 통합 및 정렬
       let items = [];
       
-      // 셔틀 로그 추가
-      if (shuttleData) {
-        shuttleData.forEach(log => {
-          items.push({
-            time: log.event_time,
-            label: `셔틀버스 ${log.event_type}`,
-            icon: log.event_type === '승차' ? 'bus-clock' : 'bus-marker'
-          });
-        });
-      }
-      
-      // 센터 출결 로그 추가
       if (attData) {
-        if (attData.check_in) items.push({ time: attData.check_in, label: "센터 등원 완료", icon: "door-open" });
-        if (attData.check_out) items.push({ time: attData.check_out, label: "수업 종료 및 하원", icon: "door-closed" });
+        // 🚀 2. 셔틀 승하차 로그 추가 (attendance_logs에 있는 데이터 사용)
+        if (attData.shuttle_ride_time) {
+          items.push({ time: attData.shuttle_ride_time, label: "셔틀버스 승차", icon: "bus-clock" });
+        }
+        if (attData.shuttle_drop_time) {
+          items.push({ time: attData.shuttle_drop_time, label: "셔틀버스 하차", icon: "bus-marker" });
+        }
+
+        // 3. 센터 출결 로그 추가
+        if (attData.check_in) {
+          items.push({ time: attData.check_in, label: "센터 등원 완료", icon: "door-open" });
+        }
+        if (attData.check_out) {
+          items.push({ time: attData.check_out, label: "수업 종료 및 하원", icon: "door-closed" });
+        }
       }
 
-      // 4. 시간순 정렬
+      // 4. 시간순 정렬 (승차 -> 등원 -> 하원 -> 하차 순으로 예쁘게 정렬됨)
       items.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+      
       setTimelineItems(items);
       
     } catch (e) {
