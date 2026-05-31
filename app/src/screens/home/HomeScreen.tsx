@@ -63,7 +63,8 @@ export default function HomeScreen({ navigation }: any) {
   const [activeChildIndex, setActiveChildIndex] = useState(0);
 
   // 💡 새로 추가된 상태: 가장 가까운 예약 데이터
-  const [upcomingReservation, setUpcomingReservation] = useState<any>(null);
+  // 🚀 [수정] 여러 개의 예약을 담아야 하므로 null 대신 배열([])로 초기화합니다.
+  const [upcomingReservation, setUpcomingReservation] = useState<any[]>([]);
 
   // 💡 지점별 사업자 정보를 저장할 상태 추가
   const [bizInfo, setBizInfo] = useState<BizInfo | null>(null);
@@ -132,9 +133,10 @@ export default function HomeScreen({ navigation }: any) {
         setChildren(childrenList || []);
 
         // 💡 3. [수정] 다가오는 예약 로드 (오늘 이후의 가장 빠른 예약 1건 + 수업 상세 정보 JOIN)
+        // 💡 3. [수정] 다가오는 예약 로드 (오늘 이후의 가장 빠른 예약 '전체'를 가져옴)
         const today = dayjs().tz().format("YYYY-MM-DD");
 
-        const { data: reservation } = await supabase
+        const { data: reservations } = await supabase
           .from("reservations")
           .select(
             `
@@ -148,17 +150,13 @@ export default function HomeScreen({ navigation }: any) {
         `,
           )
           .eq("user_id", user.id)
-          .eq("class_date", today) // 오늘 수업만 우선 노출하거나 gte 사용
+          .gte("class_date", today) // 🚀 오늘 '이후' 예약 모두 (gte 사용)
           .eq("status", "pending")
           .order("class_date", { ascending: true })
-          .limit(1)
-          .maybeSingle();
+          .order("class_schedules(start_time)", { ascending: true }); // 날짜 다음엔 시간순 정렬
 
-        if (reservation) {
-          setUpcomingReservation(reservation);
-        } else {
-          setUpcomingReservation(null);
-        }
+        // 배열 전체를 상태에 저장합니다.
+        setUpcomingReservation(reservations || []);
 
         // 🚀 [추가] 4. 홈 화면 공지사항 로드 (is_on_home이 true인 것 중 최신 2개)
         const { data: notices } = await supabase
@@ -193,8 +191,10 @@ export default function HomeScreen({ navigation }: any) {
     return `${month}.${day} ${dayOfWeek} ${time}`;
   };
 
-  const renderLessonCard = (targetName: string, isChild: boolean) => {
-    const hasReservation = !!upcomingReservation;
+  // 🚀 [수정] specificReservation 파라미터를 추가로 받아옵니다.
+  const renderLessonCard = (targetName: string, isChild: boolean, specificReservation: any) => {
+    // 💡 이제 전역 상태가 아니라, 매칭되어 들어온 특정 예약(specificReservation) 유무를 기준으로 판단
+    const hasReservation = !!specificReservation;
 
     return (
       <View style={styles.cardShadow}>
@@ -212,21 +212,21 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={styles.tag}>
                   <Text style={styles.tagText}>UPCOMING</Text>
                 </View>
-                {/* 💡 [수정] 예약된 날짜와 수업 시간을 정확히 표시 */}
+                {/* 💡 [수정] specificReservation의 데이터를 사용하도록 교체 */}
                 <Text style={styles.cardDateText}>
                   {formatReservationDate(
-                    upcomingReservation.class_date,
-                    upcomingReservation.class_schedules?.start_time,
+                    specificReservation.class_date,
+                    specificReservation.class_schedules?.start_time,
                   )}
                 </Text>
                 <Text style={styles.cardChildText}>
-                  {upcomingReservation.class_schedules?.target_class} |{" "}
+                  {specificReservation.class_schedules?.target_class} |{" "}
                   {targetName} {isChild ? "학생" : "회원님"}
                 </Text>
                 {/* 💡 [수정] '미정' 방지: 예약 데이터의 지점 정보를 먼저 보여줌 */}
                 <Text style={styles.branchText}>
                   {/* 1순위: 예약된 수업의 지점 한글명 / 2순위: 내 소속 지점 한글명 / 3순위: 기본값 */}
-                  {upcomingReservation?.branches?.name ||
+                  {specificReservation?.branches?.name ||
                     userData?.branches?.name ||
                     "시흥본점"}
                 </Text>
@@ -310,22 +310,43 @@ export default function HomeScreen({ navigation }: any) {
                 );
                 setActiveChildIndex(index);
               }}
-              renderItem={({ item }) => (
-                <View style={styles.cardWrapper}>
-                  {item ? (
-                    renderLessonCard(
-                      item.name || item.child_name,
-                      children.length > 0,
-                    )
-                  ) : (
-                    <View style={[styles.cardInner, styles.emptyCard]}>
-                      <Text style={styles.emptyText}>
-                        등록된 일정이 없습니다.
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
+              renderItem={({ item }) => {
+                // 🚀 핵심 로직: 불러온 모든 예약 중에서 '현재 자녀'의 예약만 필터링해서 찾기
+                let targetReservation = null;
+
+                if (upcomingReservation && upcomingReservation.length > 0) {
+                  if (item?.id && item.id !== userData?.id) {
+                    // 자녀 카드일 경우: child_id가 일치하는 가장 첫 번째(빠른) 예약 찾기
+                    targetReservation = upcomingReservation.find(
+                      (res: any) => res.child_id === item.id
+                    );
+                  } else {
+                    // 본인(성인) 카드일 경우: child_id가 null이거나 내 id와 일치하는 예약 찾기
+                    targetReservation = upcomingReservation.find(
+                      (res: any) => res.child_id === null || res.child_id === userData?.id
+                    );
+                  }
+                }
+
+                return (
+                  <View style={styles.cardWrapper}>
+                    {item ? (
+                      // 🚀 찾은 개별 예약 데이터를 renderLessonCard로 넘겨줍니다.
+                      renderLessonCard(
+                        item.name || item.child_name,
+                        children.length > 0,
+                        targetReservation // 세 번째 인자로 추가 전달
+                      )
+                    ) : (
+                      <View style={[styles.cardInner, styles.emptyCard]}>
+                        <Text style={styles.emptyText}>
+                          등록된 일정이 없습니다.
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              }}
               keyExtractor={(item, index) => item?.id || index.toString()}
             />
             {children.length > 1 && (
