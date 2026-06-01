@@ -21,6 +21,8 @@ import timezone from "dayjs/plugin/timezone";
 // 🚀 dayjs 플러그인 설정
 dayjs.extend(utc);
 dayjs.extend(timezone);
+dayjs.tz.setDefault("Asia/Seoul");
+dayjs.locale("ko");
 
 // 🚀 지점 정보를 가져오기 위해 useAuth 임포트
 import { useAuth } from "../../context/AuthContext";
@@ -134,7 +136,6 @@ export default function HomeScreen({ navigation }: any) {
           )
           .eq("user_id", user.id)
           .gte("class_date", today)
-          .eq("status", "pending")
           .order("class_date", { ascending: true })
           .order("class_schedules(start_time)", { ascending: true });
 
@@ -177,21 +178,82 @@ export default function HomeScreen({ navigation }: any) {
   ) => {
     const hasReservation = !!specificReservation;
 
+    // 🚀 실시간 상태 및 배경 이미지 판별 로직
+    let statusLabel = "UPCOMING";
+    let statusBg = "rgba(255,255,255,0.2)";
+    let bgImage =
+      "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800"; // 기본 축구장 배경
+
+    if (hasReservation) {
+      const now = dayjs().tz();
+      // 🚀 [수정] 날짜와 시간을 합칠 때 명시적으로 서울 시간대로 파싱하여 오차를 방지합니다.
+      const startTime = dayjs.tz(
+        `${specificReservation.class_date} ${specificReservation.class_schedules?.start_time}`,
+        "Asia/Seoul",
+      );
+      const endTime = dayjs.tz(
+        `${specificReservation.class_date} ${specificReservation.class_schedules?.end_time}`,
+        "Asia/Seoul",
+      );
+      const attStatus = specificReservation.attendance_status;
+
+      // 💡 최근 업데이트 시간 확인 (10초 이내 변경된 경우 하이라이트 배경 노출)
+      const updatedAt = dayjs(specificReservation.updated_at).tz(); // 🚀 updated_at은 DB에서 KST로 저장되므로, .tz()만 붙여도 됩니다.
+      const diff = now.diff(updatedAt, "second");
+
+      if (attStatus === "등원") {
+        if (diff < 10) {
+          statusLabel = "방금 등원함! 👋";
+          statusBg = "#F59E0B"; // 오렌지색 하이라이트
+          bgImage =
+            "https://images.unsplash.com/photo-1526232761682-d26e03ac148e?q=80&w=800"; // 웰컴 이미지
+        } else if (now.isAfter(startTime) && now.isBefore(endTime)) {
+          statusLabel = "수업 중";
+          statusBg = "#10B981"; // 초록색
+          bgImage =
+            "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800"; // 훈련 중 이미지
+        } else {
+          statusLabel = "등원 완료";
+          statusBg = "#6366F1"; // 보라색
+          bgImage =
+            "https://images.unsplash.com/photo-1511949863663-92c5c57d48a7?q=80&w=800"; // 수업 대기 이미지
+        }
+      } else if (attStatus === "하원" && diff < 10) {
+        statusLabel = "안전하게 하원함! 👋";
+        statusBg = "#F59E0B"; // 하이라이트 처리
+        bgImage =
+          "https://images.unsplash.com/photo-1516733725897-1aa73b87c8e8?q=80&w=800"; // 종료 배경
+      } else if (attStatus === "승차") {
+        if (diff < 10) {
+          statusLabel = "방금 승차함! 👋";
+          statusBg = "#F59E0B";
+        } else {
+          statusLabel = "셔틀 탑승 중";
+          statusBg = "#3D56B2"; // 셔틀 블루
+        }
+        bgImage =
+          "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800"; // 셔틀버스 이미지
+      } else if (attStatus === "하차" && diff < 10) {
+        statusLabel = "셔틀 하차 완료";
+        statusBg = "#F59E0B"; // 도착 하이라이트
+        bgImage =
+          "https://images.unsplash.com/photo-1490139177067-2819828d54d1?q=80&w=800"; // 도착지 이미지
+      }
+    }
+
     return (
       <View style={styles.cardShadow}>
         {hasReservation ? (
           <ImageBackground
-            source={{
-              uri: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800",
-            }}
+            source={{ uri: bgImage }}
             style={styles.cardInner}
             imageStyle={{ borderRadius: 16 }}
           >
             <View style={styles.cardOverlay} />
             <View style={styles.cardContent}>
               <View>
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>UPCOMING</Text>
+                <View style={[styles.tag, { backgroundColor: statusBg }]}>
+                  <Text style={styles.tagText}>{statusLabel}</Text>
                 </View>
                 <Text style={styles.cardDateText}>
                   {formatReservationDate(

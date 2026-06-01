@@ -10,6 +10,7 @@ import {
   Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 
@@ -19,6 +20,7 @@ export default function MyPackageScreen({ navigation }: any) {
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<number>(0); // 인덱스(0,1,2)로 관리
+  const insets = useSafeAreaInsets();
 
   const flatListRef = useRef<FlatList>(null);
   const TABS = ["AVAILABLE", "USED", "EXPIRED"] as const;
@@ -110,7 +112,10 @@ export default function MyPackageScreen({ navigation }: any) {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + 20 },
+          ]}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="ticket-outline" size={60} color="#CBD5E1" />

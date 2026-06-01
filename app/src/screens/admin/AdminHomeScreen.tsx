@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase"; // 🚀 경로 확인 필수
 import dayjs from "dayjs";
@@ -19,6 +20,7 @@ const { width } = Dimensions.get("window");
 const COLUMN_WIDTH = (width - 60) / 2;
 
 export default function AdminHomeScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   // 🚀 통합 요약 상태 관리
   const [summary, setSummary] = useState({
     todayConsult: 0,
@@ -119,7 +121,10 @@ export default function AdminHomeScreen({ navigation }: any) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 20 },
+        ]}
       >
         {/* 🚀 오늘/이번달 통합 요약 카드 */}
         <View style={styles.summaryRow}>

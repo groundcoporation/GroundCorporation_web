@@ -45,41 +45,64 @@ export default function PickupMainScreen({ navigation }: any) {
       }
       console.log("👤 [디버그] 현재 접속 유저 ID:", user.id);
 
-      // (1) 셔틀버스 월 이용권 보유 여부 확인
+      // (1) 본인 및 자녀 목록 조회 (필요한 이용권 수량 파악을 위해 먼저 조회)
+      const { data: profile } = await supabase
+        .from("users")
+        .select("name")
+        .eq("id", user.id)
+        .single();
+      const { data: kids } = await supabase
+        .from("children")
+        .select("id, child_name")
+        .eq("parent_id", user.id);
+
+      // 대상자 리스트 구성 (자녀가 있으면 자녀들, 없으면 본인)
+      const targets =
+        kids && kids.length > 0
+          ? kids.map((k) => ({ id: k.id, name: k.child_name, type: "자녀" }))
+          : [{ id: user.id, name: profile?.name || "학부모님", type: "본인" }];
+
+      const requiredCount = targets.length;
+
+      // (2) 셔틀버스 월 이용권 보유 개수 확인
       const { data: passData, error: passError } = await supabase
         .from("user_packages")
         .select("id, package_name, expiry_date, is_shuttle")
         .eq("user_id", user.id)
-        .ilike("status", "active")
+        .eq("status", "active") // ilike 대신 정확한 상태값 비교
         .eq("is_shuttle", true);
 
       if (passError) console.error("❌ [디버그] 이용권 조회 에러:", passError);
-      console.log("🎟️ [디버그] 조회된 이용권 데이터:", passData);
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const passExists = !!(
-        passData &&
-        passData.length > 0 &&
-        passData.some((pkg) => {
+      // 유효한(만료되지 않은) 이용권 필터링
+      const activePasses =
+        passData?.filter((pkg) => {
           if (!pkg.expiry_date) return true;
           const expiry = new Date(pkg.expiry_date);
           return expiry >= today;
-        })
-      );
+        }) || [];
+
+      // 🚀 [핵심 수정] 등록된 인원수(자녀 수)만큼 이용권이 있는지 체크
+      const passExists = activePasses.length >= requiredCount;
 
       setHasPickupPass(passExists);
-      console.log("🎫 [디버그] 이용권 보유 상태:", passExists);
+      console.log(
+        `🎫 [디버그] 필요 수량: ${requiredCount}, 보유 수량: ${activePasses.length}`,
+      );
 
-      // 이용권이 없는 경우 즉시 팝업 노출
+      // 이용권이 부족한 경우 즉시 팝업 노출
       if (!passExists) {
+        // 화면 구성을 위한 기본 리스트는 세팅 (배경에 흐릿하게 보일 용도)
+        setPickupList(targets.map((t) => ({ ...t, info: null })));
         setIsPassModalVisible(true);
         setLoading(false);
         return;
       }
 
-      // (2) 기사님 운행 상태 확인
+      // (3) 기사님 운행 상태 확인
       const { data: shuttleData, error: shuttleError } = await supabase
         .from("shuttle_status")
         .select("is_driving")
@@ -92,23 +115,7 @@ export default function PickupMainScreen({ navigation }: any) {
       console.log("🚐 [디버그] 운행 중 여부:", !!shuttleData);
       setIsDriving(!!shuttleData);
 
-      // (3) 본인 및 자녀 목록 조회
-      const { data: profile } = await supabase
-        .from("users")
-        .select("name")
-        .eq("id", user.id)
-        .single();
-      const { data: kids } = await supabase
-        .from("children")
-        .select("id, child_name")
-        .eq("parent_id", user.id);
-
-      // (4) 대상자 리스트 구성 (자녀가 있으면 자녀들, 없으면 본인)
-      const targets =
-        kids && kids.length > 0
-          ? kids.map((k) => ({ id: k.id, name: k.child_name, type: "자녀" }))
-          : [{ id: user.id, name: profile?.name || "학부모님", type: "본인" }];
-
+      // (4) 대상자들의 ID 추출 (이미 함수 상단에서 생성된 targets 변수를 재사용하여 중복 선언 에러 방지)
       const targetIds = targets.map((t) => t.id);
 
       // (5) 해당 대상들의 픽업 설정 일괄 조회
@@ -182,8 +189,9 @@ export default function PickupMainScreen({ navigation }: any) {
             </View>
             <Text style={styles.modalTitle}>셔틀버스 이용권 필요</Text>
             <Text style={styles.modalDesc}>
-              셔틀버스 이용을 위해서는{"\n"}셔틀버스 월 이용권 구매를{"\n"}
-              해야합니다.
+              {pickupList.length > 1
+                ? `등록된 자녀(${pickupList.length}명) 인원에 맞는\n개별 이용권 구매가 필요합니다.\n현재 보유 수량이 부족합니다.`
+                : "셔틀버스 이용을 위해서는\n셔틀버스 월 이용권 구매를\n해야합니다."}
             </Text>
 
             <TouchableOpacity
