@@ -14,6 +14,7 @@ import {
   TextInput, // 🚀 [추가] 검색창을 위한 TextInput 임포트
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 
@@ -72,6 +73,7 @@ const formatCurrency = (amount: number | null) => {
 export default function AdminBillingScreen({ route, navigation }: any) {
   // 🚀 [수정] 기존에 수동으로 관리하던 selectedBranchId를 삭제하고 Context에서 가져옵니다.
   const { branchId, role, setBranch } = useAuth();
+  const insets = useSafeAreaInsets();
 
   // --- 상태 관리 ---
   const [categories, setCategories] = useState<any[]>([]);
@@ -86,10 +88,10 @@ export default function AdminBillingScreen({ route, navigation }: any) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartExpanded, setIsCartExpanded] = useState(false);
   const [showOptionModal, setShowOptionModal] = useState(false);
-  
+
   // 🚀 [수정] 어드민에서는 결제창을 안 띄우므로 KSPay 관련 상태 제거/주석처리
   // const [showKSPay, setShowKSPay] = useState(false);
-  
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [isClassAssigned, setIsClassAssigned] = useState(false);
   const [showConsultModal, setShowConsultModal] = useState(false);
@@ -100,7 +102,7 @@ export default function AdminBillingScreen({ route, navigation }: any) {
   const [parents, setParents] = useState<Parent[]>([]);
   const [selectedParent, setSelectedParent] = useState<Parent | null>(null);
   const [showParentModal, setShowParentModal] = useState(false);
-  
+
   // 🚀 [추가] 학부모 검색어 상태 관리
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -128,7 +130,10 @@ export default function AdminBillingScreen({ route, navigation }: any) {
   useEffect(() => {
     if (preSelectedParent) {
       setSelectedParent(preSelectedParent);
-      console.log("🎯 [Billing] 상담 화면으로부터 자동 선택된 학부모:", preSelectedParent.name);
+      console.log(
+        "🎯 [Billing] 상담 화면으로부터 자동 선택된 학부모:",
+        preSelectedParent.name,
+      );
     }
   }, [preSelectedParent]);
 
@@ -140,7 +145,7 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         .from("users")
         .select("id, name, phone, branch_id")
         .eq("branch_id", branchId);
-      
+
       if (!error && data) setParents(data);
       else console.error("[Billing] ❌ 학부모 목록 로드 에러:", error);
     } catch (e) {
@@ -239,35 +244,40 @@ export default function AdminBillingScreen({ route, navigation }: any) {
   };
 
   const handleSendInvoice = async () => {
-    if (!selectedParent) return Alert.alert("알림", "청구서를 받을 학부모님을 선택해주세요.");
-    if (cartItems.length === 0) return Alert.alert("알림", "상품을 담아주세요.");
-    if (!currentUser) return Alert.alert("알림", "관리자 정보를 불러올 수 없습니다.");
+    if (!selectedParent)
+      return Alert.alert("알림", "청구서를 받을 학부모님을 선택해주세요.");
+    if (cartItems.length === 0)
+      return Alert.alert("알림", "상품을 담아주세요.");
+    if (!currentUser)
+      return Alert.alert("알림", "관리자 정보를 불러올 수 없습니다.");
 
     Alert.alert(
       "청구서 발송",
       `${selectedParent.name} 학부모님께 총 ${formatCurrency(finalPrice)} 청구서를 발송하시겠습니까?`,
       [
         { text: "취소", style: "cancel" },
-        { 
-          text: "발송하기", 
+        {
+          text: "발송하기",
           onPress: async () => {
             setIsProcessing(true);
             try {
               const orderNo = `REQ-${Date.now()}`;
-              
+
               const { error: dbError } = await supabase
                 .from("payment_requests")
-                .insert([{
-                  order_no: orderNo,
-                  parent_id: selectedParent.id,
-                  parent_name: selectedParent.name,
-                  sender_id: currentUser.id,
-                  branch_id: branchId,
-                  total_amount: finalPrice,
-                  cart_items: cartItems,
-                  status: "pending"
-                }]);
-              
+                .insert([
+                  {
+                    order_no: orderNo,
+                    parent_id: selectedParent.id,
+                    parent_name: selectedParent.name,
+                    sender_id: currentUser.id,
+                    branch_id: branchId,
+                    total_amount: finalPrice,
+                    cart_items: cartItems,
+                    status: "pending",
+                  },
+                ]);
+
               if (dbError) throw dbError;
 
               try {
@@ -276,7 +286,7 @@ export default function AdminBillingScreen({ route, navigation }: any) {
                   targetUserId: selectedParent.id,
                   title: `💳 이용권 결제 요청`,
                   body: `코치님이 보낸 이용권 청구서(${formatCurrency(finalPrice)})가 도착했습니다.`,
-                  type: "payment"
+                  type: "payment",
                 });
               } catch (pushError) {
                 console.log("[Billing] ⚠️ 푸시 알림 발송 중 에러:", pushError);
@@ -293,9 +303,9 @@ export default function AdminBillingScreen({ route, navigation }: any) {
             } finally {
               setIsProcessing(false);
             }
-          } 
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
@@ -354,19 +364,24 @@ export default function AdminBillingScreen({ route, navigation }: any) {
   );
 
   const handleOpenPayment = () => {
-    if (cartItems.length === 0) return Alert.alert("알림", "상품을 담아주세요.");
-    if (!selectedParent) return Alert.alert("알림", "청구서를 받을 학부모님을 선택해주세요.");
+    if (cartItems.length === 0)
+      return Alert.alert("알림", "상품을 담아주세요.");
+    if (!selectedParent)
+      return Alert.alert("알림", "청구서를 받을 학부모님을 선택해주세요.");
     setShowOptionModal(false);
-    handleSendInvoice(); 
+    handleSendInvoice();
   };
 
   const isDeveloper = role === "admin" || currentUser?.role === "admin";
 
   const filteredParents = parents.filter((p) => {
     const searchLower = searchQuery.toLowerCase();
-    const phoneClean = p.phone ? p.phone.replace(/-/g, '') : "";
-    const searchPhoneClean = searchQuery.replace(/-/g, '');
-    return p.name.toLowerCase().includes(searchLower) || phoneClean.includes(searchPhoneClean);
+    const phoneClean = p.phone ? p.phone.replace(/-/g, "") : "";
+    const searchPhoneClean = searchQuery.replace(/-/g, "");
+    return (
+      p.name.toLowerCase().includes(searchLower) ||
+      phoneClean.includes(searchPhoneClean)
+    );
   });
 
   return (
@@ -410,17 +425,27 @@ export default function AdminBillingScreen({ route, navigation }: any) {
           { paddingBottom: isCartExpanded && cartItems.length > 0 ? 400 : 160 },
         ]}
       >
-        <TouchableOpacity 
-          style={styles.parentSelectBox} 
+        <TouchableOpacity
+          style={styles.parentSelectBox}
           onPress={() => {
             setSearchQuery("");
             setShowParentModal(true);
           }}
         >
           <View>
-            <Text style={styles.parentSelectLabel}>결제 요청 대상 (학부모)</Text>
-            <Text style={selectedParent ? styles.parentSelectedText : styles.parentPlaceholderText}>
-              {selectedParent ? `${selectedParent.name} 학부모님` : '여기를 눌러 대상을 선택해주세요'}
+            <Text style={styles.parentSelectLabel}>
+              결제 요청 대상 (학부모)
+            </Text>
+            <Text
+              style={
+                selectedParent
+                  ? styles.parentSelectedText
+                  : styles.parentPlaceholderText
+              }
+            >
+              {selectedParent
+                ? `${selectedParent.name} 학부모님`
+                : "여기를 눌러 대상을 선택해주세요"}
             </Text>
           </View>
           <Ionicons name="search" size={24} color="#64748B" />
@@ -580,7 +605,12 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         </View>
       </ScrollView>
 
-      <View style={styles.integratedFooterWrapper}>
+      <View
+        style={[
+          styles.integratedFooterWrapper,
+          { paddingBottom: Math.max(insets.bottom, 20) },
+        ]}
+      >
         <TouchableOpacity
           style={styles.cartToggleHeader}
           onPress={() =>
@@ -685,9 +715,14 @@ export default function AdminBillingScreen({ route, navigation }: any) {
                 <Ionicons name="close" size={24} color="#111827" />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color="#94A3B8" style={{ marginRight: 8 }} />
+              <Ionicons
+                name="search"
+                size={20}
+                color="#94A3B8"
+                style={{ marginRight: 8 }}
+              />
               <TextInput
                 style={styles.searchInput}
                 placeholder="이름 또는 전화번호로 검색"
@@ -703,10 +738,13 @@ export default function AdminBillingScreen({ route, navigation }: any) {
               )}
             </View>
 
-            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={true}>
+            <ScrollView
+              style={{ maxHeight: 400 }}
+              showsVerticalScrollIndicator={true}
+            >
               {filteredParents.map((p) => (
-                <TouchableOpacity 
-                  key={p.id} 
+                <TouchableOpacity
+                  key={p.id}
                   style={styles.parentListItem}
                   onPress={() => {
                     setSelectedParent(p);
@@ -714,13 +752,17 @@ export default function AdminBillingScreen({ route, navigation }: any) {
                   }}
                 >
                   <Text style={styles.parentListName}>{p.name} 학부모님</Text>
-                  <Text style={styles.parentListPhone}>{p.phone || "연락처 미등록"}</Text>
+                  <Text style={styles.parentListPhone}>
+                    {p.phone || "연락처 미등록"}
+                  </Text>
                 </TouchableOpacity>
               ))}
               {filteredParents.length === 0 && (
                 <View style={styles.emptySearchContainer}>
                   <Ionicons name="search-outline" size={40} color="#E2E8F0" />
-                  <Text style={styles.emptySearchText}>검색된 학부모님이 없습니다.</Text>
+                  <Text style={styles.emptySearchText}>
+                    검색된 학부모님이 없습니다.
+                  </Text>
                 </View>
               )}
             </ScrollView>
@@ -856,9 +898,7 @@ export default function AdminBillingScreen({ route, navigation }: any) {
       {isProcessing && (
         <View style={styles.processingOverlay}>
           <ActivityIndicator size="large" color="#6366F1" />
-          <Text style={styles.processingText}>
-            요청을 처리 중입니다...
-          </Text>
+          <Text style={styles.processingText}>요청을 처리 중입니다...</Text>
         </View>
       )}
     </SafeAreaView>
@@ -884,19 +924,24 @@ const styles = StyleSheet.create({
   },
   branchStatic: { paddingHorizontal: 12, paddingVertical: 6 },
   headerTitle: { fontSize: 16, fontWeight: "800", color: "#111827" },
-  parentSelectBox: { 
-    flexDirection: "row", 
-    justifyContent: "space-between", 
-    alignItems: "center", 
-    backgroundColor: "#EEF2FF", 
-    marginHorizontal: 20, 
+  parentSelectBox: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#EEF2FF",
+    marginHorizontal: 20,
     marginBottom: 15,
-    padding: 16, 
-    borderRadius: 16, 
-    borderWidth: 1, 
-    borderColor: "#C7D2FE" 
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#C7D2FE",
   },
-  parentSelectLabel: { fontSize: 12, color: "#6366F1", fontWeight: "700", marginBottom: 4 },
+  parentSelectLabel: {
+    fontSize: 12,
+    color: "#6366F1",
+    fontWeight: "700",
+    marginBottom: 4,
+  },
   parentSelectedText: { fontSize: 16, fontWeight: "800", color: "#1E1B4B" },
   parentPlaceholderText: { fontSize: 15, fontWeight: "600", color: "#94A3B8" },
   tabContainer: {
@@ -1098,11 +1143,30 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: { fontSize: 18, fontWeight: "bold" },
-  searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12, marginBottom: 16, borderWidth: 1, borderColor: "#E2E8F0" },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
   searchInput: { flex: 1, fontSize: 15, color: "#1E293B", padding: 0 },
   emptySearchContainer: { paddingVertical: 40, alignItems: "center" },
-  emptySearchText: { color: "#94A3B8", fontSize: 14, fontWeight: "600", marginTop: 12 },
-  parentListItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  emptySearchText: {
+    color: "#94A3B8",
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 12,
+  },
+  parentListItem: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
   parentListName: { fontSize: 16, fontWeight: "700", color: "#1E293B" },
   parentListPhone: { fontSize: 14, color: "#94A3B8", marginTop: 4 },
   optionList: { marginBottom: 30 },

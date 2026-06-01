@@ -10,6 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import dayjs from "dayjs";
@@ -26,6 +27,7 @@ const formatCurrency = (amount: number | null) => {
 // 🚀 [수정] 컴포넌트 이름을 InvoiceScreen으로 변경
 export default function InvoiceScreen({ navigation }: any) {
   const { branchId } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -242,7 +244,12 @@ export default function InvoiceScreen({ navigation }: any) {
         <View style={{ width: 28 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 40 },
+        ]}
+      >
         <View style={styles.topSection}>
           <Text style={styles.welcomeText}>
             {currentUser ? `${currentUser.name} 회원님,` : "회원님,"}

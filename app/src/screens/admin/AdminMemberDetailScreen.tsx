@@ -23,6 +23,7 @@ import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function AdminMemberDetailScreen({ navigation, route }: any) {
+  const insets = useSafeAreaInsets();
   const { userId } = route.params;
   const [activeTab, setActiveTab] = useState("package");
   const [loading, setLoading] = useState(true);
@@ -295,7 +296,10 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+      >
         <View style={styles.profileSection}>
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarText}>{member.name?.[0]}</Text>

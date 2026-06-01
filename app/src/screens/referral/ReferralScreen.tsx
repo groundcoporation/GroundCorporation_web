@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 
-export default function ReferralScreen({ navigation }: any) {
+export default function ReferralScreen({ navigation, route }: any) {
   const { user } = useAuth();
   const [myReferralCode, setMyReferralCode] = useState("");
   const [referrerInput, setReferrerInput] = useState("");
@@ -24,9 +24,27 @@ export default function ReferralScreen({ navigation }: any) {
   const [isLoading, setIsLoading] = useState(false);
   const [alreadyReferred, setAlreadyReferred] = useState(false);
 
+  // 🚀 [추가] 딥링크 등을 통해 전달받은 추천인 코드 확인
+  const initialReferralCode = route?.params?.referralCode;
+
   useEffect(() => {
     if (user) fetchUserData();
   }, [user]);
+
+  // 🚀 [추가] 전달받은 코드가 있고 아직 추천인 등록 전이라면 자동 실행
+  useEffect(() => {
+    if (
+      user &&
+      initialReferralCode &&
+      !alreadyReferred &&
+      myReferralCode &&
+      !isLoading
+    ) {
+      if (initialReferralCode !== myReferralCode) {
+        handleRegisterReferrer(initialReferralCode);
+      }
+    }
+  }, [user, initialReferralCode, alreadyReferred, myReferralCode]);
 
   const fetchUserData = async () => {
     const { data, error } = await supabase
@@ -44,10 +62,12 @@ export default function ReferralScreen({ navigation }: any) {
 
   // 추천 링크 공유하기
   const onShare = async () => {
+    //  플레이 스토어 링크로 수정 (referrer 파라미터에 추천인 코드 포함)
     const playStoreLink = `https://play.google.com/store/apps/details?id=com.goundcorp.ipasscare&referrer=${myReferralCode}`;
+
     try {
       await Share.share({
-        message: `[아이패스케어] 저와 함께 시작해요! 첫 결제 1% 할인 혜택도 드려요.\n추천인 코드: ${myReferralCode}\n다운로드: ${playStoreLink}`,
+        message: `[아이패스케어] 저와 함께 시작해요! 첫 결제 1% 할인 혜택도 드려요.\n\n추천인 코드: ${myReferralCode}\n지금 다운로드: ${playStoreLink}`,
       });
     } catch (error) {
       console.log(error);
@@ -55,12 +75,14 @@ export default function ReferralScreen({ navigation }: any) {
   };
 
   // 추천인 등록 로직
-  const handleRegisterReferrer = async () => {
-    if (!referrerInput.trim()) {
+  const handleRegisterReferrer = async (code?: string) => {
+    const targetCode = (code || referrerInput).trim();
+
+    if (!targetCode) {
       Alert.alert("알림", "추천인의 아이디를 입력해주세요.");
       return;
     }
-    if (referrerInput === myReferralCode) {
+    if (targetCode === myReferralCode) {
       Alert.alert("오류", "자기 자신은 추천할 수 없습니다.");
       return;
     }
@@ -71,7 +93,7 @@ export default function ReferralScreen({ navigation }: any) {
       const { data: referrer, error: refError } = await supabase
         .from("users")
         .select("id, points")
-        .ilike("username", referrerInput.trim())
+        .ilike("username", targetCode)
         .maybeSingle();
 
       if (refError) {
@@ -97,15 +119,16 @@ export default function ReferralScreen({ navigation }: any) {
       await supabase
         .from("users")
         .update({
-          referred_by: referrerInput.trim(),
+          referred_by: targetCode,
           points: points + 1000,
         })
         .eq("id", user?.id);
 
-      Alert.alert(
-        "성공",
-        "추천인이 등록되었습니다! 1,000포인트가 지급되었습니다.",
-      );
+      const message = code
+        ? `링크를 통해 오셨군요! 추천인(${targetCode}) 등록으로 1,000포인트가 지급되었습니다.`
+        : "추천인이 등록되었습니다! 1,000포인트가 지급되었습니다.";
+
+      Alert.alert("성공", message);
       setAlreadyReferred(true);
       fetchUserData();
     } catch (e) {
@@ -157,7 +180,7 @@ export default function ReferralScreen({ navigation }: any) {
             />
             <TouchableOpacity
               style={[styles.actionButton, isLoading && { opacity: 0.7 }]}
-              onPress={handleRegisterReferrer}
+              onPress={() => handleRegisterReferrer()}
               disabled={isLoading}
             >
               {isLoading ? (

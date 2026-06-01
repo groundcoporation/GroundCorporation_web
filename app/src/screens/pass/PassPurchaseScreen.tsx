@@ -634,6 +634,9 @@ export default function PassPurchaseScreen({ navigation }: any) {
               • 가입비 최초 1회 10만원 (유니폼+젤리 지급)
             </Text>
             <Text style={styles.infoItem}>
+              • 다자녀의 경우 자녀 수만큼 이용권을 각각 구매해 주세요.
+            </Text>
+            <Text style={styles.infoItem}>
               • 모든 수업료는 부가세 별도 금액입니다.
             </Text>
             <Text style={styles.infoItem}>

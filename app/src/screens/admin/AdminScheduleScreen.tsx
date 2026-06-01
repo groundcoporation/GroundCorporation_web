@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -35,6 +36,7 @@ dayjs.tz.setDefault("Asia/Seoul");
 dayjs.locale("ko");
 
 export default function AdminScheduleScreen() {
+  const insets = useSafeAreaInsets();
   // --- 데이터 상태 ---
   const [branches, setBranches] = useState<any[]>([]); // DB 지점 목록
   const [selectedBranch, setSelectedBranch] = useState(""); // 선택된 지점 ID
@@ -518,7 +520,10 @@ export default function AdminScheduleScreen() {
             <FlatList
               data={combinedData}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+              contentContainerStyle={{
+                padding: 20,
+                paddingBottom: 40 + insets.bottom,
+              }}
               renderItem={({ item }) => (
                 <View style={styles.timeSection}>
                   <View style={styles.sectionTitleRow}>
@@ -721,7 +726,10 @@ export default function AdminScheduleScreen() {
             <FlatList
               data={schedules}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[
+                styles.listContent,
+                { paddingBottom: 40 + insets.bottom },
+              ]}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.card}

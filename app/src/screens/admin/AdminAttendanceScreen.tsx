@@ -31,7 +31,9 @@ interface AttendeeInfo {
   targetClass?: string;
 }
 
-const { height } = Dimensions.get("window");
+// 🚀 기기 화면 크기 및 태블릿 여부 판단을 위한 유틸리티 함수 추가
+const { width, height } = Dimensions.get("window");
+const isTablet = width >= 768; // 일반적인 태블릿 기준 너비
 
 const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
   const { branchId: selectedBranchId } = useAuth();
@@ -41,9 +43,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
   const [keypadInput, setKeypadInput] = useState("");
   const [searchResults, setSearchResults] = useState<AttendeeInfo[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [selectedAttendee, setSelectedAttendee] = useState<AttendeeInfo | null>(
-    null,
-  );
   const [isLoggingAttendance, setIsLoggingAttendance] = useState(false);
 
   const handleKeypadPress = (digit: string) => {
@@ -59,8 +58,106 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
   const handleClear = () => {
     setKeypadInput("");
     setSearchResults([]);
-    setSelectedAttendee(null);
   };
+
+  // 🚀 [핵심] 출결 상태를 자동으로 판별하여 토글 처리하는 함수
+  const handleAttendanceAction = useCallback(
+    async (attendee: AttendeeInfo) => {
+      if (isLoggingAttendance) return;
+      if (!selectedBranchId) {
+        Alert.alert("오류", "지점 정보가 없습니다.");
+        return;
+      }
+
+      setIsLoggingAttendance(true);
+      try {
+        const today = dayjs().tz().format("YYYY-MM-DD");
+        const currentTime = dayjs().tz().toISOString();
+        const now = dayjs().tz();
+
+        // 1. 현재 출결 로그를 먼저 확인하여 다음 상태 결정
+        const { data: existingLog } = await supabase
+          .from("attendance_logs")
+          .select("*")
+          .eq("child_id", attendee.id)
+          .eq("date", today)
+          .maybeSingle();
+
+        // 💡 토글 로직: 이미 등원 상태면 하원 처리, 아니면 등원 처리
+        const status: "등원" | "하원" =
+          existingLog?.status === "등원" ? "하원" : "등원";
+
+        // 2. 예약 데이터 연동 (예약이 있으면 해당 상태 업데이트)
+        const { data: reservations } = await supabase
+          .from("reservations")
+          .select("*, class_schedules(start_time, end_time)")
+          .eq(attendee.type === "child" ? "child_id" : "user_id", attendee.id)
+          .eq("class_date", today)
+          .neq("status", "canceled");
+
+        const validReservation = reservations?.find((res: any) => {
+          const sched = res.class_schedules;
+          if (!sched) return false;
+          const startTime = dayjs(`${today} ${sched.start_time}`);
+          const endTime = dayjs(`${today} ${sched.end_time}`);
+          return (
+            now.isAfter(startTime.subtract(10, "minute")) &&
+            now.isBefore(endTime.add(10, "minute"))
+          );
+        });
+
+        if (validReservation) {
+          await supabase
+            .from("reservations")
+            .update({ attendance_status: status })
+            .eq("id", validReservation.id);
+        }
+
+        // 3. 로그 기록 (업데이트 또는 신규 삽입)
+        if (existingLog) {
+          const updateData: any = { status: status };
+          if (status === "등원") {
+            updateData.check_in = currentTime;
+            updateData.check_out = null; // 등원으로 되돌릴 시 하원 기록 삭제
+          } else {
+            updateData.check_out = currentTime;
+          }
+          await supabase
+            .from("attendance_logs")
+            .update(updateData)
+            .eq("id", existingLog.id);
+        } else {
+          await supabase.from("attendance_logs").insert({
+            child_id: attendee.id,
+            date: today,
+            status,
+            method: "키패드",
+            branch_id: selectedBranchId,
+            check_in: status === "등원" ? currentTime : null,
+            check_out: status === "하원" ? currentTime : null,
+          });
+        }
+
+        // 4. 알림 발송 및 피드백
+        await sendGlobalPushNotification({
+          targetBranchId: null,
+          targetUserId: attendee.parentId || attendee.id,
+          title: `🔔 출결 안내`,
+          body: `${attendee.name} 학생이 안전하게 ${status} 완료하였습니다.`,
+          type: "attendance",
+          relatedId: validReservation?.id || null,
+        });
+
+        Alert.alert("성공", `${attendee.name} ${status} 처리 완료!`);
+        handleClear();
+      } catch (error: any) {
+        Alert.alert("오류", "출결 처리 중 문제가 발생했습니다.");
+      } finally {
+        setIsLoggingAttendance(false);
+      }
+    },
+    [selectedBranchId, isLoggingAttendance],
+  );
 
   const checkValidReservationForAttendee = useCallback(
     async (attendee: AttendeeInfo): Promise<boolean> => {
@@ -101,7 +198,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
     async (last4Digits: string) => {
       setSearchLoading(true);
       setSearchResults([]);
-      setSelectedAttendee(null);
 
       try {
         const potentialResults: AttendeeInfo[] = [];
@@ -147,24 +243,17 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
           }
         }
 
-        const filteredResults: AttendeeInfo[] = [];
-        for (const attendee of potentialResults) {
-          const hasValidReservation =
-            await checkValidReservationForAttendee(attendee);
-          if (hasValidReservation) {
-            filteredResults.push(attendee);
-          }
-        }
-
+        // 🚀 [변경] 예약 유무와 상관없이 검색된 모든 결과 표시
         const uniqueResults = Array.from(
           new Map(
-            filteredResults.map((item) => [item.id + item.type, item]),
+            potentialResults.map((item) => [item.id + item.type, item]),
           ).values(),
         );
         setSearchResults(uniqueResults);
 
         if (uniqueResults.length === 1) {
-          setSelectedAttendee(uniqueResults[0]);
+          // 🚀 [변경] 단일 사용자가 검색되면 즉시 자동 처리
+          handleAttendanceAction(uniqueResults[0]);
         }
       } catch (error: any) {
         console.error("Attendee search failed:", error.message);
@@ -173,7 +262,11 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
         setSearchLoading(false);
       }
     },
-    [selectedBranchId, checkValidReservationForAttendee],
+    [
+      selectedBranchId,
+      checkValidReservationForAttendee,
+      handleAttendanceAction,
+    ],
   );
 
   useEffect(() => {
@@ -181,7 +274,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
       searchAttendees(keypadInput);
     } else {
       setSearchResults([]);
-      setSelectedAttendee(null);
     }
   }, [keypadInput, selectedBranchId, searchAttendees]);
 
@@ -193,127 +285,6 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
       return currentYear - year + 1;
     } catch (e) {
       return 0;
-    }
-  };
-
-  const handleAttendanceAction = async (status: "등원" | "하원") => {
-    if (!selectedAttendee) {
-      Alert.alert("알림", "출결할 대상을 선택해주세요.");
-      return;
-    }
-    if (!selectedBranchId) {
-      Alert.alert("오류", "지점 정보가 없습니다. 관리자에게 문의하세요.");
-      return;
-    }
-
-    setIsLoggingAttendance(true);
-    try {
-      const today = dayjs().tz().format("YYYY-MM-DD");
-      const currentTime = dayjs().tz().toISOString();
-      const now = dayjs().tz();
-
-      const { data: reservations, error: resError } = await supabase
-        .from("reservations")
-        .select("*, class_schedules(start_time, end_time)")
-        .eq(
-          selectedAttendee.type === "child" ? "child_id" : "user_id",
-          selectedAttendee.id,
-        )
-        .eq("class_date", today)
-        .neq("status", "canceled");
-
-      if (resError) throw resError;
-
-      const validReservation = reservations?.find((res: any) => {
-        const sched = res.class_schedules;
-        if (!sched) return false;
-
-        const startTime = dayjs(`${today} ${sched.start_time}`);
-        const endTime = dayjs(`${today} ${sched.end_time}`);
-
-        return (
-          now.isAfter(startTime.subtract(10, "minute")) &&
-          now.isBefore(endTime.add(10, "minute"))
-        );
-      });
-
-      if (!validReservation) {
-        Alert.alert(
-          "출결 불가",
-          "현재 시간대에 예약된 수업이 없거나 출결 가능 시간이 아닙니다.\n(수업 시작/종료 10분 전후만 가능)",
-        );
-        return;
-      }
-
-      await supabase
-        .from("reservations")
-        .update({ attendance_status: status })
-        .eq("id", validReservation.id);
-
-      const { data: existingLog, error: fetchError } = await supabase
-        .from("attendance_logs")
-        .select("*")
-        .eq("child_id", selectedAttendee.id)
-        .eq("date", today)
-        .single();
-
-      if (fetchError && fetchError.code !== "PGRST116") {
-        throw fetchError;
-      }
-
-      if (existingLog) {
-        const updateData: {
-          check_in?: string;
-          check_out?: string;
-          status?: string;
-        } = {};
-        if (status === "등원") {
-          updateData.check_in = currentTime;
-          updateData.status = "등원";
-        } else {
-          updateData.check_out = currentTime;
-          updateData.status = "하원";
-        }
-
-        const { error: updateError } = await supabase
-          .from("attendance_logs")
-          .update(updateData)
-          .eq("id", existingLog.id);
-
-        if (updateError) throw updateError;
-      } else {
-        const insertData = {
-          child_id: selectedAttendee.id,
-          date: today,
-          status: status,
-          method: "키패드",
-          branch_id: selectedBranchId,
-          check_in: status === "등원" ? currentTime : null,
-          check_out: status === "하원" ? currentTime : null,
-        };
-        const { error: insertError } = await supabase
-          .from("attendance_logs")
-          .insert(insertData);
-
-        if (insertError) throw insertError;
-      }
-
-      await sendGlobalPushNotification({
-        targetBranchId: null,
-        targetUserId: selectedAttendee.parentId || selectedAttendee.id,
-        title: `🔔 출결 안내`,
-        body: `${selectedAttendee.name} 학생이 안전하게 ${status} 완료하였습니다.`,
-        type: "attendance",
-        relatedId: validReservation.id,
-      });
-
-      Alert.alert("성공", `${selectedAttendee.name} ${status} 처리 완료!`);
-      handleClear();
-    } catch (error: any) {
-      console.error("Attendance logging failed:", error.message);
-      Alert.alert("오류", `출결 처리 중 문제가 발생했습니다: ${error.message}`);
-    } finally {
-      setIsLoggingAttendance(false);
     }
   };
 
@@ -404,6 +375,7 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
                     이름이 맞는지 확인해 주세요!
                   </Text>
 
+                  {/* 🚀 [변경] listContainer에 maxHeight를 제거하고 flex: 1로 설정하여 더 많은 공간 확보 */}
                   <View style={styles.listContainer}>
                     <FlatList
                       data={searchResults}
@@ -411,13 +383,9 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
                       showsVerticalScrollIndicator={false}
                       renderItem={({ item }) => (
                         <TouchableOpacity
-                          style={[
-                            styles.attendeeItem,
-                            selectedAttendee?.id === item.id &&
-                              selectedAttendee?.type === item.type &&
-                              styles.selectedAttendeeItem,
-                          ]}
-                          onPress={() => setSelectedAttendee(item)}
+                          style={styles.attendeeItem}
+                          // 🚀 [변경] 터치 시 즉시 자동 출결 처리
+                          onPress={() => handleAttendanceAction(item)}
                         >
                           <View style={styles.attendeeTextGroup}>
                             <Text style={styles.attendeeName}>
@@ -433,58 +401,13 @@ const AdminAttendanceScreen: React.FC<any> = ({ navigation }) => {
                             )}
                           </View>
                           <Ionicons
-                            name={
-                              selectedAttendee?.id === item.id &&
-                              selectedAttendee?.type === item.type
-                                ? "checkbox"
-                                : "square-outline"
-                            }
-                            size={28}
-                            color={
-                              selectedAttendee?.id === item.id &&
-                              selectedAttendee?.type === item.type
-                                ? "#6366F1"
-                                : "#94A3B8"
-                            }
+                            name="chevron-forward-circle-outline"
+                            size={isTablet ? 44 : 34}
+                            color="#6366F1"
                           />
                         </TouchableOpacity>
                       )}
                     />
-                  </View>
-
-                  {/* 등원 / 하원 처리 액션 버튼 구역 (중간에 배치되어 하단 바 겹침 원천 방지) */}
-                  <View style={styles.actionButtonsContainer}>
-                    <TouchableOpacity
-                      style={[
-                        styles.actionButton,
-                        styles.checkInButton,
-                        !selectedAttendee && styles.disabledButton,
-                      ]}
-                      onPress={() => handleAttendanceAction("등원")}
-                      disabled={!selectedAttendee || isLoggingAttendance}
-                    >
-                      {isLoggingAttendance ? (
-                        <ActivityIndicator color="#FFF" />
-                      ) : (
-                        <Text style={styles.actionButtonText}>등 원</Text>
-                      )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.actionButton,
-                        styles.checkOutButton,
-                        !selectedAttendee && styles.disabledButton,
-                      ]}
-                      onPress={() => handleAttendanceAction("하원")}
-                      disabled={!selectedAttendee || isLoggingAttendance}
-                    >
-                      {isLoggingAttendance ? (
-                        <ActivityIndicator color="#FFF" />
-                      ) : (
-                        <Text style={styles.actionButtonText}>하 원</Text>
-                      )}
-                    </TouchableOpacity>
                   </View>
                 </View>
               ) : (
@@ -542,7 +465,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 5 },
   headerTitle: {
-    fontSize: 20,
+    fontSize: isTablet ? 24 : 20, // 🚀 [변경] 태블릿에서 폰트 크기 키움
     fontWeight: "800",
     color: "#1E293B",
     letterSpacing: -0.5,
@@ -550,7 +473,7 @@ const styles = StyleSheet.create({
 
   displaySection: { marginTop: 16, alignItems: "center" },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: isTablet ? 20 : 16, // 🚀 [변경] 태블릿에서 폰트 크기 키움
     fontWeight: "700",
     color: "#64748B",
     marginBottom: 10,
@@ -559,8 +482,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderRadius: 16,
     width: "100%",
-    paddingVertical: 14,
-    fontSize: 38,
+    paddingVertical: isTablet ? 20 : 14, // 🚀 [변경] 태블릿에서 패딩 키움
+    fontSize: isTablet ? 48 : 38, // 🚀 [변경] 태블릿에서 폰트 크기 키움
     fontWeight: "900",
     textAlign: "center",
     color: "#1E293B",
@@ -585,19 +508,20 @@ const styles = StyleSheet.create({
   },
   resultsWrapper: { flex: 1, justifyContent: "space-between" },
   resultsHeader: {
-    fontSize: 16,
+    fontSize: isTablet ? 19 : 16, // 🚀 [변경] 태블릿에서 폰트 크기 키움
     fontWeight: "800",
     color: "#475569",
     marginBottom: 10,
     textAlign: "center",
   },
-  listContainer: { flex: 1, maxHeight: 120 },
+  // 🚀 [변경] maxHeight: 120을 제거하고 flex: 1로 설정하여 더 많은 공간 확보
+  listContainer: { flex: 1 },
 
   attendeeItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: isTablet ? 25 : 18, // 🚀 [증가] 선택 영역 높이 확대
     paddingHorizontal: 16,
     backgroundColor: "#F8FAFC",
     borderRadius: 14,
@@ -605,12 +529,20 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#E2E8F0",
   },
-  selectedAttendeeItem: { borderColor: "#6366F1", backgroundColor: "#EEF2FF" },
   attendeeTextGroup: { flex: 1 },
-  attendeeName: { fontSize: 18, fontWeight: "800", color: "#1E293B" },
-  ageText: { fontSize: 14, fontWeight: "500", color: "#64748B" },
+  // 🚀 [변경] 태블릿에서 폰트 크기 키움
+  attendeeName: {
+    fontSize: isTablet ? 22 : 18, // 🚀 [복구] 이름 폰트 표준화
+    fontWeight: "800",
+    color: "#1E293B",
+  },
+  ageText: {
+    fontSize: isTablet ? 18 : 14, // 🚀 [복구] 나이 폰트 표준화
+    fontWeight: "500",
+    color: "#64748B",
+  },
   attendeeClass: {
-    fontSize: 13,
+    fontSize: isTablet ? 16 : 13, // 🚀 [복구] 반 정보 폰트 표준화
     color: "#4F46E5",
     fontWeight: "600",
     marginTop: 2,
@@ -623,7 +555,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    height: 54,
+    height: isTablet ? 64 : 54, // 🚀 [변경] 태블릿에서 버튼 높이 키움
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
@@ -632,7 +564,11 @@ const styles = StyleSheet.create({
   checkInButton: { backgroundColor: "#22C55E" },
   checkOutButton: { backgroundColor: "#EF4444" },
   disabledButton: { backgroundColor: "#CBD5E1", opacity: 0.6 },
-  actionButtonText: { color: "#FFF", fontSize: 18, fontWeight: "900" },
+  actionButtonText: {
+    color: "#FFF",
+    fontSize: isTablet ? 22 : 18,
+    fontWeight: "900",
+  }, // 🚀 [변경] 태블릿에서 폰트 크기 키움
 
   /* 🚀 [변경] 하단에 안착한 키패드 구역 레이아웃 스타일 */
   keypadBottomSection: {
@@ -654,7 +590,7 @@ const styles = StyleSheet.create({
   },
   keypadButton: {
     width: "31%",
-    aspectRatio: 1.5, // 기종 편차 최소화를 위해 콤팩트한 비율 유지
+    aspectRatio: isTablet ? 2.5 : 2.0, // 🚀 [슬림화] 버튼 높이를 줄여 키패드를 아래로 밀어냄
     justifyContent: "center",
     alignItems: "center",
     marginVertical: 4,
@@ -662,7 +598,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   clearButton: { backgroundColor: "#FEF2F2" },
-  keypadButtonText: { fontSize: 26, fontWeight: "800", color: "#1E293B" },
+  keypadButtonText: {
+    fontSize: isTablet ? 32 : 26,
+    fontWeight: "800",
+    color: "#1E293B",
+  }, // 🚀 [변경] 태블릿에서 폰트 크기 키움
 
   centeredView: {
     flex: 1,
@@ -672,19 +612,19 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    fontSize: 15,
+    fontSize: isTablet ? 18 : 15, // 🚀 [변경] 태블릿에서 폰트 크기 키움
     color: "#6366F1",
     fontWeight: "600",
   },
   noResultsText: {
     textAlign: "center",
     marginTop: 10,
-    fontSize: 14,
+    fontSize: isTablet ? 17 : 14, // 🚀 [변경] 태블릿에서 폰트 크기 키움
     color: "#64748B",
     fontWeight: "600",
   },
   guideSubText: {
-    fontSize: 14,
+    fontSize: isTablet ? 17 : 14, // 🚀 [변경] 태블릿에서 폰트 크기 키움
     color: "#94A3B8",
     marginTop: 8,
     fontWeight: "500",
