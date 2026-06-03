@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   User,
@@ -29,14 +29,10 @@ interface UserInsertData {
   birth_date: string;
   branch_id: string;
   role: string;
-  referred_by?: string;
-  points?: number;
 }
 
 export default function SignUpPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const referralCode = searchParams.get("ref"); // ?ref=추천인ID 추출
 
   // [SECTION] 2. State Management (상태 관리)
   const [loading, setLoading] = useState(false); // 전송 로딩 상태
@@ -111,29 +107,6 @@ export default function SignUpPage() {
 
       // [Step 3] 가입된 Auth UID를 기반으로 Users 테이블 정보 생성
       if (authData.user) {
-        let points = 0;
-        let referredBy = "";
-
-        // 추천인 코드(아이디)가 있고, 존재하는 사용자인지 확인
-        if (referralCode) {
-          const { data: referrer } = await supabase
-            .from("users")
-            .select("id, points")
-            .eq("username", referralCode)
-            .maybeSingle();
-
-          if (referrer) {
-            referredBy = referralCode;
-            points = 1000; // 가입자에게 주는 혜택 포인트
-
-            // 추천인에게도 포인트 지급
-            await supabase
-              .from("users")
-              .update({ points: (referrer.points || 0) + 1000 })
-              .eq("id", referrer.id);
-          }
-        }
-
         const newUser: UserInsertData = {
           id: authData.user.id, // Auth의 고유 ID(UUID)를 FK로 사용
           username: username,
@@ -143,8 +116,6 @@ export default function SignUpPage() {
           birth_date: birthDate.replace(/-/g, ""), // 하이픈 제거 후 저장
           branch_id: branchId,
           role: "user",
-          referred_by: referredBy,
-          points: points,
         };
 
         // Users 테이블에 최종 데이터 삽입
