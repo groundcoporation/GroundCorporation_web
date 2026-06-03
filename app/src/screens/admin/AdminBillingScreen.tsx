@@ -271,6 +271,7 @@ export default function AdminBillingScreen({ route, navigation }: any) {
                     parent_id: selectedParent.id,
                     parent_name: selectedParent.name,
                     sender_id: currentUser.id,
+                    sender_name: currentUser.name,
                     branch_id: branchId,
                     total_amount: finalPrice,
                     cart_items: cartItems,

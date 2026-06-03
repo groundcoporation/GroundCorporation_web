@@ -267,13 +267,22 @@ export default function InvoiceScreen({ navigation }: any) {
           invoices.map((invoice) => (
             <View key={invoice.id} style={styles.invoiceCard}>
               <View style={styles.invoiceHeader}>
-                <Ionicons
-                  name="receipt"
-                  size={20}
-                  color="#6366F1"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.invoiceTitle}>청구 내역</Text>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Ionicons
+                      name="receipt"
+                      size={20}
+                      color="#6366F1"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={styles.invoiceTitle}>청구 내역</Text>
+                  </View>
+                  {invoice.sender_name && (
+                    <Text style={styles.senderText}>
+                      발송자: {invoice.sender_name} 님
+                    </Text>
+                  )}
+                </View>
               </View>
 
               <View style={styles.divider} />
@@ -390,6 +399,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 16,
+  },
+  senderText: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 4,
+    fontWeight: "700",
   },
   invoiceTitle: { fontSize: 18, fontWeight: "800", color: "#1E1B4B" },
   divider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 16 },
