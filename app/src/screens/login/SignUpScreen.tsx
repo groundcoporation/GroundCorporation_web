@@ -8,7 +8,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 
-export default function SignUpScreen({ navigation }: any) {
+export default function SignUpScreen({ navigation, route }: any) { // 🚀 route 추가
   const [isLoading, setIsLoading] = useState(false);
 
   // 상태 관리
@@ -20,10 +20,18 @@ export default function SignUpScreen({ navigation }: any) {
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [branchId, setBranchId] = useState('unassigned');
+  const [referralCode, setReferralCode] = useState(''); // 🚀 [추가] 추천인 코드 상태
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isPasswordMatch, setIsPasswordMatch] = useState(true);
+
+  // 🚀 딥링크(route)를 통해 넘어온 추천인 코드가 있다면 자동 세팅
+  useEffect(() => {
+    if (route?.params?.referralCode) {
+      setReferralCode(route.params.referralCode);
+    }
+  }, [route?.params]);
 
   // 비밀번호 일치 실시간 체크
   useEffect(() => {
@@ -101,7 +109,23 @@ export default function SignUpScreen({ navigation }: any) {
         return;
       }
 
-      // 4. Supabase Auth 가입
+      // 4. 추천인 검증 (가입 전 미리 확인)
+      let referrerData = null;
+      if (referralCode) {
+        const { data } = await supabase
+          .from('users')
+          .select('id, points')
+          .eq('username', referralCode)
+          .maybeSingle();
+        referrerData = data;
+        if (!referrerData) {
+          Alert.alert('오류', '존재하지 않는 추천인 코드입니다.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 5. Supabase Auth 가입
       const { data: authData, error: authError } = await supabase.auth.signUp({ 
         email: email, 
         password: password 
@@ -109,20 +133,35 @@ export default function SignUpScreen({ navigation }: any) {
 
       if (authError) throw authError;
 
-      // 5. Auth 성공 시 users 테이블에 상세 정보 저장
+      // 6. Auth 성공 시 users 테이블에 상세 정보 저장 및 포인트 지급
       if (authData.user) {
+        // 추천인이 있다면 포인트 처리
+        if (referrerData) {
+          // [A] 추천인 포인트 지급
+          await supabase.from('users').update({ points: (referrerData.points || 0) + 1000 }).eq('id', referrerData.id);
+          await supabase.from('point_logs').insert({ user_id: referrerData.id, amount: 1000, reason: '친구 추천 가입 보너스' });
+        }
+
+        // [B] 가입자 정보 저장
         const { error: dbError } = await supabase.from('users').insert([{
             id: authData.user.id,
             username: username,
             email: email,
             name: name,
             phone: phone.replace(/-/g, ''), // 하이픈 제거 후 저장
-            birth_date: birthDate.replace(/-/g, ''), // 👈 생년월일 하이픈 제거 후 저장 (8자리 숫자)
+            birth_date: birthDate.replace(/-/g, ''), // 생년월일 하이픈 제거 후 저장 (8자리 숫자)
             branch_id: branchId,
-            role: 'user'
+            role: 'user',
+            referred_by: referralCode || null, // 🚀 추천인 정보 저장
+            points: referrerData ? 1000 : 0 // 🚀 가입자도 1,000P 지급
         }]);
 
         if (dbError) throw dbError;
+
+        // [C] 가입자 로그 기록
+        if (referrerData) {
+            await supabase.from('point_logs').insert({ user_id: authData.user.id, amount: 1000, reason: '친구 초대 가입 보너스' });
+        }
 
         Alert.alert('성공', '회원가입이 완료되었습니다!', [{ text: '확인', onPress: () => navigation.navigate('Login') }]);
       }
@@ -195,7 +234,6 @@ export default function SignUpScreen({ navigation }: any) {
             keyboardType="phone-pad" 
             maxLength={13} 
           />
-          {/* 📅 생년월일 입력 섹션 */}
           <TextInput 
             style={styles.input} 
             placeholder="생년월일 (예: 19940101)" 
@@ -203,6 +241,14 @@ export default function SignUpScreen({ navigation }: any) {
             onChangeText={(text) => setBirthDate(formatBirthDate(text))} 
             keyboardType="number-pad" 
             maxLength={10} 
+          />
+          {/* 🚀 [추가] 회원가입 시 추천인 코드 입력란 */}
+          <TextInput 
+            style={styles.input} 
+            placeholder="추천인 코드 (선택)" 
+            value={referralCode} 
+            onChangeText={setReferralCode} 
+            autoCapitalize="none"
           />
         </View>
 
