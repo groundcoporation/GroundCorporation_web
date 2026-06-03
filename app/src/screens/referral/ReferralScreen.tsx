@@ -150,9 +150,36 @@ export default function ReferralScreen({ navigation, route }: any) {
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
-          <Text style={styles.label}>나의 보유 포인트</Text>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.label}>나의 보유 포인트</Text>
+            <TouchableOpacity
+              style={styles.withdrawBtn}
+              onPress={() =>
+                Alert.alert("알림", "포인트 인출 기능은 현재 준비 중입니다.")
+              }
+            >
+              <Text style={styles.withdrawBtnText}>인출하기</Text>
+            </TouchableOpacity>
+          </View>
           <Text style={styles.pointsText}>{points.toLocaleString()} P</Text>
         </View>
+
+        {/* 🚀 [추가] 임시 이벤트 배너 */}
+        <TouchableOpacity
+          style={styles.eventBanner}
+          onPress={() =>
+            Alert.alert("이벤트", "진행 중인 이벤트 페이지로 이동합니다.")
+          }
+        >
+          <View style={styles.eventIcon}>
+            <Ionicons name="gift" size={24} color="#FF6B6B" />
+          </View>
+          <View style={styles.eventTextContainer}>
+            <Text style={styles.eventTitle}>친구 초대 무제한 이벤트!</Text>
+            <Text style={styles.eventSub}>초대할 때마다 1,000P 즉시 지급</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+        </TouchableOpacity>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>나의 추천 코드 공유</Text>
@@ -224,12 +251,58 @@ const styles = StyleSheet.create({
     backgroundColor: "#4D96FF",
     padding: 24,
     borderRadius: 20,
-    alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 15,
     elevation: 5,
   },
+  cardHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  withdrawBtn: {
+    backgroundColor: "rgba(255,255,255,0.25)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)",
+  },
+  withdrawBtnText: { color: "white", fontSize: 12, fontWeight: "800" },
+  eventBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 25,
+    borderWidth: 1,
+    borderColor: "#EEF2FF",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  eventIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#FFF5F5",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  eventTextContainer: { flex: 1 },
+  eventTitle: { fontSize: 15, fontWeight: "800", color: "#1E293B" },
+  eventSub: { fontSize: 12, color: "#64748B", marginTop: 2, fontWeight: "500" },
   label: { color: "rgba(255,255,255,0.8)", fontSize: 14, marginBottom: 5 },
-  pointsText: { color: "#fff", fontSize: 32, fontWeight: "900" },
+  pointsText: {
+    color: "#fff",
+    fontSize: 32,
+    fontWeight: "900",
+    textAlign: "center",
+  },
   section: {
     backgroundColor: "#fff",
     padding: 20,
