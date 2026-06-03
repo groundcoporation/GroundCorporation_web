@@ -421,7 +421,6 @@ export default function HomeScreen({ navigation }: any) {
                 수업 예약
               </Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("Pass")}
