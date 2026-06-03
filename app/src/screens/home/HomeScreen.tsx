@@ -178,33 +178,21 @@ export default function HomeScreen({ navigation }: any) {
   ) => {
     const hasReservation = !!specificReservation;
 
-    // 🚀 실시간 상태 및 배경 이미지 판별 로직
+    // 기본 상태
     let statusLabel = "오늘의 일정을 기다리고 있어요";
     let statusBg = "rgba(255,255,255,0.2)";
     let bgImage =
       "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800"; // 기본 축구장 배경
 
     if (hasReservation) {
-      const now = dayjs().tz();
-      // 🚀 [수정] 날짜와 시간을 합칠 때 명시적으로 서울 시간대로 파싱하여 오차를 방지합니다.
-      const startTime = dayjs.tz(
-        `${specificReservation.class_date} ${specificReservation.class_schedules?.start_time}`,
-        "Asia/Seoul",
-      );
-      const endTime = dayjs.tz(
-        `${specificReservation.class_date} ${specificReservation.class_schedules?.end_time}`,
-        "Asia/Seoul",
-      );
+      // 🚀 단일 컬럼(attendance_status)에서 모든 4가지 상태를 한글로 가져옵니다!
+      const attStatus = specificReservation.attendance_status; 
       
-      const attStatus = specificReservation.attendance_status;
-      const shuttleStatus = specificReservation.shuttle_status;
-      
-      // 🚀 [추가] DB 예약 정보에서 셔틀 이용 여부를 가져옵니다 (기본값 true)
       const isShuttleUser = specificReservation.is_shuttle_user ?? true;
 
-      // 💡 직관적인 상태 텍스트 분기 로직 (10초 라이브 액션 제거, 즉시 렌더링)
+      // 💡 한글 텍스트 완벽 매칭 로직!
       if (isShuttleUser) {
-        if (shuttleStatus === "dropped_off") {
+        if (attStatus === "하차") {
           statusLabel = "안전하게 셔틀에서 하차했어요 🏠";
           statusBg = "#64748B"; // 회색
           bgImage = "https://images.unsplash.com/photo-1490139177067-2819828d54d1?q=80&w=800";
@@ -216,7 +204,7 @@ export default function HomeScreen({ navigation }: any) {
           statusLabel = "학원에 도착해 열심히 수업 중이에요 ⚽";
           statusBg = "#10B981"; // 초록색
           bgImage = "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
-        } else if (shuttleStatus === "boarded") {
+        } else if (attStatus === "승차") {
           statusLabel = "학원 가는 셔틀에 탑승했어요 🚌";
           statusBg = "#3D56B2"; // 파란색
           bgImage = "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
