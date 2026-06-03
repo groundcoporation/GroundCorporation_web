@@ -61,6 +61,7 @@ export default function ReferralScreen({ navigation }: any) {
   };
 
   // 추천인 등록 로직
+  // 추천인 등록 로직 (이름 포함 버전)
   const handleRegisterReferrer = async (code?: string) => {
     const targetCode = (code || referrerInput).trim();
 
@@ -75,41 +76,59 @@ export default function ReferralScreen({ navigation }: any) {
 
     setIsLoading(true);
     try {
-      const { data: referrer, error: refError } = await supabase
-        .from("users")
-        .select("id, points")
-        .ilike("username", targetCode)
-        .maybeSingle();
-
-      if (refError) {
-        console.error("추천인 조회 에러:", refError.message);
-        Alert.alert("오류", "사용자 조회 중 문제가 발생했습니다.");
-        return;
-      }
+      // 1. 추천인 조회 및 보너스 값 가져오기
+      const [{ data: referrer }, { data: bonusData }] = await Promise.all([
+        supabase
+          .from("users")
+          .select("id, points, username")
+          .ilike("username", targetCode)
+          .maybeSingle(),
+        supabase
+          .from("point_settings")
+          .select("value")
+          .eq("key", "signup_bonus")
+          .single(),
+      ]);
 
       if (!referrer) {
         Alert.alert("오류", "존재하지 않는 사용자 아이디입니다.");
         return;
       }
 
-      await supabase
-        .from("users")
-        .update({ points: (referrer.points || 0) + 1000 })
-        .eq("id", referrer.id);
+      const signupBonus = Number(bonusData?.value) || 1000;
+      const myUsername = myReferralCode; // 내 아이디
+      const referrerUsername = referrer.username; // 추천인 아이디
 
+      // 2. 포인트 지급
       await supabase
         .from("users")
-        .update({
-          referred_by: targetCode,
-          points: points + 1000,
-        })
+        .update({ points: (referrer.points || 0) + signupBonus })
+        .eq("id", referrer.id);
+      await supabase
+        .from("users")
+        .update({ referred_by: targetCode, points: points + signupBonus })
         .eq("id", user?.id);
 
-      const message = code
-        ? `링크를 통해 오셨군요! 추천인(${targetCode}) 등록으로 1,000포인트가 지급되었습니다.`
-        : "추천인이 등록되었습니다! 1,000포인트가 지급되었습니다.";
+      // 3. 로그 기록 (이름/아이디 포함하여 직관적으로)
+      await supabase.from("point_logs").insert([
+        {
+          user_id: referrer.id,
+          amount: signupBonus,
+          reason: `${myUsername} 님의 가입으로 받은 보너스`, // 🚀 추천인 로그에 가입자 아이디 포함
+          related_user_id: user?.id,
+        },
+        {
+          user_id: user?.id,
+          amount: signupBonus,
+          reason: `${referrerUsername} 님을 추천하여 받은 보너스`, // 🚀 가입자 로그에 추천인 아이디 포함
+          related_user_id: referrer.id,
+        },
+      ]);
 
-      Alert.alert("성공", message);
+      Alert.alert(
+        "성공",
+        `추천인(${targetCode}) 등록 완료! ${signupBonus.toLocaleString()} 포인트가 지급되었습니다.`,
+      );
       setAlreadyReferred(true);
       fetchUserData();
     } catch (e) {

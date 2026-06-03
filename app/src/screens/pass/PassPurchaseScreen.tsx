@@ -325,10 +325,28 @@ export default function PassPurchaseScreen({ navigation }: any) {
       if (response.ok) {
         console.log("[Payment] ✅ 승인 성공 - DB 기록 중...");
 
+        // 1. [추가] 통합 결제 장부에 먼저 기록
+  const { data: paymentRecord, error: payError } = await supabase
+    .from("payments")
+    .insert({
+      user_id: currentUser.id,
+      branch_id: branchId,
+      total_amount: finalPrice,
+      payment_method: "CARD", // PG 결제이므로 CARD로 고정
+      status: "paid",
+      pg_tid: authResult.trno || "N/A" // 서버 응답에서 거래번호 매칭
+    })
+    .select("id")
+    .single();
+
+  if (payError) throw payError;
+  
+
         const dbInserts = cartItems.flatMap((item) =>
           Array(item.quantity).fill({
             user_id: currentUser.id,
             package_id: item.pkg.id,
+            payment_id: paymentRecord.id,
             package_name: item.pkg.name,
             total_count:
               item.pkg.package_options?.[item.optIndex]?.total_count || 10,
