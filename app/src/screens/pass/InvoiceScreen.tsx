@@ -156,40 +156,52 @@ export default function InvoiceScreen({ navigation }: any) {
       console.log("[Invoice] ✅ 승인 성공 - DB 기록 중...");
 
       // 🚀 [핵심 보정] KSNET 백틱 구분자 문자열 파싱
-      // KSNET 표준 데이터 포맷: `O`거래번호(12자리)`승인일시(14자리)`금액`승인번호...
       let extractedTrNo = null;
       let extractedAuthNo = null;
 
       if (authResult.rawText) {
         const segments = authResult.rawText.split("`");
-        // 백틱으로 쪼갠 후 공백이나 빈 요소를 제거하여 배열 색인 불일치 방지
         const cleanSegments = segments.filter((s: string) => s.trim() !== "");
 
         if (cleanSegments.length >= 5) {
           extractedTrNo = cleanSegments[1]; // 거래번호 추출
-          extractedAuthNo = cleanSegments[4]; // 승인번호(결제확인용 고유코드) 추출
+          extractedAuthNo = cleanSegments[4]; // 승인번호 추출
         }
       }
 
-      // 2. 청구서(payment_requests) 상태를 'paid'로 업데이트 및 결제 데이터 기록
+      // 🚀 [추가] 통합 결제 장부(payments)에 먼저 기록! (포인트 트리거 발동용)
+      const { data: paymentRecord, error: payError } = await supabase
+        .from("payments")
+        .insert({
+          user_id: currentUser.id,
+          branch_id: currentBranch?.id || invoice.branch_id,
+          total_amount: invoice.total_amount,
+          payment_method: "CARD",
+          status: "paid", // 트리거가 감지하는 핵심 조건
+          pg_tid: extractedTrNo || authResult.trno || null
+        })
+        .select("id")
+        .single();
+
+      if (payError) throw payError;
+
+      // 2. 청구서(payment_requests) 상태를 'paid'로 업데이트
       const { error: updateError } = await supabase
         .from("payment_requests")
         .update({
           status: "paid",
-          // 🚀 파싱 결과를 우선 적용하고 없는 경우 기존 객체 매핑으로 폴백
-          kspay_tr_no: extractedTrNo || authResult.trno || null,
-          kspay_auth_no: extractedAuthNo || authResult.authno || null,
           paid_at: new Date().toISOString(),
         })
         .eq("id", invoice.id);
 
       if (updateError) throw updateError;
 
-      // 3. 지갑(user_packages)에 공용 이용권 인서트!
+      // 3. 지갑(user_packages)에 공용 이용권 인서트! (payment_id 연결)
       const cartItems = invoice.cart_items || [];
       const dbInserts = cartItems.flatMap((item: any) =>
         Array(item.quantity).fill({
           user_id: currentUser.id,
+          payment_id: paymentRecord.id, // 🚀 트리거와 영수증의 연결 고리 (이게 제일 중요!)
           package_id: item.pkg.id,
           package_name: item.pkg.name,
           total_count:
