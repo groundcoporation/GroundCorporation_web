@@ -7,51 +7,34 @@ import {
   TouchableOpacity,
   Alert,
   Share,
-  Clipboard,
   ActivityIndicator,
   ScrollView,
+  Dimensions,
 } from "react-native";
+import EventBanner from "../../components/EventBanner"; // 🚀 공통 배너 컴포넌트 사용
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 
-export default function ReferralScreen({ navigation, route }: any) {
+const { width } = Dimensions.get("window");
+
+export default function ReferralScreen({ navigation }: any) {
   const { user } = useAuth();
   const [myReferralCode, setMyReferralCode] = useState("");
   const [referrerInput, setReferrerInput] = useState("");
   const [points, setPoints] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [alreadyReferred, setAlreadyReferred] = useState(false);
-  const [banners, setBanners] = useState<any[]>([]); // 🚀 배너 상태 추가
-
-  // 🚀 [추가] 딥링크 등을 통해 전달받은 추천인 코드 확인
-  const initialReferralCode = route?.params?.referralCode;
 
   useEffect(() => {
     if (user) {
       fetchUserData();
-      fetchBanners(); // 🚀 배너 로드
     }
   }, [user]);
 
-  // 🚀 [추가] 전달받은 코드가 있고 아직 추천인 등록 전이라면 자동 실행
-  useEffect(() => {
-    if (
-      user &&
-      initialReferralCode &&
-      !alreadyReferred &&
-      myReferralCode &&
-      !isLoading
-    ) {
-      if (initialReferralCode !== myReferralCode) {
-        handleRegisterReferrer(initialReferralCode);
-      }
-    }
-  }, [user, initialReferralCode, alreadyReferred, myReferralCode]);
-
   const fetchUserData = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("users")
       .select("username, points, referred_by")
       .eq("id", user?.id)
@@ -64,21 +47,8 @@ export default function ReferralScreen({ navigation, route }: any) {
     }
   };
 
-  const fetchBanners = async () => {
-    const { data } = await supabase
-      .from("banners")
-      .select("*")
-      .eq("screen_type", "referral")
-      .eq("is_active", true)
-      .or(`branch_id.eq.${user?.branch_id},branch_id.is.null`)
-      .order("display_order", { ascending: true });
-
-    if (data) setBanners(data);
-  };
-
   // 추천 링크 공유하기
   const onShare = async () => {
-    //  플레이 스토어 링크로 수정 (referrer 파라미터에 추천인 코드 포함)
     const playStoreLink = `https://play.google.com/store/apps/details?id=com.goundcorp.ipasscare&referrer=${myReferralCode}`;
 
     try {
@@ -105,7 +75,6 @@ export default function ReferralScreen({ navigation, route }: any) {
 
     setIsLoading(true);
     try {
-      // 1. 추천인 존재 여부 확인 (ilike를 사용하여 대소문자 구분 없이 검색)
       const { data: referrer, error: refError } = await supabase
         .from("users")
         .select("id, points")
@@ -114,10 +83,7 @@ export default function ReferralScreen({ navigation, route }: any) {
 
       if (refError) {
         console.error("추천인 조회 에러:", refError.message);
-        Alert.alert(
-          "오류",
-          "사용자 조회 중 문제가 발생했습니다. (RLS 또는 컬럼 확인 필요)",
-        );
+        Alert.alert("오류", "사용자 조회 중 문제가 발생했습니다.");
         return;
       }
 
@@ -126,7 +92,6 @@ export default function ReferralScreen({ navigation, route }: any) {
         return;
       }
 
-      // 2. 포인트 지급 및 업데이트
       await supabase
         .from("users")
         .update({ points: (referrer.points || 0) + 1000 })
@@ -180,25 +145,12 @@ export default function ReferralScreen({ navigation, route }: any) {
           <Text style={styles.pointsText}>{points.toLocaleString()} P</Text>
         </View>
 
-        {/* 🚀 [추가] 임시 이벤트 배너 */}
-        {banners.map((banner) => (
-          <TouchableOpacity
-            key={banner.id}
-            style={styles.eventBanner}
-            onPress={() => banner.link_url && Linking.openURL(banner.link_url)}
-          >
-            <View style={styles.eventIcon}>
-              <Ionicons name="gift" size={24} color="#FF6B6B" />
-            </View>
-            <View style={styles.eventTextContainer}>
-              <Text style={styles.eventTitle}>{banner.title}</Text>
-              {banner.subtitle && (
-                <Text style={styles.eventSub}>{banner.subtitle}</Text>
-              )}
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
-          </TouchableOpacity>
-        ))}
+        {/* 🚀 공통 동적 이벤트 배너 컴포넌트 */}
+        <EventBanner
+          screenType="referral"
+          branchId={user?.branch_id}
+          marginHorizontal={0} // content 패딩(20) 안에서 딱 맞게 떨어지도록 설정
+        />
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>나의 추천 코드 공유</Text>
@@ -249,7 +201,6 @@ export default function ReferralScreen({ navigation, route }: any) {
           </View>
         )}
 
-        {/* 🚀 [추가] 유의사항 섹션 */}
         <View style={styles.noticeSection}>
           <Text style={styles.noticeHeader}>💡 이용 안내 및 유의사항</Text>
           <View style={styles.noticeItem}>
@@ -315,33 +266,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.4)",
   },
   withdrawBtnText: { color: "white", fontSize: 12, fontWeight: "800" },
-  eventBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 20,
-    marginBottom: 25,
-    borderWidth: 1,
-    borderColor: "#EEF2FF",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-  },
-  eventIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#FFF5F5",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  eventTextContainer: { flex: 1 },
-  eventTitle: { fontSize: 15, fontWeight: "800", color: "#1E293B" },
-  eventSub: { fontSize: 12, color: "#64748B", marginTop: 2, fontWeight: "500" },
+
+  // 💡 [중복 제거 완료] 과거 하드코딩 배너 전용 파편 스타일 전체 제거
+
   label: { color: "rgba(255,255,255,0.8)", fontSize: 14, marginBottom: 5 },
   pointsText: {
     color: "#fff",
