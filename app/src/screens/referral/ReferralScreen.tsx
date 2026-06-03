@@ -9,17 +9,15 @@ import {
   Share,
   ActivityIndicator,
   ScrollView,
-  Dimensions,
 } from "react-native";
-import EventBanner from "../../components/EventBanner"; // 🚀 공통 배너 컴포넌트 사용
+import EventBanner from "../../components/EventBanner"; // 🚀 동적 마스터 배너 컴포넌트 유지
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 
-const { width } = Dimensions.get("window");
-
-export default function ReferralScreen({ navigation }: any) {
+// 내비게이션 route 파라미터 수신 인프라 복원
+export default function ReferralScreen({ navigation, route }: any) {
   const { user } = useAuth();
   const [myReferralCode, setMyReferralCode] = useState("");
   const [referrerInput, setReferrerInput] = useState("");
@@ -27,11 +25,29 @@ export default function ReferralScreen({ navigation }: any) {
   const [isLoading, setIsLoading] = useState(false);
   const [alreadyReferred, setAlreadyReferred] = useState(false);
 
+  // 딥링크 등을 통해 파라미터로 전달받은 추천인 코드 확인
+  const initialReferralCode = route?.params?.referralCode;
+
   useEffect(() => {
     if (user) {
       fetchUserData();
     }
   }, [user]);
+
+  //  전달받은 딥링크 코드가 있고 아직 추천인 등록 전이라면 원터치 자동 실행 매커니즘
+  useEffect(() => {
+    if (
+      user &&
+      initialReferralCode &&
+      !alreadyReferred &&
+      myReferralCode &&
+      !isLoading
+    ) {
+      if (initialReferralCode !== myReferralCode) {
+        handleRegisterReferrer(initialReferralCode);
+      }
+    }
+  }, [user, initialReferralCode, alreadyReferred, myReferralCode]);
 
   const fetchUserData = async () => {
     const { data } = await supabase
@@ -60,8 +76,7 @@ export default function ReferralScreen({ navigation }: any) {
     }
   };
 
-  // 추천인 등록 로직
-  // 추천인 등록 로직 (이름 포함 버전)
+  // 추천인 등록 로직 (이름/아이디 매칭 버전)
   const handleRegisterReferrer = async (code?: string) => {
     const targetCode = (code || referrerInput).trim();
 
@@ -96,8 +111,8 @@ export default function ReferralScreen({ navigation }: any) {
       }
 
       const signupBonus = Number(bonusData?.value) || 1000;
-      const myUsername = myReferralCode; // 내 아이디
-      const referrerUsername = referrer.username; // 추천인 아이디
+      const myUsername = myReferralCode;
+      const referrerUsername = referrer.username;
 
       // 2. 포인트 지급
       await supabase
@@ -114,13 +129,13 @@ export default function ReferralScreen({ navigation }: any) {
         {
           user_id: referrer.id,
           amount: signupBonus,
-          reason: `${myUsername} 님의 가입으로 받은 보너스`, // 🚀 추천인 로그에 가입자 아이디 포함
+          reason: `${myUsername} 님의 가입으로 받은 보너스`,
           related_user_id: user?.id,
         },
         {
           user_id: user?.id,
           amount: signupBonus,
-          reason: `${referrerUsername} 님을 추천하여 받은 보너스`, // 🚀 가입자 로그에 추천인 아이디 포함
+          reason: `${referrerUsername} 님을 추천하여 받은 보너스`,
           related_user_id: referrer.id,
         },
       ]);
@@ -164,11 +179,11 @@ export default function ReferralScreen({ navigation }: any) {
           <Text style={styles.pointsText}>{points.toLocaleString()} P</Text>
         </View>
 
-        {/* 🚀 공통 동적 이벤트 배너 컴포넌트 */}
+        {/* 🚀 고정형 배너를 파쇄하고 데이터베이스 연동형 동적 이벤트 배너 연동 유지 */}
         <EventBanner
           screenType="referral"
           branchId={user?.branch_id}
-          marginHorizontal={0} // content 패딩(20) 안에서 딱 맞게 떨어지도록 설정
+          marginHorizontal={0} // 좌우 여백 패딩 조율 맞춤
         />
 
         <View style={styles.section}>
@@ -285,9 +300,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.4)",
   },
   withdrawBtnText: { color: "white", fontSize: 12, fontWeight: "800" },
-
-  // 💡 [중복 제거 완료] 과거 하드코딩 배너 전용 파편 스타일 전체 제거
-
   label: { color: "rgba(255,255,255,0.8)", fontSize: 14, marginBottom: 5 },
   pointsText: {
     color: "#fff",

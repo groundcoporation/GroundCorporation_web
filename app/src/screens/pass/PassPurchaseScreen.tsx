@@ -22,12 +22,6 @@ import dayjs from "dayjs";
 import KSPayService from "../../services/payment/KSPayService";
 import EventBanner from "../../components/EventBanner"; // 🚀 공통 배너 컴포넌트 사용[cite: 4]
 
-// 🚀 [추가] HTML 렌더러 임포트
-import RenderHtml from "react-native-render-html";
-
-const { width } = Dimensions.get("window");
-const CARD_WIDTH = width - 40; // 좌우 패딩 20씩 제외
-
 // 🚀 [추가] 전역 상태 보관소에서 useAuth 훅 임포트
 import { useAuth } from "../../context/AuthContext";
 
@@ -326,21 +320,20 @@ export default function PassPurchaseScreen({ navigation }: any) {
         console.log("[Payment] ✅ 승인 성공 - DB 기록 중...");
 
         // 1. [추가] 통합 결제 장부에 먼저 기록
-  const { data: paymentRecord, error: payError } = await supabase
-    .from("payments")
-    .insert({
-      user_id: currentUser.id,
-      branch_id: branchId,
-      total_amount: finalPrice,
-      payment_method: "CARD", // PG 결제이므로 CARD로 고정
-      status: "paid",
-      pg_tid: authResult.trno || "N/A" // 서버 응답에서 거래번호 매칭
-    })
-    .select("id")
-    .single();
+        const { data: paymentRecord, error: payError } = await supabase
+          .from("payments")
+          .insert({
+            user_id: currentUser.id,
+            branch_id: branchId,
+            total_amount: finalPrice,
+            payment_method: "CARD", // PG 결제이므로 CARD로 고정
+            status: "paid",
+            pg_tid: authResult.trno || "N/A", // 서버 응답에서 거래번호 매칭
+          })
+          .select("id")
+          .single();
 
-  if (payError) throw payError;
-  
+        if (payError) throw payError;
 
         const dbInserts = cartItems.flatMap((item) =>
           Array(item.quantity).fill({
