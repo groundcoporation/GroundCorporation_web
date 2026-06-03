@@ -89,45 +89,43 @@ export default function ReferralScreen({ navigation, route }: any) {
 
     setIsLoading(true);
     try {
-      // 1. 추천인 존재 여부 확인 (ilike를 사용하여 대소문자 구분 없이 검색)
-      const { data: referrer, error: refError } = await supabase
-        .from("users")
-        .select("id, points")
-        .ilike("username", targetCode)
-        .maybeSingle();
-
-      if (refError) {
-        console.error("추천인 조회 에러:", refError.message);
-        Alert.alert(
-          "오류",
-          "사용자 조회 중 문제가 발생했습니다. (RLS 또는 컬럼 확인 필요)",
-        );
-        return;
-      }
+      // 1. 추천인 조회 및 DB의 포인트 설정값 가져오기
+      const [
+        { data: referrer }, 
+        { data: bonusData }
+      ] = await Promise.all([
+        supabase.from("users").select("id, points").ilike("username", targetCode).maybeSingle(),
+        supabase.from("point_settings").select("value").eq("key", "signup_bonus").single()
+      ]);
 
       if (!referrer) {
         Alert.alert("오류", "존재하지 않는 사용자 아이디입니다.");
         return;
       }
 
-      // 2. 포인트 지급 및 업데이트
+      const signupBonus = Number(bonusData?.value) || 1000; // 설정 없으면 안전하게 1000
+
+      // 2. 포인트 지급 및 업데이트 (보너스 값 활용)
       await supabase
         .from("users")
-        .update({ points: (referrer.points || 0) + 1000 })
+        .update({ points: (referrer.points || 0) + signupBonus })
         .eq("id", referrer.id);
 
       await supabase
         .from("users")
         .update({
           referred_by: targetCode,
-          points: points + 1000,
+          points: points + signupBonus,
         })
         .eq("id", user?.id);
 
-      const message = code
-        ? `링크를 통해 오셨군요! 추천인(${targetCode}) 등록으로 1,000포인트가 지급되었습니다.`
-        : "추천인이 등록되었습니다! 1,000포인트가 지급되었습니다.";
+      // 3. 로그 기록
+      await supabase.from("point_logs").insert([
+        { user_id: referrer.id, amount: signupBonus, reason: '친구 초대 가입 보너스' },
+        { user_id: user?.id, amount: signupBonus, reason: '친구 추천 가입 보너스' }
+      ]);
 
+      const message = `추천인(${targetCode}) 등록으로 ${signupBonus.toLocaleString()} 포인트가 지급되었습니다.`;
       Alert.alert("성공", message);
       setAlreadyReferred(true);
       fetchUserData();
