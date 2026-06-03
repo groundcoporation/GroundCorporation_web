@@ -67,7 +67,7 @@ export default function ReferralScreen({ navigation, route }: any) {
 
     try {
       await Share.share({
-        message: `[아이패스케어] 저와 함께 시작해요! 첫 결제 1% 할인 혜택도 드려요.\n\n추천인 코드: ${myReferralCode}\n지금 다운로드: ${playStoreLink}`,
+        message: `[아이패스케어] 저와 함께 시작해요! \n\n추천인 코드: ${myReferralCode}\n지금 다운로드: ${playStoreLink}`,
       });
     } catch (error) {
       console.log(error);
@@ -225,10 +225,37 @@ export default function ReferralScreen({ navigation, route }: any) {
               이미 추천인 등록을 완료하셨습니다.
             </Text>
             <Text style={styles.discountBadge}>
-              다음 상품 결제 시 1% 할인 혜택이 적용됩니다!
+              1,000P 적립 혜택이 적용되었습니다!
             </Text>
           </View>
         )}
+
+        {/* 🚀 [추가] 유의사항 섹션 */}
+        <View style={styles.noticeSection}>
+          <Text style={styles.noticeHeader}>💡 이용 안내 및 유의사항</Text>
+          <View style={styles.noticeItem}>
+            <Text style={styles.noticeText}>
+              • 포인트 인출은 10,000P 이상부터 신청 가능합니다.
+            </Text>
+          </View>
+          <View style={styles.noticeItem}>
+            <Text style={styles.noticeText}>
+              • 포인트 사용은 상품 결제 시 3,000P부터 사용하실 수 있습니다.
+            </Text>
+          </View>
+          <View style={styles.noticeItem}>
+            <Text style={styles.noticeText}>
+              • 결제 적립: 추천인 0.1% / 피추천인 0.3% 적립 (개인 결제 시 0.3%
+              기본 적립)
+            </Text>
+          </View>
+          <View style={styles.noticeItem}>
+            <Text style={styles.noticeText}>
+              • 특별 혜택: 10명 이상 추천 시 0.5% 페이백, 30명 이상 추천 시 1%
+              페이백 혜택이 적용됩니다.
+            </Text>
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -366,5 +393,25 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 14,
     fontWeight: "bold",
+  },
+  noticeSection: {
+    marginTop: 10,
+    paddingHorizontal: 5,
+    paddingBottom: 40,
+  },
+  noticeHeader: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#475569",
+    marginBottom: 12,
+  },
+  noticeItem: {
+    marginBottom: 8,
+  },
+  noticeText: {
+    fontSize: 12,
+    color: "#64748B",
+    lineHeight: 18,
+    fontWeight: "500",
   },
 });
