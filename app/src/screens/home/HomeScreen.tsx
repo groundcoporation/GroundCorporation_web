@@ -11,6 +11,7 @@ import {
   Linking,
   ImageBackground,
 } from "react-native";
+import RenderHtml from "react-native-render-html"; // 🚀 HTML 렌더러 임포트
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
@@ -189,33 +190,21 @@ export default function HomeScreen({ navigation }: any) {
   ) => {
     const hasReservation = !!specificReservation;
 
-    // 🚀 실시간 상태 및 배경 이미지 판별 로직
+    // 기본 상태
     let statusLabel = "오늘의 일정을 기다리고 있어요";
     let statusBg = "rgba(255,255,255,0.2)";
     let bgImage =
       "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800"; // 기본 축구장 배경
 
     if (hasReservation) {
-      const now = dayjs().tz();
-      // 🚀 [수정] 날짜와 시간을 합칠 때 명시적으로 서울 시간대로 파싱하여 오차를 방지합니다.
-      const startTime = dayjs.tz(
-        `${specificReservation.class_date} ${specificReservation.class_schedules?.start_time}`,
-        "Asia/Seoul",
-      );
-      const endTime = dayjs.tz(
-        `${specificReservation.class_date} ${specificReservation.class_schedules?.end_time}`,
-        "Asia/Seoul",
-      );
-
+      // 🚀 단일 컬럼(attendance_status)에서 모든 4가지 상태를 한글로 가져옵니다!
       const attStatus = specificReservation.attendance_status;
-      const shuttleStatus = specificReservation.shuttle_status;
 
-      // 🚀 [추가] DB 예약 정보에서 셔틀 이용 여부를 가져옵니다 (기본값 true)
       const isShuttleUser = specificReservation.is_shuttle_user ?? true;
 
-      // 💡 직관적인 상태 텍스트 분기 로직 (10초 라이브 액션 제거, 즉시 렌더링)
+      // 💡 한글 텍스트 완벽 매칭 로직!
       if (isShuttleUser) {
-        if (shuttleStatus === "dropped_off") {
+        if (attStatus === "하차") {
           statusLabel = "안전하게 셔틀에서 하차했어요 🏠";
           statusBg = "#64748B"; // 회색
           bgImage =
@@ -230,7 +219,7 @@ export default function HomeScreen({ navigation }: any) {
           statusBg = "#10B981"; // 초록색
           bgImage =
             "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
-        } else if (shuttleStatus === "boarded") {
+        } else if (attStatus === "승차") {
           statusLabel = "학원 가는 셔틀에 탑승했어요 🚌";
           statusBg = "#3D56B2"; // 파란색
           bgImage =
@@ -558,6 +547,12 @@ export default function HomeScreen({ navigation }: any) {
           </View>
 
           {/* 3. 광고 배너 섹션 */}
+          {/* 🚀 HTML 렌더링을 위한 스타일 정의 */}
+          const baseHtmlStyle = {
+            color: '#FFFFFF',
+            fontSize: 16,
+          };
+
           {banners.map((banner) => (
             <TouchableOpacity
               key={banner.id}
@@ -587,18 +582,30 @@ export default function HomeScreen({ navigation }: any) {
               >
                 <View style={styles.adTextContainer}>
                   <Text style={styles.adTag}>EVENT</Text>
-                  <Text
-                    style={[
-                      styles.adTitle,
-                      {
+                  {banner.content_html ? (
+                    <RenderHtml
+                      contentWidth={CARD_WIDTH - 100}
+                      source={{ html: banner.content_html }}
+                      baseStyle={{
                         color: banner.title_color || "#FFFFFF",
-                        fontSize: banner.font_size_title || 16,
-                      },
-                    ]}
-                  >
-                    {banner.title}
-                    {banner.subtitle ? `\n${banner.subtitle}` : ""}
-                  </Text>
+                        fontSize: 16,
+                        fontWeight: '700',
+                      }}
+                    />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.adTitle,
+                        {
+                          color: banner.title_color || "#FFFFFF",
+                          fontSize: banner.font_size_title || 16,
+                        },
+                      ]}
+                    >
+                      {banner.title}
+                      {banner.subtitle ? `\n${banner.subtitle}` : ""}
+                    </Text>
+                  )}
                 </View>
                 <MaterialCommunityIcons
                   name="chevron-right"
