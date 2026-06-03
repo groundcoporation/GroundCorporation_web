@@ -204,6 +204,13 @@ export default function AdminHomeScreen({ navigation }: any) {
             "AdminSetting",
             "이용권 및 가격",
           )}
+          {renderGridMenu(
+            "배너 관리",
+            "image-outline",
+            "#F43F5E",
+            "AdminBanner",
+            "이벤트 배너 수정",
+          )}
         </View>
 
         {/* 🚀 하단 배너: 실시간 관제 센터 */}

@@ -23,12 +23,16 @@ export default function ReferralScreen({ navigation, route }: any) {
   const [points, setPoints] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [alreadyReferred, setAlreadyReferred] = useState(false);
+  const [banners, setBanners] = useState<any[]>([]); // 🚀 배너 상태 추가
 
   // 🚀 [추가] 딥링크 등을 통해 전달받은 추천인 코드 확인
   const initialReferralCode = route?.params?.referralCode;
 
   useEffect(() => {
-    if (user) fetchUserData();
+    if (user) {
+      fetchUserData();
+      fetchBanners(); // 🚀 배너 로드
+    }
   }, [user]);
 
   // 🚀 [추가] 전달받은 코드가 있고 아직 추천인 등록 전이라면 자동 실행
@@ -58,6 +62,18 @@ export default function ReferralScreen({ navigation, route }: any) {
       setPoints(data.points || 0);
       setAlreadyReferred(!!data.referred_by);
     }
+  };
+
+  const fetchBanners = async () => {
+    const { data } = await supabase
+      .from("banners")
+      .select("*")
+      .eq("screen_type", "referral")
+      .eq("is_active", true)
+      .or(`branch_id.eq.${user?.branch_id},branch_id.is.null`)
+      .order("display_order", { ascending: true });
+
+    if (data) setBanners(data);
   };
 
   // 추천 링크 공유하기
@@ -165,21 +181,24 @@ export default function ReferralScreen({ navigation, route }: any) {
         </View>
 
         {/* 🚀 [추가] 임시 이벤트 배너 */}
-        <TouchableOpacity
-          style={styles.eventBanner}
-          onPress={() =>
-            Alert.alert("이벤트", "진행 중인 이벤트 페이지로 이동합니다.")
-          }
-        >
-          <View style={styles.eventIcon}>
-            <Ionicons name="gift" size={24} color="#FF6B6B" />
-          </View>
-          <View style={styles.eventTextContainer}>
-            <Text style={styles.eventTitle}>친구 초대 무제한 이벤트!</Text>
-            <Text style={styles.eventSub}>초대할 때마다 1,000P 즉시 지급</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
-        </TouchableOpacity>
+        {banners.map((banner) => (
+          <TouchableOpacity
+            key={banner.id}
+            style={styles.eventBanner}
+            onPress={() => banner.link_url && Linking.openURL(banner.link_url)}
+          >
+            <View style={styles.eventIcon}>
+              <Ionicons name="gift" size={24} color="#FF6B6B" />
+            </View>
+            <View style={styles.eventTextContainer}>
+              <Text style={styles.eventTitle}>{banner.title}</Text>
+              {banner.subtitle && (
+                <Text style={styles.eventSub}>{banner.subtitle}</Text>
+              )}
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+          </TouchableOpacity>
+        ))}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>나의 추천 코드 공유</Text>
