@@ -63,6 +63,7 @@ export default function HomeScreen({ navigation }: any) {
   const [upcomingReservation, setUpcomingReservation] = useState<any[]>([]);
   const [bizInfo, setBizInfo] = useState<BizInfo | null>(null);
   const [homeNotices, setHomeNotices] = useState<any[]>([]);
+  const [banners, setBanners] = useState<any[]>([]); // 🚀 배너 상태 추가
 
   useEffect(() => {
     if (branchId && isFocused) {
@@ -152,6 +153,16 @@ export default function HomeScreen({ navigation }: any) {
           .limit(2);
 
         setHomeNotices(notices || []);
+
+        // 5. 배너 로드
+        const { data: bannerData } = await supabase
+          .from("banners")
+          .select("*")
+          .eq("screen_type", "home")
+          .eq("is_active", true)
+          .or(`branch_id.eq.${branchId},branch_id.is.null`)
+          .order("display_order", { ascending: true });
+        setBanners(bannerData || []);
       }
     } catch (e) {
       console.log("데이터 로드 에러:", e);
@@ -195,10 +206,10 @@ export default function HomeScreen({ navigation }: any) {
         `${specificReservation.class_date} ${specificReservation.class_schedules?.end_time}`,
         "Asia/Seoul",
       );
-      
+
       const attStatus = specificReservation.attendance_status;
       const shuttleStatus = specificReservation.shuttle_status;
-      
+
       // 🚀 [추가] DB 예약 정보에서 셔틀 이용 여부를 가져옵니다 (기본값 true)
       const isShuttleUser = specificReservation.is_shuttle_user ?? true;
 
@@ -207,30 +218,36 @@ export default function HomeScreen({ navigation }: any) {
         if (shuttleStatus === "dropped_off") {
           statusLabel = "안전하게 셔틀에서 하차했어요 🏠";
           statusBg = "#64748B"; // 회색
-          bgImage = "https://images.unsplash.com/photo-1490139177067-2819828d54d1?q=80&w=800";
+          bgImage =
+            "https://images.unsplash.com/photo-1490139177067-2819828d54d1?q=80&w=800";
         } else if (attStatus === "하원") {
           statusLabel = "집으로 가는 셔틀을 타고 있어요 🚌";
           statusBg = "#3D56B2"; // 파란색
-          bgImage = "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
+          bgImage =
+            "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
         } else if (attStatus === "등원") {
           statusLabel = "학원에 도착해 열심히 수업 중이에요 ⚽";
           statusBg = "#10B981"; // 초록색
-          bgImage = "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
+          bgImage =
+            "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
         } else if (shuttleStatus === "boarded") {
           statusLabel = "학원 가는 셔틀에 탑승했어요 🚌";
           statusBg = "#3D56B2"; // 파란색
-          bgImage = "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
+          bgImage =
+            "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
         }
       } else {
         // 도보/자차 이용 학생
         if (attStatus === "하원") {
           statusLabel = "수업을 안전하게 마쳤어요 👋";
           statusBg = "#F59E0B"; // 주황색
-          bgImage = "https://images.unsplash.com/photo-1516733725897-1aa73b87c8e8?q=80&w=800";
+          bgImage =
+            "https://images.unsplash.com/photo-1516733725897-1aa73b87c8e8?q=80&w=800";
         } else if (attStatus === "등원") {
           statusLabel = "학원에 도착해 열심히 수업 중이에요 ⚽";
           statusBg = "#10B981"; // 초록색
-          bgImage = "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
+          bgImage =
+            "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
         }
       }
     }
@@ -541,20 +558,57 @@ export default function HomeScreen({ navigation }: any) {
           </View>
 
           {/* 3. 광고 배너 섹션 */}
-          <TouchableOpacity style={styles.adBanner}>
-            <View style={styles.adTextContainer}>
-              <Text style={styles.adTag}>EVENT</Text>
-              <Text style={styles.adTitle}>
-                우리 아이 첫 축구 교실{"\n"}지금 예약하면 20% 할인
-              </Text>
-            </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={24}
-              color="#fff"
-              opacity={0.7}
-            />
-          </TouchableOpacity>
+          {banners.map((banner) => (
+            <TouchableOpacity
+              key={banner.id}
+              style={[
+                styles.adBanner,
+                {
+                  backgroundColor: banner.bg_color || "#111827",
+                  padding: 0,
+                  overflow: "hidden",
+                },
+              ]}
+              onPress={() =>
+                banner.link_url && Linking.openURL(banner.link_url)
+              }
+            >
+              <ImageBackground
+                source={
+                  banner.image_url ? { uri: banner.image_url } : undefined
+                }
+                style={{
+                  width: "100%",
+                  padding: 24,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <View style={styles.adTextContainer}>
+                  <Text style={styles.adTag}>EVENT</Text>
+                  <Text
+                    style={[
+                      styles.adTitle,
+                      {
+                        color: banner.title_color || "#FFFFFF",
+                        fontSize: banner.font_size_title || 16,
+                      },
+                    ]}
+                  >
+                    {banner.title}
+                    {banner.subtitle ? `\n${banner.subtitle}` : ""}
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={24}
+                  color={banner.title_color || "#FFFFFF"}
+                  opacity={0.7}
+                />
+              </ImageBackground>
+            </TouchableOpacity>
+          ))}
 
           {/* 4. 공지 사항 */}
           <View style={styles.sectionHeader}>
