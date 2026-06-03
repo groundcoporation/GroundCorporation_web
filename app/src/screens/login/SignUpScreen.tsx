@@ -146,9 +146,20 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
       // 6. Auth 성공 시 상세 정보 저장 및 포인트 지급
       if (authData.user) {
         if (referrerData) {
+          // 추천인의 아이디(username)를 가져와서 더 직관적인 로그를 남깁니다.
+          const referrerUsername = referralCode; 
+          const newUsername = username;
+
           // [A] 추천인 포인트 지급
           await supabase.from('users').update({ points: (referrerData.points || 0) + signupBonus }).eq('id', referrerData.id);
-          await supabase.from('point_logs').insert({ user_id: referrerData.id, amount: signupBonus, reason: '친구 추천 가입 보너스' });
+          
+          // 🚀 로그에 누가 가입했는지 이름을 직접 박습니다!
+          await supabase.from('point_logs').insert({ 
+            user_id: referrerData.id, 
+            amount: signupBonus, 
+            reason: `${newUsername} 님의 가입으로 받은 보너스`, // 직관적인 이유
+            related_user_id: authData.user.id 
+          });
         }
 
         // [B] 가입자 정보 저장
@@ -162,14 +173,20 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             branch_id: branchId,
             role: 'user',
             referred_by: referralCode || null,
-            points: referrerData ? signupBonus : 0 // 🚀 동적 가입 보너스 지급
+            points: referrerData ? signupBonus : 0 
         }]);
 
         if (dbError) throw dbError;
 
         // [C] 가입자 로그 기록
         if (referrerData) {
-            await supabase.from('point_logs').insert({ user_id: authData.user.id, amount: signupBonus, reason: '친구 초대 가입 보너스' });
+            // 🚀 로그에 누가 추천했는지 이름을 직접 박습니다!
+            await supabase.from('point_logs').insert({ 
+              user_id: authData.user.id, 
+              amount: signupBonus, 
+              reason: `${referralCode} 님을 추천하여 받은 보너스`, // 직관적인 이유
+              related_user_id: referrerData.id 
+            });
         }
 
         Alert.alert('성공', `회원가입이 완료되었습니다! (${signupBonus}P 지급)`, [{ text: '확인', onPress: () => navigation.navigate('Login') }]);
