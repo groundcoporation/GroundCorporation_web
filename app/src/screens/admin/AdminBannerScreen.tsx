@@ -34,6 +34,7 @@ export default function AdminBannerScreen({ navigation }: any) {
     bg_color: "#111827",
     title_color: "#FFFFFF",
     subtitle_color: "rgba(255,255,255,0.7)",
+    content_html: "", // 🚀 HTML 필드 추가
     image_url: "",
     is_active: true,
   });
@@ -96,6 +97,7 @@ export default function AdminBannerScreen({ navigation }: any) {
       bg_color: banner.bg_color || "#111827",
       title_color: banner.title_color || "#FFFFFF",
       subtitle_color: banner.subtitle_color || "rgba(255,255,255,0.7)",
+      content_html: banner.content_html || "", // 🚀 HTML 필드 로드
       image_url: banner.image_url || "",
       is_active: banner.is_active,
     });
@@ -137,6 +139,7 @@ export default function AdminBannerScreen({ navigation }: any) {
               bg_color: "#111827",
               title_color: "#FFFFFF",
               subtitle_color: "rgba(255,255,255,0.7)",
+              content_html: "",
               image_url: "",
               is_active: true,
             });
@@ -225,6 +228,17 @@ export default function AdminBannerScreen({ navigation }: any) {
               value={form.display_order}
               onChangeText={(t) => setForm({ ...form, display_order: t })}
               keyboardType="numeric"
+            />
+
+            <Text style={styles.label}>
+              상세 내용 (HTML 형식 - 입력 시 제목/부제목 무시)
+            </Text>
+            <TextInput
+              style={[styles.input, { height: 100, textAlignVertical: "top" }]}
+              multiline
+              value={form.content_html}
+              onChangeText={(t) => setForm({ ...form, content_html: t })}
+              placeholder="예: <span style='color: yellow;'>이벤트</span> 내용을 입력하세요."
             />
 
             <Text style={styles.label}>
