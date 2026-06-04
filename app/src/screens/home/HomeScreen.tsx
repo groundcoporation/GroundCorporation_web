@@ -66,8 +66,10 @@ export default function HomeScreen({ navigation }: any) {
   const [upcomingReservation, setUpcomingReservation] = useState<any[]>([]);
   const [bizInfo, setBizInfo] = useState<BizInfo | null>(null);
   const [homeNotices, setHomeNotices] = useState<any[]>([]);
-
-  // 💡 [중복 제거] banners, activeBannerIndex 상태 및 bannerFlatListRef, 자동 스크롤 useEffect 전체 삭제
+  const [expiryAlert, setExpiryAlert] = useState<{
+    days: number;
+    packageName: string;
+  } | null>(null);
 
   useEffect(() => {
     if (branchId && isFocused) {
@@ -157,6 +159,31 @@ export default function HomeScreen({ navigation }: any) {
           .limit(2);
 
         setHomeNotices(notices || []);
+
+        // 5. 이용권 만료 체크 (3일, 1일 남은 경우)
+        // 실제 테이블명(user_packages)은 데이터베이스 구조에 맞춰 확인 필요
+        const { data: userPackages } = await supabase
+          .from("user_packages")
+          .select("package_name, expiry_date")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .order("expiry_date", { ascending: true });
+
+        if (userPackages && userPackages.length > 0) {
+          const today = dayjs().tz().startOf("day");
+          for (const pkg of userPackages) {
+            const expiry = dayjs(pkg.expiry_date).tz().startOf("day");
+            const diffDays = expiry.diff(today, "day");
+
+            if (diffDays === 1 || diffDays === 3) {
+              setExpiryAlert({
+                days: diffDays,
+                packageName: pkg.package_name,
+              });
+              break; // 가장 먼저 만료되는 것 하나만 표시
+            }
+          }
+        }
       }
     } catch (e) {
       console.log("데이터 로드 에러:", e);
@@ -323,6 +350,26 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={styles.welcomeName}>
               {userData?.name || "사용자"}님
             </Text>
+            {expiryAlert && (
+              <TouchableOpacity
+                style={styles.expiryBanner}
+                onPress={() => navigation.navigate("MyPackage")}
+              >
+                <MaterialCommunityIcons
+                  name="alert-circle"
+                  size={18}
+                  color="#EF4444"
+                />
+                <Text style={styles.expiryBannerText}>
+                  {expiryAlert.packageName} 만료가{" "}
+                  <Text style={{ fontWeight: "800" }}>
+                    {expiryAlert.days}일
+                  </Text>{" "}
+                  남았습니다.
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color="#EF4444" />
+              </TouchableOpacity>
+            )}
             <Text style={styles.welcomeMsg}>오늘의 일정을 확인하세요.</Text>
           </View>
 
@@ -688,6 +735,24 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     marginTop: 4,
     fontWeight: "500",
+  },
+  expiryBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+  },
+  expiryBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#B91C1C",
+    marginLeft: 8,
+    fontWeight: "600",
   },
   pageViewSection: {
     marginBottom: 32,
