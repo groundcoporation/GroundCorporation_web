@@ -1,25 +1,37 @@
 import { supabase } from "../lib/supabase"; // 🚀 본부장님 환경에 맞춘 경로
-import dayjs from 'dayjs';
+import dayjs from "dayjs";
 
 // 🚀 [본부장님 기존 타입 + 신규 타입 합체]
-export type NotificationType = 'ATTENDANCE' | 'SHUTTLE' | 'CONSULT' | 'RESERVATION' | 'notice' | 'payment' | 'attendance';
+export type NotificationType =
+  | "ATTENDANCE"
+  | "SHUTTLE"
+  | "CONSULT"
+  | "RESERVATION"
+  | "notice"
+  | "payment"
+  | "attendance";
 
 // =========================================================================
 // 1️⃣ 본부장님이 기존에 만드신 알림 서비스 (DB 저장용)
 // =========================================================================
 export const NotificationService = {
   // 1. 기초 발송 함수
-  async send(targetUserId: string, title: string, message: string, type: NotificationType) {
+  async send(
+    targetUserId: string,
+    title: string,
+    message: string,
+    type: NotificationType,
+  ) {
     try {
-      const { error } = await supabase
-        .from("notifications")
-        .insert([{
+      const { error } = await supabase.from("notifications").insert([
+        {
           user_id: targetUserId,
           title,
           message,
           type,
           is_read: false,
-        }]);
+        },
+      ]);
       if (error) throw error;
     } catch (e) {
       console.error("알림 발송 실패:", e);
@@ -27,25 +39,33 @@ export const NotificationService = {
   },
 
   // 2. 등하원 알림
-  async sendAttendance(parentId: string, childName: string, status: '등원' | '하원') {
+  async sendAttendance(
+    parentId: string,
+    childName: string,
+    status: "등원" | "하원",
+  ) {
     const title = `🔔 ${status} 알림`;
     const message = `${childName} 학생이 안전하게 ${status}하였습니다.`;
-    await this.send(parentId, title, message, 'ATTENDANCE');
+    await this.send(parentId, title, message, "ATTENDANCE");
   },
 
   // 3. 차량 승하차 알림
-  async sendShuttle(parentId: string, childName: string, status: '승차' | '하차') {
+  async sendShuttle(
+    parentId: string,
+    childName: string,
+    status: "승차" | "하차",
+  ) {
     const title = `🚐 차량 ${status} 알림`;
     const message = `${childName} 학생이 차량에 ${status}하였습니다.`;
-    await this.send(parentId, title, message, 'SHUTTLE');
+    await this.send(parentId, title, message, "SHUTTLE");
   },
 
   // 4. 상담 신청 알림 (코치용)
   async sendConsultRequest(coachId: string, userName: string) {
     const title = `💬 새 상담 신청`;
     const message = `${userName} 님이 상담을 신청했습니다.`;
-    await this.send(coachId, title, message, 'CONSULT');
-  }
+    await this.send(coachId, title, message, "CONSULT");
+  },
 };
 
 // =========================================================================
@@ -66,12 +86,12 @@ export const sendGlobalPushNotification = async ({
   title,
   body,
   type,
-  relatedId = null
+  relatedId = null,
 }: SendPushArgs) => {
   try {
     // 1. 대상 유저 중 푸시 토큰이 존재하는 진성 회원만 일차적으로 긁어옵니다.
     let query = supabase.from("users").select("id, push_token");
-    
+
     // 🚀 [추가 및 수정된 핵심 로직] 콕 집은 유저가 있으면 그 유저만, 아니면 지점 전체!
     if (targetUserId) {
       // 💡 학부모 ID가 넘어왔다면, 지점 전체가 아니라 딱 그 학부모 1명만 검색합니다!
@@ -80,13 +100,15 @@ export const sendGlobalPushNotification = async ({
       // 학부모 ID가 없고 지점 ID만 있다면, 지점 전체 학부모를 검색합니다. (공지사항용)
       query = query.eq("branch_id", targetBranchId);
     }
-    
+
     // 💡 푸시 토큰이 있는 사람만 최종 필터링
     query = query.not("push_token", "is", null);
 
     const { data: targetUsers, error: userError } = await query;
     if (userError || !targetUsers || targetUsers.length === 0) {
-      console.log("⚠️ [전역 푸시] 알림을 보낼 대상 유저(토큰 보유자)가 없습니다.");
+      console.log(
+        "⚠️ [전역 푸시] 알림을 보낼 대상 유저(토큰 보유자)가 없습니다.",
+      );
       return;
     }
 
@@ -99,15 +121,20 @@ export const sendGlobalPushNotification = async ({
       notice_id: type === "notice" ? relatedId : null,
       reservation_id: type === "RESERVATION" ? relatedId : null,
       is_read: false,
-      created_at: dayjs().tz().format('YYYY-MM-DDTHH:mm:ssZ'), // 명시적으로 KST 오프셋 포함
+      created_at: dayjs().tz().format("YYYY-MM-DDTHH:mm:ssZ"), // 명시적으로 KST 오프셋 포함
     }));
 
-    const { error: notiError } = await supabase.from("notifications").insert(notificationRows);
-    if (notiError) console.log("🚨 [전역 푸시] 알림 DB 저장 실패:", notiError.message);
+    const { error: notiError } = await supabase
+      .from("notifications")
+      .insert(notificationRows);
+    if (notiError)
+      console.log("🚨 [전역 푸시] 알림 DB 저장 실패:", notiError.message);
 
     // 3. 🔴 엑스포 우체국 서버를 통한 스마트폰 상단바 진짜 팝업 발송
     const validPushTokens = targetUsers
-      .filter((u) => u.push_token && u.push_token.startsWith("ExponentPushToken"))
+      .filter(
+        (u) => u.push_token && u.push_token.startsWith("ExponentPushToken"),
+      )
       .map((u) => u.push_token);
 
     if (validPushTokens.length > 0) {
@@ -116,11 +143,11 @@ export const sendGlobalPushNotification = async ({
         sound: "default",
         title: title,
         body: body,
-        data: { type, relatedId }, 
+        data: { type, relatedId },
         // 🚀 안드로이드 배포 앱 필수 규격 추가
         android: {
-          channelId: "default"
-        }
+          channelId: "default",
+        },
       }));
 
       await fetch("https://exp.host/--/api/v2/push/send", {
@@ -132,7 +159,9 @@ export const sendGlobalPushNotification = async ({
         },
         body: JSON.stringify(pushMessages),
       });
-      console.log(`🎉 [전역 푸시 배달부] ${type} 타입 시스템 팝업 발송 통신 완료! (발송 인원: ${validPushTokens.length}명)`);
+      console.log(
+        `🎉 [전역 푸시 배달부] ${type} 타입 시스템 팝업 발송 통신 완료! (발송 인원: ${validPushTokens.length}명)`,
+      );
     }
   } catch (error) {
     console.log("🚨 [전역 푸시 배달부] 시스템 치명적 에러 발생:", error);
