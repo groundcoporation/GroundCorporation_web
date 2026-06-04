@@ -9,6 +9,7 @@ import {
   Share,
   ActivityIndicator,
   ScrollView,
+  Modal, // 🚀 [추가] 팝업창을 위한 Modal 컴포넌트 임포트
 } from "react-native";
 import EventBanner from "../../components/EventBanner"; // 🚀 동적 마스터 배너 컴포넌트 유지
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -24,6 +25,16 @@ export default function ReferralScreen({ navigation, route }: any) {
   const [points, setPoints] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [alreadyReferred, setAlreadyReferred] = useState(false);
+
+  // =========================================================================
+  // 🚀 [추가] 인출 모달창 관리를 위한 상태 변수들
+  // =========================================================================
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountHolder, setAccountHolder] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   // 딥링크 등을 통해 파라미터로 전달받은 추천인 코드 확인
   const initialReferralCode = route?.params?.referralCode;
@@ -124,18 +135,20 @@ export default function ReferralScreen({ navigation, route }: any) {
         .update({ referred_by: targetCode, points: points + signupBonus })
         .eq("id", user?.id);
 
-      // 3. 로그 기록 (이름/아이디 포함하여 직관적으로)
+      // 3. 로그 기록 (이름/아이디 포함하여 직관적으로) - 🚀 type 컬럼 추가 반영
       await supabase.from("point_logs").insert([
         {
           user_id: referrer.id,
           amount: signupBonus,
-          reason: `${myUsername} 님의 가입으로 받은 보너스`,
+          type: "earn",
+          reason: `${myUsername} 님의 가입으로 받은 포인트`,
           related_user_id: user?.id,
         },
         {
           user_id: user?.id,
           amount: signupBonus,
-          reason: `${referrerUsername} 님을 추천하여 받은 보너스`,
+          type: "earn",
+          reason: `${referrerUsername} 님을 추천하여 받은 포인트`,
           related_user_id: referrer.id,
         },
       ]);
@@ -150,6 +163,79 @@ export default function ReferralScreen({ navigation, route }: any) {
       Alert.alert("오류", "추천인 등록 중 문제가 발생했습니다.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // =========================================================================
+  // 🚀 [추가] 포인트 현금 인출 신청 핵심 로직 (DB 연동 + 자동차감)
+  // =========================================================================
+  const handleWithdrawRequest = async () => {
+    const amountNum = Number(withdrawAmount);
+
+    if (!bankName || !accountNumber || !accountHolder || !withdrawAmount) {
+      Alert.alert("알림", "계좌 정보를 모두 입력해주세요.");
+      return;
+    }
+    if (amountNum < 10000) {
+      Alert.alert("알림", "최소 10,000P 이상부터 인출 가능합니다.");
+      return;
+    }
+    if (amountNum > points) {
+      Alert.alert("알림", "보유 포인트가 부족합니다.");
+      return;
+    }
+
+    setIsWithdrawing(true);
+    try {
+      // 1. 유저 보유 포인트 자동 차감 (업데이트)
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({ points: points - amountNum })
+        .eq("id", user?.id);
+      
+      if (updateError) throw updateError;
+
+      // 2. 관리자가 볼 인출 요청 DB 인서트
+      const { error: requestError } = await supabase
+        .from("withdrawal_requests")
+        .insert({
+          user_id: user?.id,
+          bank_name: bankName,
+          account_number: accountNumber,
+          account_holder: accountHolder,
+          amount: amountNum,
+        });
+
+      if (requestError) throw requestError;
+
+      // 3. 내역(장부)에 마이너스(-) 로 인출 로그 기록 (type: withdraw 지정!)
+      const { error: logError } = await supabase
+        .from("point_logs")
+        .insert({
+          user_id: user?.id,
+          amount: -amountNum,
+          type: "withdraw",
+          reason: "포인트 현금 인출 신청",
+        });
+
+      if (logError) throw logError;
+
+      Alert.alert("신청 완료", "현금 인출 신청이 정상적으로 접수되었습니다.\n(관리자 확인 후 송금됩니다)");
+      
+      // 모달 닫기 및 초기화
+      setShowWithdrawModal(false);
+      setBankName("");
+      setAccountNumber("");
+      setAccountHolder("");
+      setWithdrawAmount("");
+      
+      // 최신 잔여 포인트 갱신
+      fetchUserData();
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert("오류", "인출 신청 중 문제가 발생했습니다.");
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -179,7 +265,14 @@ export default function ReferralScreen({ navigation, route }: any) {
               
               <TouchableOpacity
                 style={styles.withdrawBtn}
-                onPress={() => Alert.alert("알림", "포인트 인출 기능은 현재 준비 중입니다.")}
+                // 🚀 [수정] 인출하기 클릭 시 모달 띄우기 조건 적용
+                onPress={() => {
+                  if (points < 10000) {
+                    Alert.alert("알림", "포인트 인출은 10,000P 이상부터 가능합니다.");
+                  } else {
+                    setShowWithdrawModal(true);
+                  }
+                }}
               >
                 <Text style={styles.withdrawBtnText}>인출하기</Text>
               </TouchableOpacity>
@@ -271,6 +364,68 @@ export default function ReferralScreen({ navigation, route }: any) {
           </View>
         </View>
       </ScrollView>
+
+      {/* ========================================================================= */}
+      {/* 🚀 [추가] 포인트 인출 팝업창 (Modal) */}
+      {/* ========================================================================= */}
+      <Modal visible={showWithdrawModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>포인트 현금 인출 신청</Text>
+              <TouchableOpacity onPress={() => setShowWithdrawModal(false)}>
+                <Ionicons name="close" size={24} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalSubText}>
+                인출 가능 포인트: <Text style={{ color: '#4D96FF', fontWeight: 'bold' }}>{points.toLocaleString()} P</Text>
+              </Text>
+              
+              <TextInput
+                style={styles.modalInput}
+                placeholder="은행명 (예: 국민은행)"
+                value={bankName}
+                onChangeText={setBankName}
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="계좌번호 (- 제외)"
+                value={accountNumber}
+                onChangeText={setAccountNumber}
+                keyboardType="number-pad"
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="예금주 (실명)"
+                value={accountHolder}
+                onChangeText={setAccountHolder}
+              />
+              <TextInput
+                style={[styles.modalInput, { borderColor: '#4D96FF', borderWidth: 2 }]}
+                placeholder="인출할 금액 (P)"
+                value={withdrawAmount}
+                onChangeText={setWithdrawAmount}
+                keyboardType="number-pad"
+              />
+
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, isWithdrawing && { opacity: 0.7 }]}
+                onPress={handleWithdrawRequest}
+                disabled={isWithdrawing}
+              >
+                {isWithdrawing ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>신청하기</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -401,4 +556,44 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "500",
   },
+
+  // 🚀 [추가] 모달창 스타일
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "bold", color: "#111827" },
+  modalBody: { marginTop: 10 },
+  modalSubText: { fontSize: 14, color: "#64748B", marginBottom: 15 },
+  modalInput: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 15,
+    fontSize: 15,
+    marginBottom: 12,
+  },
+  modalSubmitBtn: {
+    backgroundColor: "#4D96FF",
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  modalSubmitBtnText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
 });
