@@ -20,7 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import dayjs from "dayjs";
 import KSPayService from "../../services/payment/KSPayService";
-import EventBanner from "../../components/EventBanner"; // 🚀 공통 배너 컴포넌트 사용[cite: 4]
+import EventBanner from "../../components/EventBanner";
 
 // 🚀 [추가] 전역 상태 보관소에서 useAuth 훅 임포트
 import { useAuth } from "../../context/AuthContext";
