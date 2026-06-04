@@ -152,15 +152,25 @@ export default function ReferralScreen({ navigation, route }: any) {
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.label}>나의 보유 포인트</Text>
-            <TouchableOpacity
-              style={styles.withdrawBtn}
-              onPress={() =>
-                Alert.alert("알림", "포인트 인출 기능은 현재 준비 중입니다.")
-              }
-            >
-              <Text style={styles.withdrawBtnText}>인출하기</Text>
-            </TouchableOpacity>
+            
+            {/* 🚀 [수정] 버튼들을 가로로 나란히 배치 */}
+            <View style={{ flexDirection: 'row' }}>
+              <TouchableOpacity
+                style={[styles.withdrawBtn, { marginRight: 8, backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                onPress={() => navigation.navigate("PointHistory")} // 👈 나중에 만들 새 화면으로 이동
+              >
+                <Text style={styles.withdrawBtnText}>내역 보기</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.withdrawBtn}
+                onPress={() => Alert.alert("알림", "포인트 인출 기능은 현재 준비 중입니다.")}
+              >
+                <Text style={styles.withdrawBtnText}>인출하기</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+          
           <Text style={styles.pointsText}>{points.toLocaleString()} P</Text>
         </View>
 
