@@ -113,7 +113,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
       let referrerData = null;
       let signupBonus = 0;
 
-      // 보너스 값 가져오기
+      //포인트 값 가져오기
       const { data: bonusData } = await supabase
         .from('point_settings')
         .select('value')
@@ -157,7 +157,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
           await supabase.from('point_logs').insert({ 
             user_id: referrerData.id, 
             amount: signupBonus, 
-            reason: `${newUsername} 님의 가입으로 받은 보너스`, // 직관적인 이유
+            reason: `${newUsername} 님의 가입으로 받은 포인트`, // 직관적인 이유
             related_user_id: authData.user.id 
           });
         }
@@ -184,7 +184,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             await supabase.from('point_logs').insert({ 
               user_id: authData.user.id, 
               amount: signupBonus, 
-              reason: `${referralCode} 님을 추천하여 받은 보너스`, // 직관적인 이유
+              reason: `${referralCode} 님을 추천하여 받은 포인트`, // 직관적인 이유
               related_user_id: referrerData.id 
             });
         }
@@ -193,7 +193,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
         // 🚀 [수정] 추천인(referrerData) 유무에 따라 알림 메시지를 다르게 띄움
         // =================================================================
         const successMessage = referrerData 
-          ? `회원가입이 완료되었습니다! (추천 보너스 ${signupBonus}P 지급)` 
+          ? `회원가입이 완료되었습니다! (추천 포인트 ${signupBonus}P 지급)` 
           : '회원가입이 완료되었습니다!';
 
         Alert.alert('성공', successMessage, [{ text: '확인', onPress: () => navigation.navigate('Login') }]);
