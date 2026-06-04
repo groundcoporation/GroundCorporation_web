@@ -211,6 +211,15 @@ export default function AdminHomeScreen({ navigation }: any) {
             "AdminBanner",
             "이벤트 배너 수정",
           )}
+
+          {/* 🚀 [추가] 남는 한 칸을 완벽하게 채우는 인출 관리 메뉴! */}
+          {renderGridMenu(
+            "인출 요청 관리",
+            "wallet-outline",   // 지갑/돈 관련 아이콘
+            "#10B981",          // 입금/현금 느낌이 나는 초록색
+            "AdminWithdrawal",  // 이동할 스크린 이름
+            "포인트 환급 승인",
+          )}
         </View>
 
         {/* 🚀 하단 배너: 실시간 관제 센터 */}
