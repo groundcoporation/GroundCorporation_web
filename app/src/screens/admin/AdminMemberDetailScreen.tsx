@@ -71,7 +71,7 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
           `
           id, name, phone, role, target_class, branch_id,
           children!fk_children_parent (id, child_name, target_class),
-          user_packages!fk_user_packages_user (id, package_name, remaining_count, total_count, created_at, expiry_date)
+          user_packages!fk_user_packages_user (id, package_name, remaining_count, total_count, created_at, expiry_date, is_shuttle)
         `,
         )
         .eq("id", userId)
@@ -110,7 +110,7 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
     try {
       const { data, error } = await supabase.from("package_options").select(`
           id, label, total_count, price,
-          packages!fk_package_option_parent ( id, name )
+          packages!fk_package_option_parent ( id, name, is_shuttle )
         `);
       if (error) throw error;
       setAvailableOptions(data || []);
@@ -122,6 +122,7 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
 
   const handleGrantPackage = async (option: any) => {
     try {
+      const isShuttle = option.packages?.is_shuttle || false;
       const fullPackageName = `${option.packages?.name || "수강권"} - ${option.label}`;
       const { error } = await supabase.from("user_packages").insert({
         user_id: userId,
@@ -133,6 +134,7 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
         status: "active",
         branch_id: member.branch_id,
         expiry_date: dayjs().endOf("month").format("YYYY-MM-DD"),
+        is_shuttle: isShuttle, // 🚀 셔틀 여부 연동
       });
       if (error) throw error;
       Alert.alert("완료", "수강권이 부여되었습니다.");
@@ -447,12 +449,23 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
                     </View>
 
                     <View style={styles.countControlRow}>
-                      <Text style={styles.countNum}>
-                        {pkg.remaining_count}{" "}
-                        <Text style={{ fontSize: 14, color: "#94A3B8" }}>
-                          / {pkg.total_count}회
+                      {pkg.is_shuttle ? (
+                        <View>
+                          <Text style={[styles.countNum, { fontSize: 18 }]}>
+                            {dayjs(pkg.expiry_date).diff(dayjs().startOf("day"), "day")}일 남음
+                          </Text>
+                          <Text style={{ fontSize: 12, color: "#6366F1", fontWeight: "700" }}>
+                            셔틀 전용권
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.countNum}>
+                          {pkg.remaining_count}{" "}
+                          <Text style={{ fontSize: 14, color: "#94A3B8" }}>
+                            / {pkg.total_count}회
+                          </Text>
                         </Text>
-                      </Text>
+                      )}
                       <View style={styles.countBtns}>
                         <TouchableOpacity
                           onPress={() =>
@@ -674,7 +687,9 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
                   onPress={() => handleGrantPackage(opt)}
                 >
                   <View>
-                    <Text style={styles.optParent}>{opt.packages?.name}</Text>
+                    <Text style={styles.optParent}>
+                      {opt.packages?.name} {opt.packages?.is_shuttle && "(셔틀)"}
+                    </Text>
                     <Text style={styles.optLabel}>
                       {opt.label} ({opt.total_count}회)
                     </Text>
