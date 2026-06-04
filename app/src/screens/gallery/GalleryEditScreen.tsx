@@ -61,7 +61,7 @@ export default function GalleryEditScreen({ route, navigation }: any) {
   // 1️⃣ 새 이미지 선택
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.5,
