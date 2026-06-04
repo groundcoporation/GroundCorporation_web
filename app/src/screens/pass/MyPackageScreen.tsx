@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
+import dayjs from "dayjs";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -42,13 +43,63 @@ export default function MyPackageScreen({ navigation }: any) {
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
 
-        setPackages(data || []);
+        if (data) {
+          const today = dayjs().startOf("day");
+          
+          // 1. 만료 처리 대상 (active/pending 인데 날짜 지난 것)
+          const toExpire = data.filter(
+            (pkg) =>
+              (pkg.status?.toLowerCase() === "active" || pkg.status?.toLowerCase() === "pending") &&
+              dayjs(pkg.expiry_date).startOf("day").isBefore(today)
+          );
+
+          // 2. 사용 완료 처리 대상 (active 인데 횟수 0인 것)
+          const toExhaust = data.filter(
+            (pkg) =>
+              pkg.status?.toLowerCase() === "active" && pkg.remaining_count <= 0
+          );
+
+          if (toExpire.length > 0) {
+            await supabase
+              .from("user_packages")
+              .update({ status: "expired" })
+              .in("id", toExpire.map(p => p.id));
+          }
+
+          if (toExhaust.length > 0) {
+            await supabase
+              .from("user_packages")
+              .update({ status: "exhausted" })
+              .in("id", toExhaust.map(p => p.id));
+          }
+
+          // 로컬 상태 업데이트
+          const updatedData = data.map((pkg) => {
+            if (toExpire.find((p) => p.id === pkg.id)) return { ...pkg, status: "expired" };
+            if (toExhaust.find((p) => p.id === pkg.id)) return { ...pkg, status: "exhausted" };
+            return pkg;
+          });
+          setPackages(updatedData);
+        }
       }
     } catch (error) {
       console.log("이용권 로드 실패:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // 만료 여부 확인 함수
+  const isExpired = (pkg: any) => {
+    if (pkg.status?.toLowerCase() === "expired") return true;
+    const today = dayjs().startOf("day");
+    const expiryDate = dayjs(pkg.expiry_date).startOf("day");
+    return expiryDate.isBefore(today);
+  };
+
+  // 사용 완료 여부 확인 함수
+  const isExhausted = (pkg: any) => {
+    return pkg.status?.toLowerCase() === "exhausted" || pkg.remaining_count <= 0;
   };
 
   // 탭 클릭 시 해당 페이지로 스크롤
@@ -64,46 +115,74 @@ export default function MyPackageScreen({ navigation }: any) {
     setActiveTab(index);
   };
 
-  // 개별 이용권 카드 렌더링 (중복 방지용 함수)
-  const renderPackageItem = (pkg: any) => (
-    <View key={pkg.id} style={styles.packageCard}>
-      <View style={styles.cardTop}>
-        <View style={styles.childTag}>
-          <Text style={styles.childTagText}>
-            {pkg.children?.child_name || "자녀 미지정"}
+  // 개별 이용권 카드 렌더링
+  const renderPackageItem = (pkg: any) => {
+    const expired = isExpired(pkg);
+    const exhausted = isExhausted(pkg);
+    const inactive = expired || exhausted;
+    const isShuttle = pkg.is_shuttle || false;
+
+    // 남은 일수 계산 (셔틀용)
+    const remainingDays = dayjs(pkg.expiry_date).diff(dayjs().startOf("day"), "day");
+    const dDayLabel = remainingDays < 0 ? "만료" : `${remainingDays}일 남음`;
+
+    return (
+      <View
+        key={pkg.id}
+        style={[styles.packageCard, inactive && styles.inactiveCard]}
+      >
+        <View style={styles.cardTop}>
+          <View style={[styles.childTag, inactive && styles.inactiveChildTag]}>
+            <Text
+              style={[
+                styles.childTagText,
+                inactive && styles.inactiveChildTagText,
+              ]}
+            >
+              {pkg.children?.child_name || "자녀 미지정"}
+            </Text>
+          </View>
+          <Text style={[styles.sessionInfo, inactive && styles.inactiveText]}>
+            {isShuttle ? dDayLabel : `${pkg.remaining_count} / ${pkg.total_count}회`}
           </Text>
         </View>
-        <Text style={styles.sessionInfo}>
-          {pkg.remaining_count} / {pkg.total_count}회
+        <Text style={[styles.packageName, inactive && styles.inactiveText]}>
+          {pkg.package_name} {isShuttle && "(셔틀)"}
         </Text>
+        <View style={styles.cardBottom}>
+          <View>
+            <Text style={styles.expiryText}>
+              유효기간: {new Date(pkg.expiry_date).toLocaleDateString()}
+            </Text>
+            {expired && <Text style={styles.expiredLabel}>만료됨</Text>}
+            {exhausted && !expired && !isShuttle && <Text style={styles.usedLabel}>사용완료</Text>}
+          </View>
+          {!inactive && !isShuttle && TABS[activeTab] === "AVAILABLE" && (
+            <TouchableOpacity
+              style={styles.reserveBtn}
+              onPress={() =>
+                navigation.navigate("Reservation", { packageId: pkg.id })
+              }
+            >
+              <Text style={styles.reserveBtnText}>예약하기</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-      <Text style={styles.packageName}>{pkg.package_name}</Text>
-      <View style={styles.cardBottom}>
-        <Text style={styles.expiryText}>
-          유효기간: {new Date(pkg.expiry_date).toLocaleDateString()}
-        </Text>
-        {TABS[activeTab] === "AVAILABLE" && (
-          <TouchableOpacity
-            style={styles.reserveBtn}
-            onPress={() =>
-              navigation.navigate("Reservation", { packageId: pkg.id })
-            }
-          >
-            <Text style={styles.reserveBtnText}>예약하기</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
+    );
+  };
 
   // 각 탭별 컨텐츠 리스트 (가로로 배열될 요소)
   const renderTabPage = ({ item: tabType }: { item: string }) => {
     const filtered = packages.filter((pkg) => {
       const status = pkg.status?.toLowerCase();
+      const expired = isExpired(pkg);
+      const exhausted = isExhausted(pkg);
+
       if (tabType === "AVAILABLE")
-        return status === "active" || status === "pending";
-      if (tabType === "USED") return status === "exhausted";
-      if (tabType === "EXPIRED") return status === "expired";
+        return (status === "active" || status === "pending") && !expired && !exhausted;
+      if (tabType === "USED") return exhausted && !expired;
+      if (tabType === "EXPIRED") return expired;
       return false;
     });
 
@@ -228,6 +307,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
   },
+  // 👇 비활성화(만료/사용완료) 카드 스타일 (배경을 흐리게 변경)
+  inactiveCard: {
+    backgroundColor: "#F1F5F9",
+    elevation: 0,
+    shadowOpacity: 0,
+  },
   cardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -240,7 +325,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
+  // 👇 비활성화된 자녀 태그 스타일
+  inactiveChildTag: {
+    backgroundColor: "#E2E8F0",
+  },
   childTagText: { color: "#4F46E5", fontSize: 12, fontWeight: "700" },
+  // 👇 비활성화된 자녀 태그 텍스트 스타일
+  inactiveChildTagText: {
+    color: "#94A3B8",
+  },
   sessionInfo: { fontSize: 16, fontWeight: "800", color: "#111827" },
   packageName: {
     fontSize: 17,
@@ -248,12 +341,30 @@ const styles = StyleSheet.create({
     color: "#334155",
     marginBottom: 15,
   },
+  // 👇 비활성화된 텍스트 공통 스타일 (글자색 회색으로)
+  inactiveText: {
+    color: "#94A3B8",
+  },
   cardBottom: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
   expiryText: { fontSize: 12, color: "#94A3B8" },
+  // 👇 만료됨 레이블 텍스트 스타일
+  expiredLabel: {
+    fontSize: 12,
+    color: "#EF4444",
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  // 👇 사용완료 레이블 텍스트 스타일
+  usedLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "700",
+    marginTop: 2,
+  },
   reserveBtn: {
     backgroundColor: "#111827",
     paddingHorizontal: 15,

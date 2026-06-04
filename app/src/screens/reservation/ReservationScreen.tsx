@@ -226,13 +226,18 @@ export default function ReservationScreen({ navigation }: any) {
     setSelectedChild(child);
     setChildModalVisible(false);
 
+    const today = dayjs().tz().format("YYYY-MM-DD");
+
     // 🚀 핵심 필터링: 아무도 안 쓴 수강권(null)이거나, 이 대상에게 이미 Lock된 수강권만 가져옴
+    // 유효기간이 지나지 않은 것, 그리고 수업 예약용이므로 셔틀 전용권은 제외합니다.
     let query = supabase
       .from("user_packages")
       .select("*")
       .eq("user_id", currentUser.id)
       .eq("status", "active")
-      .gt("remaining_count", 0);
+      .gt("remaining_count", 0)
+      .gte("expiry_date", today)
+      .or("is_shuttle.is.null,is_shuttle.eq.false");
 
     if (child) {
       // 자녀 수강권: child_id가 비어있거나, 선택한 자녀 ID와 일치하는 것

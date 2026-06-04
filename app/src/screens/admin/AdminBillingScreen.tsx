@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,20 +11,20 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
-  TextInput, // 🚀 [추가] 검색창을 위한 TextInput 임포트
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 
-// 🚀 [추가] 푸시 알림 발송 함수 임포트
+// 🚀 공통 이벤트 배너 컴포넌트 임포트 (중복 제거의 핵심)
+import EventBanner from "../../components/EventBanner";
+
+// 🚀 푸시 알림 발송 함수 임포트
 import { sendGlobalPushNotification } from "../../services/notificationService";
 
-// 🚀 [수정] 어드민 페이지이므로 KSPayService 임포트 제거 (결제는 학부모 앱에서 진행)
-// import KSPayService from "../../services/payment/KSPayService";
-
-// 🚀 [추가] 전역 상태 보관소에서 useAuth 훅 임포트
+// 🚀 전역 상태 보관소에서 useAuth 훅 임포트
 import { useAuth } from "../../context/AuthContext";
 
 // --- 인터페이스 정의 ---
@@ -46,7 +46,7 @@ interface Package {
   total_count?: number;
   duration_in_days?: number;
   weekly_limit?: number;
-  is_shuttle?: boolean; // 🚀 [추가] 타입 정의에 셔틀 여부 추가
+  is_shuttle?: boolean;
   package_options: PackageOption[];
 }
 interface CartItem {
@@ -56,7 +56,6 @@ interface CartItem {
   quantity: number;
 }
 
-// 🚀 [추가] 학부모 데이터 타입 정의
 interface Parent {
   id: string;
   name: string;
@@ -69,9 +68,7 @@ const formatCurrency = (amount: number | null) => {
   return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "원";
 };
 
-// 🚀 [수정] 컴포넌트 이름을 AdminBillingScreen으로 변경하고, 파라미터 수신을 위해 route 추가
 export default function AdminBillingScreen({ route, navigation }: any) {
-  // 🚀 [수정] 기존에 수동으로 관리하던 selectedBranchId를 삭제하고 Context에서 가져옵니다.
   const { branchId, role, setBranch } = useAuth();
   const insets = useSafeAreaInsets();
 
@@ -88,45 +85,33 @@ export default function AdminBillingScreen({ route, navigation }: any) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartExpanded, setIsCartExpanded] = useState(false);
   const [showOptionModal, setShowOptionModal] = useState(false);
-
-  // 🚀 [수정] 어드민에서는 결제창을 안 띄우므로 KSPay 관련 상태 제거/주석처리
-  // const [showKSPay, setShowKSPay] = useState(false);
-
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isClassAssigned, setIsClassAssigned] = useState(false);
-  const [showConsultModal, setShowConsultModal] = useState(false);
-  const [branchContact, setBranchContact] = useState({ phone: "", kakao: "" });
-  const [branchMid, setBranchMid] = useState<string>("");
 
-  // 🚀 [추가] 학부모 선택 관련 상태 관리
+  // 💡 [중복 제거] 하드코딩 배너 제어용 banners, activeBannerIndex 상태 및 레퍼런스 전체 삭제
+
+  // 학부모 선택 및 검색 관련 상태
   const [parents, setParents] = useState<Parent[]>([]);
   const [selectedParent, setSelectedParent] = useState<Parent | null>(null);
   const [showParentModal, setShowParentModal] = useState(false);
-
-  // 🚀 [추가] 학부모 검색어 상태 관리
   const [searchQuery, setSearchQuery] = useState("");
 
-  // 🚀 [추가] 상담 화면 등 외부에서 라우팅으로 넘어온 preSelectedParent 파라미터 확인
   const preSelectedParent = route.params?.preSelectedParent;
 
   // --- 초기 데이터 로딩 ---
   useEffect(() => {
-    // 🚀 branchId가 없으면 로딩 대기
     if (!branchId) return;
 
     fetchInitialData();
     fetchCategoriesFromDB(true);
-    fetchParents(); // 🚀 [추가] 지점이 바뀔 때마다 해당 지점의 학부모 목록 불러오기
-  }, [branchId]); // 🚀 의존성 배열에 branchId 적용
+    fetchParents();
+  }, [branchId]);
 
   useEffect(() => {
     if (activeCategory && branchId) {
-      // 🚀 branchId 추가
       fetchPackagesFromDB();
     }
-  }, [activeCategory, branchId]); // 🚀 의존성 배열에 branchId 적용
+  }, [activeCategory, branchId]);
 
-  // 🚀 [추가] 다른 화면(예: 상담화면)에서 자동 선택 요청 파라미터가 인입되었을 때 처리하는 Effect
   useEffect(() => {
     if (preSelectedParent) {
       setSelectedParent(preSelectedParent);
@@ -137,10 +122,8 @@ export default function AdminBillingScreen({ route, navigation }: any) {
     }
   }, [preSelectedParent]);
 
-  // 🚀 [추가] 학부모 목록 불러오기 함수 (지점 필터링 적용)
   const fetchParents = async () => {
     try {
-      // 🚀 지점별로 학부모 필터링 (branch_id가 현재 branchId와 같은 경우만)
       const { data, error } = await supabase
         .from("users")
         .select("id, name, phone, branch_id")
@@ -159,7 +142,7 @@ export default function AdminBillingScreen({ route, navigation }: any) {
       const { data, error } = await supabase
         .from("package_categories")
         .select("*")
-        .eq("branch_id", branchId) // 🚀 지점 갈라치기: 현재 접속한 지점의 카테고리만
+        .eq("branch_id", branchId)
         .order("display_order", { ascending: true });
 
       if (error) throw error;
@@ -184,17 +167,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
           .eq("id", user.id)
           .single();
         setCurrentUser(profile);
-        const { data: children } = await supabase
-          .from("children")
-          .select("*")
-          .eq("parent_id", user.id);
-        const isAdultAssigned =
-          profile?.target_class && String(profile.target_class).trim() !== "";
-        const isChildAssigned = children?.some(
-          (child: any) =>
-            child.target_class && String(child.target_class).trim() !== "",
-        );
-        setIsClassAssigned(!!(isAdultAssigned || isChildAssigned));
       }
     } catch (e) {
       console.error("[Purchase] ❌ 초기 데이터 로드 실패:", e);
@@ -207,19 +179,18 @@ export default function AdminBillingScreen({ route, navigation }: any) {
       const { data: branchData } = await supabase
         .from("branches")
         .select("*")
-        .eq("id", branchId) // 🚀 지점 정보도 Context의 branchId로 가져오기
+        .eq("id", branchId)
         .single();
 
       if (branchData) {
         console.log("[Purchase] 🔍 DB에서 가져온 MID:", branchData.kspay_mid);
         setCurrentBranch(branchData);
-        setBranchMid(branchData.kspay_mid || "2999199999");
       }
 
       const { data, error } = await supabase
         .from("packages")
         .select(`*, package_options (*)`)
-        .eq("branch_id", branchId) // 🚀 지점 갈라치기: 현재 접속한 지점의 패키지만
+        .eq("branch_id", branchId)
         .order("display_order", { ascending: true, nullsFirst: false });
 
       if (error) throw error;
@@ -480,12 +451,12 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         </ScrollView>
 
         <View style={styles.mainPadding}>
-          <View style={styles.eventBanner}>
-            <View style={styles.eventBadge}>
-              <Text style={styles.eventBadgeText}>EVENT</Text>
-            </View>
-            <Text style={styles.eventText}>선착순 50명 가입비 면제 혜택!</Text>
-          </View>
+          {/* 🚀 [수정] 중복 청소된 자리에 고정형 공통 이벤트 배너 연동 */}
+          <EventBanner
+            screenType="purchase"
+            branchId={branchId}
+            marginHorizontal={0} // 메인 패딩 레이아웃 틀에 균일하게 밀착
+          />
 
           {loading ? (
             <ActivityIndicator
@@ -771,75 +742,6 @@ export default function AdminBillingScreen({ route, navigation }: any) {
         </View>
       </Modal>
 
-      <Modal visible={showConsultModal} transparent animationType="fade">
-        <View style={styles.consultModalOverlay}>
-          <View style={styles.consultModalContent}>
-            <View style={styles.consultModalIconBg}>
-              <Ionicons name="chatbubbles" size={32} color="#6366F1" />
-            </View>
-            <Text style={styles.consultModalTitle}>상담이 필요합니다!</Text>
-            <Text style={styles.consultModalDesc}>
-              첫 수강생은 원활한 수업을 위해{"\n"}반 배정 상담 후 결제가
-              가능합니다.
-            </Text>
-            <View style={styles.consultModalBtnContainer}>
-              <TouchableOpacity
-                style={styles.consultKakaoBtn}
-                onPress={async () => {
-                  if (currentUser)
-                    await supabase.from("consultation_requests").insert({
-                      user_id: currentUser.id,
-                      branch_id: branchId,
-                      request_type: "KAKAO",
-                      status: "PENDING",
-                    });
-                  Linking.openURL(
-                    branchContact.kakao || "https://pf.kakao.com/_xxxxxx",
-                  );
-                }}
-              >
-                <Ionicons
-                  name="chatbubble"
-                  size={20}
-                  color="#111827"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.consultKakaoText}>카카오톡 문의</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.consultCallBtn}
-                onPress={async () => {
-                  if (currentUser)
-                    await supabase.from("consultation_requests").insert({
-                      user_id: currentUser.id,
-                      branch_id: branchId,
-                      request_type: "PHONE",
-                      status: "PENDING",
-                    });
-                  Linking.openURL(
-                    `tel:${branchContact.phone || "010-0000-0000"}`,
-                  );
-                }}
-              >
-                <Ionicons
-                  name="call"
-                  size={20}
-                  color="#FFF"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.consultCallText}>전화 상담</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={styles.consultCloseBtn}
-              onPress={() => setShowConsultModal(false)}
-            >
-              <Text style={styles.consultCloseBtnText}>나중에 할게요</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
       <Modal visible={showOptionModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -963,27 +865,13 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   activeTab: { borderBottomColor: "#6366F1" },
+
+  // 💡 [중복 제거 완료] bannerWrapper, adBanner, adTag, bannerDotRow 스타일 파편 완전 파쇄
+
   tabText: { fontSize: 15, fontWeight: "600", color: "#94A3B8" },
   activeTabText: { color: "#111827", fontWeight: "800" },
   scrollContent: {},
   mainPadding: { padding: 20 },
-  eventBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1E1B4B",
-    padding: 16,
-    borderRadius: 20,
-    marginBottom: 20,
-  },
-  eventBadge: {
-    backgroundColor: "#F59E0B",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  eventBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
-  eventText: { color: "#FFF", fontSize: 13, fontWeight: "600" },
   packageCard: {
     backgroundColor: "#FFF",
     borderRadius: 24,
@@ -1193,77 +1081,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   finalPayBtnText: { color: "#FFF", fontWeight: "bold" },
-  consultModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  consultModalContent: {
-    width: "100%",
-    backgroundColor: "#FFF",
-    borderRadius: 24,
-    padding: 24,
-    alignItems: "center",
-  },
-  consultModalIconBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#EEF2FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  consultModalTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#111827",
-    marginBottom: 12,
-  },
-  consultModalDesc: {
-    fontSize: 15,
-    color: "#475569",
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  consultModalBtnContainer: {
-    flexDirection: "row",
-    width: "100%",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  consultKakaoBtn: {
-    flexDirection: "row",
-    backgroundColor: "#FEE500",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-    marginRight: 8,
-  },
-  consultKakaoText: { color: "#111827", fontSize: 15, fontWeight: "700" },
-  consultCallBtn: {
-    flexDirection: "row",
-    backgroundColor: "#6366F1",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-    marginLeft: 8,
-  },
-  consultCallText: { color: "#FFF", fontSize: 15, fontWeight: "700" },
-  consultCloseBtn: { paddingVertical: 10 },
-  consultCloseBtnText: {
-    color: "#94A3B8",
-    fontSize: 14,
-    fontWeight: "600",
-    textDecorationLine: "underline",
-  },
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(255,255,255,0.9)",

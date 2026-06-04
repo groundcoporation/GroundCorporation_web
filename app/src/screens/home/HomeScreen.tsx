@@ -30,6 +30,9 @@ import { useAuth } from "../../context/AuthContext";
 // 🚀 화면이 유저 눈에 보일 때마다 자동 새로고침을 수행하기 위해 useIsFocused 임포트
 import { useIsFocused } from "@react-navigation/native";
 
+// 🚀 공통 이벤트 배너 컴포넌트 임포트 (중복 제거의 핵심)
+import EventBanner from "../../components/EventBanner";
+
 // 🚀 [팝업 관리자 임포트] 유니폼 및 공지사항 통제
 import PopupManager from "../../components/popups/PopupManager";
 // 🚀 [알림 종 임포트] 실시간 알림 및 모달 기능 추가
@@ -63,6 +66,8 @@ export default function HomeScreen({ navigation }: any) {
   const [upcomingReservation, setUpcomingReservation] = useState<any[]>([]);
   const [bizInfo, setBizInfo] = useState<BizInfo | null>(null);
   const [homeNotices, setHomeNotices] = useState<any[]>([]);
+
+  // 💡 [중복 제거] banners, activeBannerIndex 상태 및 bannerFlatListRef, 자동 스크롤 useEffect 전체 삭제
 
   useEffect(() => {
     if (branchId && isFocused) {
@@ -185,40 +190,42 @@ export default function HomeScreen({ navigation }: any) {
       "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800"; // 기본 축구장 배경
 
     if (hasReservation) {
-      // 🚀 단일 컬럼(attendance_status)에서 모든 4가지 상태를 한글로 가져옵니다!
-      const attStatus = specificReservation.attendance_status; 
-      
+      const attStatus = specificReservation.attendance_status;
       const isShuttleUser = specificReservation.is_shuttle_user ?? true;
 
-      // 💡 한글 텍스트 완벽 매칭 로직!
       if (isShuttleUser) {
         if (attStatus === "하차") {
           statusLabel = "안전하게 셔틀에서 하차했어요 🏠";
-          statusBg = "#64748B"; // 회색
-          bgImage = "https://images.unsplash.com/photo-1490139177067-2819828d54d1?q=80&w=800";
+          statusBg = "#64748B";
+          bgImage =
+            "https://images.unsplash.com/photo-1490139177067-2819828d54d1?q=80&w=800";
         } else if (attStatus === "하원") {
           statusLabel = "집으로 가는 셔틀을 타고 있어요 🚌";
-          statusBg = "#3D56B2"; // 파란색
-          bgImage = "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
+          statusBg = "#3D56B2";
+          bgImage =
+            "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
         } else if (attStatus === "등원") {
           statusLabel = "학원에 도착해 열심히 수업 중이에요 ⚽";
-          statusBg = "#10B981"; // 초록색
-          bgImage = "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
+          statusBg = "#10B981";
+          bgImage =
+            "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
         } else if (attStatus === "승차") {
           statusLabel = "학원 가는 셔틀에 탑승했어요 🚌";
-          statusBg = "#3D56B2"; // 파란색
-          bgImage = "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
+          statusBg = "#3D56B2";
+          bgImage =
+            "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
         }
       } else {
-        // 도보/자차 이용 학생
         if (attStatus === "하원") {
           statusLabel = "수업을 안전하게 마쳤어요 👋";
-          statusBg = "#F59E0B"; // 주황색
-          bgImage = "https://images.unsplash.com/photo-1516733725897-1aa73b87c8e8?q=80&w=800";
+          statusBg = "#F59E0B";
+          bgImage =
+            "https://images.unsplash.com/photo-1516733725897-1aa73b87c8e8?q=80&w=800";
         } else if (attStatus === "등원") {
           statusLabel = "학원에 도착해 열심히 수업 중이에요 ⚽";
-          statusBg = "#10B981"; // 초록색
-          bgImage = "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
+          statusBg = "#10B981";
+          bgImage =
+            "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
         }
       }
     }
@@ -324,7 +331,7 @@ export default function HomeScreen({ navigation }: any) {
             <FlatList
               data={children.length > 0 ? children : [userData]}
               horizontal
-              pagingEnabled={true} // 🚀 자석처럼 한 페이지씩 딱딱 들어맞도록 스냅 활성화
+              pagingEnabled={true}
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={(e) => {
                 const index = Math.round(
@@ -349,7 +356,6 @@ export default function HomeScreen({ navigation }: any) {
                 }
 
                 return (
-                  // 🚀 카드 한 장이 메인 여백을 제외한 너비를 꽉 채우도록 설정하여 밀림과 짤림 방지
                   <View style={{ width: CARD_WIDTH }}>
                     {item ? (
                       renderLessonCard(
@@ -403,6 +409,7 @@ export default function HomeScreen({ navigation }: any) {
                 수업 예약
               </Text>
             </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => navigation.navigate("Pass")}
@@ -528,21 +535,12 @@ export default function HomeScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
-          {/* 3. 광고 배너 섹션 */}
-          <TouchableOpacity style={styles.adBanner}>
-            <View style={styles.adTextContainer}>
-              <Text style={styles.adTag}>EVENT</Text>
-              <Text style={styles.adTitle}>
-                우리 아이 첫 축구 교실{"\n"}지금 예약하면 20% 할인
-              </Text>
-            </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={24}
-              color="#fff"
-              opacity={0.7}
-            />
-          </TouchableOpacity>
+          {/* 3. 🎉 [수정] 중복 제거된 공통 광고 배너 섹션 교체 */}
+          <EventBanner
+            screenType="home"
+            branchId={branchId}
+            marginHorizontal={0} // HomeScreen UI 구조에 맞춰 패딩 무력화 상쇄
+          />
 
           {/* 4. 공지 사항 */}
           <View style={styles.sectionHeader}>
@@ -693,16 +691,13 @@ const styles = StyleSheet.create({
   },
   pageViewSection: {
     marginBottom: 32,
-    // 🚀 대폭 수정: 부모 패딩(24)을 무력화하고 좌우로 완전히 100% 밀착시키는 마법의 코드
     marginHorizontal: -24,
-    paddingHorizontal: 24, // 안쪽 카드의 정렬 위치는 그대로 유지
+    paddingHorizontal: 24,
   },
   cardShadow: {
     borderRadius: 0,
     backgroundColor: "#fff",
-    // 🚀 양옆 마진을 0으로 꽉 채우거나 미세한 조정을 통해 그림자 찌꺼기 노출을 완벽 차단합니다.
     marginHorizontal: 0,
-    // 그림자 농도를 살짝 부드럽게 조절
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -710,7 +705,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardInner: {
-    height: 160, // 🚀 좀 더 시원하고 와이드하게 보이도록 세로 높이 살짝 확장
+    height: 160,
     justifyContent: "flex-end",
   },
   cardOverlay: {
@@ -768,29 +763,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     letterSpacing: -0.2,
   },
-  adBanner: {
-    backgroundColor: "#111827",
-    borderRadius: 16,
-    padding: 24,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 48,
-  },
-  adTextContainer: { flex: 1 },
-  adTag: {
-    color: "#4F46E5",
-    fontSize: 10,
-    fontWeight: "800",
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
-  adTitle: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22,
-  },
   emptyCard: {
     backgroundColor: "#F9FAFB",
     height: 160,
@@ -813,6 +785,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "baseline",
     marginBottom: 20,
+    marginTop: 24, // 배너 하단과의 여백 추가
   },
   sectionTitle: {
     fontSize: 20,
