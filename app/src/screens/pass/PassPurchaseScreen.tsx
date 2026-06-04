@@ -6,11 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  Platform,
   Linking,
   ActivityIndicator,
   Modal,
   Alert,
+  Dimensions,
 } from "react-native";
 import {
   SafeAreaView,
@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import dayjs from "dayjs";
 import KSPayService from "../../services/payment/KSPayService";
+import EventBanner from "../../components/EventBanner";
 
 // 🚀 [추가] 전역 상태 보관소에서 useAuth 훅 임포트
 import { useAuth } from "../../context/AuthContext";
@@ -319,21 +320,20 @@ export default function PassPurchaseScreen({ navigation }: any) {
         console.log("[Payment] ✅ 승인 성공 - DB 기록 중...");
 
         // 1. [추가] 통합 결제 장부에 먼저 기록
-  const { data: paymentRecord, error: payError } = await supabase
-    .from("payments")
-    .insert({
-      user_id: currentUser.id,
-      branch_id: branchId,
-      total_amount: finalPrice,
-      payment_method: "CARD", // PG 결제이므로 CARD로 고정
-      status: "paid",
-      pg_tid: authResult.trno || "N/A" // 서버 응답에서 거래번호 매칭
-    })
-    .select("id")
-    .single();
+        const { data: paymentRecord, error: payError } = await supabase
+          .from("payments")
+          .insert({
+            user_id: currentUser.id,
+            branch_id: branchId,
+            total_amount: finalPrice,
+            payment_method: "CARD", // PG 결제이므로 CARD로 고정
+            status: "paid",
+            pg_tid: authResult.trno || "N/A", // 서버 응답에서 거래번호 매칭
+          })
+          .select("id")
+          .single();
 
-  if (payError) throw payError;
-  
+        if (payError) throw payError;
 
         const dbInserts = cartItems.flatMap((item) =>
           Array(item.quantity).fill({
@@ -353,9 +353,6 @@ export default function PassPurchaseScreen({ navigation }: any) {
               item.pkg.price ||
               0,
             status: "active",
-            // =========================================================================
-            // 🚀 [추가] 결제 내역(user_packages)에 셔틀 이용권 여부(is_shuttle) 도장 꽝!
-            // =========================================================================
             is_shuttle: item.pkg.is_shuttle || false,
             expiry_date: dayjs().endOf("month").format("YYYY-MM-DD"),
           }),
@@ -462,7 +459,6 @@ export default function PassPurchaseScreen({ navigation }: any) {
     setShowKSPay(true);
   };
 
-  // 🚀 [수정] 관리자 여부도 Context에서 받아온 role로 검증 가능 (본부장님이 스왑 가능하도록)
   const isDeveloper = role === "admin" || currentUser?.role === "admin";
 
   return (
@@ -475,7 +471,6 @@ export default function PassPurchaseScreen({ navigation }: any) {
         {isDeveloper ? (
           <TouchableOpacity
             style={styles.branchSwitcher}
-            // 🚀 [수정] 관리자가 지점을 누르면 전역 지점이 바뀝니다. (setBranch 함수 호출)
             onPress={() =>
               setBranch(branchId === "branch_1" ? "branch_2" : "branch_1")
             }
@@ -535,12 +530,12 @@ export default function PassPurchaseScreen({ navigation }: any) {
         </ScrollView>
 
         <View style={styles.mainPadding}>
-          <View style={styles.eventBanner}>
-            <View style={styles.eventBadge}>
-              <Text style={styles.eventBadgeText}>EVENT</Text>
-            </View>
-            <Text style={styles.eventText}>선착순 50명 가입비 면제 혜택!</Text>
-          </View>
+          {/* 🚀 공통 동적 배너 컴포넌트로 깔끔하게 일원화 (중복 마크업 완벽 차단) */}
+          <EventBanner
+            screenType="purchase"
+            branchId={branchId}
+            marginHorizontal={0} // mainPadding(20) 내부 레이아웃에 최적화되도록 설정[cite: 1]
+          />
 
           {loading ? (
             <ActivityIndicator
@@ -764,7 +759,6 @@ export default function PassPurchaseScreen({ navigation }: any) {
                   `tel:${branchContact.phone || "010-0000-0000"}`,
                 );
               } else if (!isClassAssigned) {
-                // 🚀 상담 신청 중일 때 결제 버튼을 누르면 나오는 안내 메시지 (전화 버튼 추가)
                 if (hasPendingConsult) {
                   const prevType =
                     pendingConsultType === "KAKAO" ? "카카오톡" : "전화";
@@ -983,28 +977,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 3,
     borderBottomColor: "transparent",
   },
+
+  // 💡 [중복 제거 완료] bannerDotRow, adBanner, adTitle 등 하드코딩 배너 스타일 파편 전체 청소[cite: 1]
+
   activeTab: { borderBottomColor: "#6366F1" },
   tabText: { fontSize: 15, fontWeight: "600", color: "#94A3B8" },
   activeTabText: { color: "#111827", fontWeight: "800" },
   scrollContent: {},
   mainPadding: { padding: 20 },
-  eventBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1E1B4B",
-    padding: 16,
-    borderRadius: 20,
-    marginBottom: 20,
-  },
-  eventBadge: {
-    backgroundColor: "#F59E0B",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  eventBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
-  eventText: { color: "#FFF", fontSize: 13, fontWeight: "600" },
   packageCard: {
     backgroundColor: "#FFF",
     borderRadius: 24,
