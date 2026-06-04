@@ -93,6 +93,8 @@ import AdminMemberScreen from "./src/screens/admin/AdminMemberScreen";
 import AdminScheduleScreen from "./src/screens/admin/AdminScheduleScreen";
 import AdminSettingScreen from "./src/screens/admin/AdminSettingScreen";
 import AdminMemberDetailScreen from "./src/screens/admin/AdminMemberDetailScreen"; // 관리자페이지 회원 상세 화면
+// 🚀 [추가] 관리자 인출 관리 스크린 임포트! (파일 경로를 실제 위치에 맞게 확인해주세요)
+import AdminWithdrawalScreen from "./src/screens/admin/AdminWithdrawalScreen";
 // 🚀 [추가] 관리자용 청구서 발행 화면
 import AdminBillingScreen from "./src/screens/admin/AdminBillingScreen";
 import AdminAttendanceScreen from "./src/screens/admin/AdminAttendanceScreen"; // 🚀 추가: 키패드 출결 스크린
@@ -302,6 +304,9 @@ export default function App() {
 
           {/* 🚀 [추가] 관리자 정류장 관리 등록 */}
           <Stack.Screen name="ManageSpots" component={ManageSpotsScreen} />
+
+          {/* 🚀 [추가] 관리자 포인트 정산 프로세스 */}
+          <Stack.Screen name="AdminWithdrawal" component={AdminWithdrawalScreen} />
 
           {/* 10. 포인트 내역 및 관리 프로세스 👈 추가된 부분! */}
           <Stack.Screen name="PointHistory" component={PointHistoryScreen} />
