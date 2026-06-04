@@ -98,6 +98,9 @@ import AdminBillingScreen from "./src/screens/admin/AdminBillingScreen";
 import AdminAttendanceScreen from "./src/screens/admin/AdminAttendanceScreen"; // 🚀 추가: 키패드 출결 스크린
 import ManageSpotsScreen from "./src/screens/admin/ManageSpotsScreen"; // 🚀 추가!
 
+// 💰 [포인트 관리 시스템] // 👈 새로 추가된 섹션!
+import PointHistoryScreen from "./src/screens/referral/PointHistoryScreen";
+
 const Stack = createNativeStackNavigator();
 
 // 🔔 [알림 전역 제어 전용] 화면이 뜨기 전 컴포넌트 밖에서도 네비게이션을 컨트롤할 수 있는 마법의 참조키 생성
@@ -299,6 +302,9 @@ export default function App() {
 
           {/* 🚀 [추가] 관리자 정류장 관리 등록 */}
           <Stack.Screen name="ManageSpots" component={ManageSpotsScreen} />
+
+          {/* 10. 포인트 내역 및 관리 프로세스 👈 추가된 부분! */}
+          <Stack.Screen name="PointHistory" component={PointHistoryScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </AuthProvider>

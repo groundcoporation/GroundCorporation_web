@@ -189,8 +189,16 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             });
         }
 
-        Alert.alert('성공', `회원가입이 완료되었습니다! (${signupBonus}P 지급)`, [{ text: '확인', onPress: () => navigation.navigate('Login') }]);
-      }
+        // =================================================================
+        // 🚀 [수정] 추천인(referrerData) 유무에 따라 알림 메시지를 다르게 띄움
+        // =================================================================
+        const successMessage = referrerData 
+          ? `회원가입이 완료되었습니다! (추천 보너스 ${signupBonus}P 지급)` 
+          : '회원가입이 완료되었습니다!';
+
+        Alert.alert('성공', successMessage, [{ text: '확인', onPress: () => navigation.navigate('Login') }]);
+        
+      } // <- if (authData.user) 닫히는 괄호
     } catch (error: any) {
       Alert.alert('가입 에러', error.message || '오류가 발생했습니다.');
     } finally {
