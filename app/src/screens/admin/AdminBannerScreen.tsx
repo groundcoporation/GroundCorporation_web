@@ -18,7 +18,6 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { Picker } from "@react-native-picker/picker";
-import RenderHtml from "react-native-render-html";
 
 const { width } = Dimensions.get("window");
 
@@ -37,10 +36,6 @@ const PRESET_THEMES = [
   { label: "로얄 퍼플", bg: "#6D28D9", text: "#FFFFFF" },
 ];
 
-const previewTagsStyles = {
-  body: { margin: 0, padding: 0 },
-};
-
 export default function AdminBannerScreen({ navigation }: any) {
   const { branchId } = useAuth();
   const [banners, setBanners] = useState<any[]>([]);
@@ -58,7 +53,6 @@ export default function AdminBannerScreen({ navigation }: any) {
     bg_color: "#111827",
     title_color: "#FFFFFF",
     subtitle_color: "rgba(255,255,255,0.7)",
-    content_html: "",
     image_url: "",
     is_active: true,
   });
@@ -93,7 +87,6 @@ export default function AdminBannerScreen({ navigation }: any) {
       bg_color: form.bg_color || "#111827",
       title_color: form.title_color || "#FFFFFF",
       subtitle_color: form.subtitle_color || "rgba(255,255,255,0.7)",
-      content_html: form.content_html.trim() || null,
       image_url: form.image_url.trim() || null,
       is_active: form.is_active,
       branch_id: branchId,
@@ -144,7 +137,6 @@ export default function AdminBannerScreen({ navigation }: any) {
       bg_color: banner.bg_color || "#111827",
       title_color: banner.title_color || "#FFFFFF",
       subtitle_color: banner.subtitle_color || "rgba(255,255,255,0.7)",
-      content_html: banner.content_html || "",
       image_url: banner.image_url || "",
       is_active: banner.is_active,
     });
@@ -164,37 +156,6 @@ export default function AdminBannerScreen({ navigation }: any) {
       },
     ]);
   };
-
-  const insertHtmlShortcut = (tagType: "yellow" | "cyan" | "br" | "large") => {
-    let shortcut = "";
-    if (tagType === "yellow")
-      shortcut = `<span style="color: #FBBF24;">포인트글귀</span>`;
-    if (tagType === "cyan")
-      shortcut = `<span style="color: #38BDF8;">포인트글귀</span>`;
-    if (tagType === "large")
-      shortcut = `<span style="fontSize: 18px;">큰글씨</span>`;
-    if (tagType === "br") shortcut = `<br/>`;
-
-    setForm({ ...form, content_html: form.content_html + shortcut });
-  };
-
-  const processedPreviewHtml = useMemo(() => {
-    if (!form.content_html) return null;
-    let html = form.content_html;
-    html = html.replace(/font-size/g, "fontSize");
-    html = html.replace(/font-weight/g, "fontWeight");
-    html = html.replace(/margin-top/g, "marginTop");
-    html = html.replace(/line-height/g, "lineHeight");
-    return { html: `<div>${html}</div>` };
-  }, [form.content_html]);
-
-  const previewBaseStyle = useMemo(() => {
-    return {
-      color: form.title_color,
-      fontSize: 15,
-      fontWeight: "700" as const,
-    };
-  }, [form.title_color]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -220,7 +181,6 @@ export default function AdminBannerScreen({ navigation }: any) {
               bg_color: "#111827",
               title_color: "#FFFFFF",
               subtitle_color: "rgba(255,255,255,0.7)",
-              content_html: "",
               image_url: "",
               is_active: true,
             });
@@ -331,38 +291,29 @@ export default function AdminBannerScreen({ navigation }: any) {
                     />
                   )}
 
-                  {processedPreviewHtml ? (
-                    <RenderHtml
-                      contentWidth={width - 120}
-                      source={processedPreviewHtml}
-                      baseStyle={previewBaseStyle}
-                      tagsStyles={previewTagsStyles}
-                    />
-                  ) : (
-                    // 🚀 똑같이 뚱뚱해지던 버그 분리 교정: 대제목과 소제목 독립 배치형 교정
-                    <View style={styles.textContentLayout}>
+                  {/* 🚀 똑같이 뚱뚱해지던 버그 분리 교정: 대제목과 소제목 독립 배치형 교정 */}
+                  <View style={styles.textContentLayout}>
+                    <Text
+                      style={[
+                        styles.livePreviewMainTitle,
+                        { color: form.title_color },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {form.title || "메인 헤드라인 텍스트 문구"}
+                    </Text>
+                    {!!form.subtitle && (
                       <Text
                         style={[
-                          styles.livePreviewMainTitle,
-                          { color: form.title_color },
+                          styles.livePreviewSubTitle,
+                          { color: form.subtitle_color || form.title_color },
                         ]}
                         numberOfLines={1}
                       >
-                        {form.title || "메인 헤드라인 텍스트 문구"}
+                        {form.subtitle}
                       </Text>
-                      {!!form.subtitle && (
-                        <Text
-                          style={[
-                            styles.livePreviewSubTitle,
-                            { color: form.subtitle_color || form.title_color },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {form.subtitle}
-                        </Text>
-                      )}
-                    </View>
-                  )}
+                    )}
+                  </View>
                 </View>
                 <MaterialCommunityIcons
                   name="chevron-right"
@@ -374,7 +325,7 @@ export default function AdminBannerScreen({ navigation }: any) {
             </View>
 
             <View style={styles.cardFormContainer}>
-              <Text style={styles.label}>📍 기본 표출 규칙</Text>
+              <Text style={styles.label}>기본 표출 규칙</Text>
               <View style={styles.pickerWrapper}>
                 <Picker
                   selectedValue={form.screen_type}
@@ -401,7 +352,7 @@ export default function AdminBannerScreen({ navigation }: any) {
                 <View style={styles.rowLabelGroup}>
                   {/* 🚀 컬럼 오염을 제거하고 tag_text 단독 전용 레이블 분할 매칭 */}
                   <Text style={styles.label}>
-                    🏷️ 배너 상단 소형 태그 배지 (선택)
+                    배너 상단 소형 태그 배지 (선택)
                   </Text>
                   <Text style={styles.charCount}>
                     {form.tag_text.length}/8자
@@ -462,9 +413,7 @@ export default function AdminBannerScreen({ navigation }: any) {
             </View>
 
             <View style={styles.cardFormContainer}>
-              <Text style={styles.label}>
-                🖼️ 배너 디자인 백그라운드 이미지 주소 (선택)
-              </Text>
+              <Text style={styles.label}>백그라운드 이미지 주소 (선택)</Text>
               <TextInput
                 style={styles.inputField}
                 value={form.image_url}
@@ -476,54 +425,7 @@ export default function AdminBannerScreen({ navigation }: any) {
             </View>
 
             <View style={styles.cardFormContainer}>
-              <Text style={styles.label}>
-                📝 고급 모드 (HTML 커스텀 코딩 에디터)
-              </Text>
-              <View style={styles.shortcutBand}>
-                <TouchableOpacity
-                  style={styles.shortcutBtn}
-                  onPress={() => insertHtmlShortcut("yellow")}
-                >
-                  <Text style={[styles.shortcutBtnText, { color: "#D97706" }]}>
-                    🟡 노란강조
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.shortcutBtn}
-                  onPress={() => insertHtmlShortcut("cyan")}
-                >
-                  <Text style={[styles.shortcutBtnText, { color: "#0284C7" }]}>
-                    🔵 하늘강조
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.shortcutBtn}
-                  onPress={() => insertHtmlShortcut("large")}
-                >
-                  <Text style={styles.shortcutBtnText}>🔎 글씨확대</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.shortcutBtn}
-                  onPress={() => insertHtmlShortcut("br")}
-                >
-                  <Text style={styles.shortcutBtnText}>↩️ 줄바꿈</Text>
-                </TouchableOpacity>
-              </View>
-
-              <TextInput
-                style={[styles.inputField, styles.textAreaField]}
-                multiline
-                value={form.content_html}
-                onChangeText={(t) => setForm({ ...form, content_html: t })}
-                placeholder="인라인 HTML 코드를 기입하거나 위 숏컷 치트키 버튼을 활용하세요."
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
-
-            <View style={styles.cardFormContainer}>
-              <Text style={styles.label}>
-                🎨 안 짜치는 추천 조율 테마 팔레트
-              </Text>
+              <Text style={styles.label}>테마 팔레트</Text>
               <View style={styles.colorPaletteGrid}>
                 {PRESET_THEMES.map((theme, index) => (
                   <TouchableOpacity
@@ -557,9 +459,7 @@ export default function AdminBannerScreen({ navigation }: any) {
               style={styles.saveSubmitButton}
               onPress={handleSave}
             >
-              <Text style={styles.saveSubmitButtonText}>
-                💾 검증 완료된 배너 동기화 및 즉시 게시
-              </Text>
+              <Text style={styles.saveSubmitButtonText}>저장</Text>
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>

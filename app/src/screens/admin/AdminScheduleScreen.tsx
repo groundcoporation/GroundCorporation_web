@@ -129,7 +129,14 @@ export default function AdminScheduleScreen() {
 
       const { data: resData, error: resError } = await supabase
         .from("reservations")
-        .select("*")
+        .select(
+          `
+          *,
+          user_packages (
+            package_name
+          )
+        `,
+        )
         .eq("class_date", dateString)
         .eq("branch_id", selectedBranch);
 
@@ -253,18 +260,18 @@ export default function AdminScheduleScreen() {
 
               if (resError) throw resError;
 
-              if (reservation.user_package_id) {
+              if (reservation.package_id) {
                 const { data: pkg, error: pkgFetchError } = await supabase
                   .from("user_packages")
                   .select("remaining_count")
-                  .eq("id", reservation.user_package_id)
+                  .eq("id", reservation.package_id)
                   .single();
 
                 if (!pkgFetchError && pkg) {
                   await supabase
                     .from("user_packages")
                     .update({ remaining_count: pkg.remaining_count + 1 })
-                    .eq("id", reservation.user_package_id);
+                    .eq("id", reservation.package_id);
                 }
               }
 
@@ -558,16 +565,16 @@ export default function AdminScheduleScreen() {
                           res.attendance_status === "보강" && styles.cardMakeup,
                         ]}
                       >
-                        <View style={{ flex: 1 }}>
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                            }}
-                          >
+                        <View style={styles.statusCardBody}>
+                          <View style={styles.statusNameRow}>
                             <Text style={styles.statusChildName}>
                               {res.child_name}
                             </Text>
+                            {res.user_packages?.package_name && (
+                              <Text style={styles.statusPackageTextInline}>
+                                ({res.user_packages.package_name})
+                              </Text>
+                            )}
                             {res.status === "cancel_requested" && (
                               <View style={styles.cancelWaitBadge}>
                                 <Text style={styles.cancelWaitText}>
@@ -582,105 +589,112 @@ export default function AdminScheduleScreen() {
                               </View>
                             )}
                           </View>
-                          <Text style={styles.statusSubText}>
-                            상태:{" "}
-                            {res.attendance_status ||
-                              (res.status === "cancel_requested"
-                                ? "취소대기"
-                                : "확인전")}
-                          </Text>
-                        </View>
 
-                        <View style={styles.statusBtnGroup}>
-                          {res.status === "cancel_requested" ? (
-                            <TouchableOpacity
-                              onPress={() => handleApproveCancel(res)}
-                              style={styles.approveCancelBtn}
-                            >
-                              <Text style={styles.approveCancelBtnText}>
-                                취소승인(복구)
-                              </Text>
-                            </TouchableOpacity>
-                          ) : (
-                            <>
-                              <TouchableOpacity
-                                onPress={() => handleAttendance(res, "등원")}
-                                style={[
-                                  styles.statusSmallBtn,
-                                  res.attendance_status === "등원" &&
-                                    styles.active등원,
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.statusSmallBtnText,
-                                    res.attendance_status === "등원" &&
-                                      styles.textWhite,
-                                  ]}
+                          <View style={styles.statusActionRow}>
+                            <Text style={styles.statusSubText}>
+                              {res.attendance_status ||
+                                (res.status === "cancel_requested"
+                                  ? "취소대기"
+                                  : "확인전")}
+                            </Text>
+                            <View style={styles.statusBtnGroup}>
+                              {res.status === "cancel_requested" ? (
+                                <TouchableOpacity
+                                  onPress={() => handleApproveCancel(res)}
+                                  style={styles.approveCancelBtn}
                                 >
-                                  등원
-                                </Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => handleAttendance(res, "하원")}
-                                style={[
-                                  styles.statusSmallBtn,
-                                  res.attendance_status === "하원" &&
-                                    styles.active하원,
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.statusSmallBtnText,
-                                    res.attendance_status === "하원" &&
-                                      styles.textWhite,
-                                  ]}
-                                >
-                                  하원
-                                </Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => handleAttendance(res, "결석")}
-                                style={[
-                                  styles.statusSmallBtn,
-                                  res.attendance_status === "결석" &&
-                                    styles.active결석,
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.statusSmallBtnText,
-                                    res.attendance_status === "결석" &&
-                                      styles.textWhite,
-                                  ]}
-                                >
-                                  결석
-                                </Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() =>
-                                  handleAttendance(res, "보강", true)
-                                }
-                                style={[
-                                  styles.statusSmallBtn,
-                                  (res.status === "makeup" ||
-                                    res.attendance_status === "보강") &&
-                                    styles.active보강,
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.statusSmallBtnText,
-                                    (res.status === "makeup" ||
-                                      res.attendance_status === "보강") &&
-                                      styles.textWhite,
-                                  ]}
-                                >
-                                  보강
-                                </Text>
-                              </TouchableOpacity>
-                            </>
-                          )}
+                                  <Text style={styles.approveCancelBtnText}>
+                                    취소승인(복구)
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : (
+                                <>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      handleAttendance(res, "등원")
+                                    }
+                                    style={[
+                                      styles.statusSmallBtn,
+                                      res.attendance_status === "등원" &&
+                                        styles.active등원,
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.statusSmallBtnText,
+                                        res.attendance_status === "등원" &&
+                                          styles.textWhite,
+                                      ]}
+                                    >
+                                      등원
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      handleAttendance(res, "하원")
+                                    }
+                                    style={[
+                                      styles.statusSmallBtn,
+                                      res.attendance_status === "하원" &&
+                                        styles.active하원,
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.statusSmallBtnText,
+                                        res.attendance_status === "하원" &&
+                                          styles.textWhite,
+                                      ]}
+                                    >
+                                      하원
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      handleAttendance(res, "결석")
+                                    }
+                                    style={[
+                                      styles.statusSmallBtn,
+                                      res.attendance_status === "결석" &&
+                                        styles.active결석,
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.statusSmallBtnText,
+                                        res.attendance_status === "결석" &&
+                                          styles.textWhite,
+                                      ]}
+                                    >
+                                      결석
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      handleAttendance(res, "보강", true)
+                                    }
+                                    style={[
+                                      styles.statusSmallBtn,
+                                      (res.status === "makeup" ||
+                                        res.attendance_status === "보강") &&
+                                        styles.active보강,
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.statusSmallBtnText,
+                                        (res.status === "makeup" ||
+                                          res.attendance_status === "보강") &&
+                                          styles.textWhite,
+                                      ]}
+                                    >
+                                      보강
+                                    </Text>
+                                  </TouchableOpacity>
+                                </>
+                              )}
+                            </View>
+                          </View>
                         </View>
                       </View>
                     ))
@@ -987,10 +1001,10 @@ const styles = StyleSheet.create({
   sectionCountText: { fontSize: 14, color: "#6366F1", fontWeight: "700" },
 
   statusItemCard: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "column",
     backgroundColor: "#FFF",
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 20,
     marginBottom: 10,
     elevation: 2,
@@ -1003,8 +1017,30 @@ const styles = StyleSheet.create({
   cardAbsent: { borderLeftWidth: 6, borderLeftColor: "#EF4444" },
   cardMakeup: { borderLeftWidth: 6, borderLeftColor: "#F59E0B" },
 
-  statusChildName: { fontSize: 17, fontWeight: "700", color: "#1E293B" },
-  statusSubText: { fontSize: 12, color: "#94A3B8", marginTop: 3 },
+  statusCardBody: { flex: 1 },
+  statusNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginBottom: 12,
+  },
+  statusChildName: { fontSize: 16, fontWeight: "800", color: "#1E293B" },
+  statusPackageTextInline: {
+    fontSize: 12,
+    color: "#64748B",
+    marginLeft: 6,
+    fontWeight: "500",
+  },
+  statusActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  statusSubText: { fontSize: 13, color: "#6366F1", fontWeight: "800" },
+
   makeupBadge: {
     backgroundColor: "#F59E0B",
     paddingHorizontal: 6,

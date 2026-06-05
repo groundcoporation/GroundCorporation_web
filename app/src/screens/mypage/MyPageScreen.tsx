@@ -310,7 +310,7 @@ export default function MyPageScreen({ navigation }: any) {
                     { color: "#F59E0B", fontWeight: "700" },
                   ]}
                 >
-                  [테스트] 청구서 결제 이동
+                  청구서 결제 이동
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
