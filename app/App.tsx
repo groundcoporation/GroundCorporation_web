@@ -99,6 +99,7 @@ import AdminWithdrawalScreen from "./src/screens/admin/AdminWithdrawalScreen";
 import AdminBillingScreen from "./src/screens/admin/AdminBillingScreen";
 import AdminAttendanceScreen from "./src/screens/admin/AdminAttendanceScreen"; // 🚀 추가: 키패드 출결 스크린
 import ManageSpotsScreen from "./src/screens/admin/ManageSpotsScreen"; // 🚀 추가!
+import AdminBannerScreen from "./src/screens/admin/AdminBannerScreen"; // 🚀 추가!
 
 // 💰 [포인트 관리 시스템] // 👈 새로 추가된 섹션!
 import PointHistoryScreen from "./src/screens/referral/PointHistoryScreen";
@@ -289,6 +290,7 @@ export default function App() {
           <Stack.Screen name="AdminMember" component={AdminMemberScreen} />
           <Stack.Screen name="AdminSchedule" component={AdminScheduleScreen} />
           <Stack.Screen name="AdminSetting" component={AdminSettingScreen} />
+          <Stack.Screen name="AdminBanners" component={AdminBannerScreen} />
           <Stack.Screen
             name="AdminMemberDetail"
             component={AdminMemberDetailScreen}
@@ -306,7 +308,10 @@ export default function App() {
           <Stack.Screen name="ManageSpots" component={ManageSpotsScreen} />
 
           {/* 🚀 [추가] 관리자 포인트 정산 프로세스 */}
-          <Stack.Screen name="AdminWithdrawal" component={AdminWithdrawalScreen} />
+          <Stack.Screen
+            name="AdminWithdrawal"
+            component={AdminWithdrawalScreen}
+          />
 
           {/* 10. 포인트 내역 및 관리 프로세스 👈 추가된 부분! */}
           <Stack.Screen name="PointHistory" component={PointHistoryScreen} />
