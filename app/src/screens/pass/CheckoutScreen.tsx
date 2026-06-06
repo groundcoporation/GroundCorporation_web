@@ -33,7 +33,8 @@ export default function CheckoutScreen({ route, navigation }: any) {
     currentUser, 
     branchId, 
     branchMid, 
-    currentBranch 
+    currentBranch,
+    invoiceId // 🚀 인보이스용 ID
   } = route.params || {};
 
   const [myPoints, setMyPoints] = useState(0);
@@ -113,10 +114,13 @@ export default function CheckoutScreen({ route, navigation }: any) {
       return;
     }
 
-    // 최종 결제 금액이 0원 이하면 결제 진행 방지
+    // 💡 [수정] 최종 결제 금액이 0원이면 바로 전액 결제 프로세스로 이동
     if (finalAmount <= 0) {
-       Alert.alert("알림", "전액 포인트 결제는 현재 준비 중입니다.");
-       return;
+      Alert.alert("포인트 결제", "포인트로 전액 결제하시겠습니까?", [
+        { text: "취소", style: "cancel" },
+        { text: "확인", onPress: () => processCompletePayment("POINT_FULL") }
+      ]);
+      return;
     }
 
     setShowKSPay(true);
@@ -134,47 +138,50 @@ export default function CheckoutScreen({ route, navigation }: any) {
   const processCompletePayment = async (payKey: string) => {
     setIsProcessing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const userToken = session?.access_token;
-      const rawKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
-      const cleanKey = rawKey.replace(/['"]+/g, "").trim();
-      const authUrl = process.env.EXPO_PUBLIC_SERVER_AUTH_URL || "";
+      let tid = "POINT_FULL";
+      
+      // 💡 결제 금액이 0원보다 클 때만 PG 서버 통신
+      if (payKey !== "POINT_FULL") {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userToken = session?.access_token;
+        const rawKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
+        const cleanKey = rawKey.replace(/['"]+/g, "").trim();
+        const authUrl = process.env.EXPO_PUBLIC_SERVER_AUTH_URL || "";
 
-      // 1. Edge Function 호출 (PG 승인) - finalAmount 전달
-      const response = await fetch(authUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userToken || cleanKey}`,
-          apikey: cleanKey,
-        },
-        body: JSON.stringify({ 
-            payKey: payKey, 
-            amount: finalAmount, 
-            branch_id: branchId, 
-            used_points: usedPointsNum 
-        }),
-      });
+        // 1. Edge Function 호출 (PG 승인) - finalAmount 전달
+        const response = await fetch(authUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userToken || cleanKey}`,
+            apikey: cleanKey,
+          },
+          body: JSON.stringify({ 
+              payKey: payKey, 
+              amount: finalAmount, 
+              branch_id: branchId, 
+              used_points: usedPointsNum 
+          }),
+        });
 
-      const resText = await response.text();
-      console.log("[Checkout] PG 응답 원본:", resText);
+        const resText = await response.text();
+        console.log("[Checkout] PG 응답 원본:", resText);
 
-      // 💡 [수정] 거래번호(pg_tid)를 안전하게 추출
-      let tid = "N/A";
-      try {
-        const authResult = JSON.parse(resText);
-        if (authResult.rawText) {
-          const raw = authResult.rawText.replace(/`/g, "");
-          const parts = raw.split("`");
-          tid = parts[1] || "N/A";
-        } else if (authResult.trno) {
-          tid = authResult.trno;
+        // 💡 [수정] 거래번호(pg_tid)를 안전하게 추출
+        try {
+          const authResult = JSON.parse(resText);
+          if (authResult.rawText) {
+            const raw = authResult.rawText.replace(/`/g, "");
+            const parts = raw.split("`");
+            tid = parts[1] || "N/A";
+          } else if (authResult.trno) {
+            tid = authResult.trno;
+          }
+        } catch (e) {
+          if (resText.includes("|")) tid = resText.split('|')[1] || "N/A";
         }
-      } catch (e) {
-        if (resText.includes("|")) tid = resText.split('|')[1] || "N/A";
+        if (!response.ok) throw new Error("결제 승인 실패");
       }
-
-      if (!response.ok) throw new Error("결제 승인 실패");
 
       // 2. 💡 DB `payments` 테이블에 데이터 기록
       const { data: paymentRecord, error: payError } = await supabase
@@ -185,7 +192,7 @@ export default function CheckoutScreen({ route, navigation }: any) {
           total_amount: totalAmount,      // 원래 총액
           used_points: usedPointsNum,     // 사용한 포인트
           final_amount: finalAmount,      // 실제 카드 결제액
-          payment_method: "CARD",
+          payment_method: finalAmount > 0 ? "CARD" : "POINT", // 0원이면 POINT로 기록
           status: "paid",
           pg_tid: tid, // 🚀 위에서 추출한 실제 거래번호 기록
         })
@@ -232,7 +239,7 @@ export default function CheckoutScreen({ route, navigation }: any) {
             status: "paid",
             paid_at: new Date().toISOString(),
           })
-          .eq("id", route.params.invoiceId);
+          .eq("id", invoiceId);
           
         if (updateError) throw updateError;
 
@@ -288,7 +295,7 @@ export default function CheckoutScreen({ route, navigation }: any) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>주문 상품</Text>
             <View style={styles.card}>
-              {type === "CART" && cartItems.map((item: any, idx: number) => {
+              {cartItems.map((item: any, idx: number) => {
                 const opt = item.pkg.package_options?.[item.optIndex];
                 const price = opt?.price || item.pkg.price || 0;
                 return (
