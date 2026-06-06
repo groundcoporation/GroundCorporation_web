@@ -74,8 +74,12 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
   };
 
   const handleSignUp = async () => {
-    // 1. 필수 입력 확인
-    if (!username || !password || !confirmPassword || !name || !email || !phone || !birthDate) {
+    // 🚀 [추가] 양끝 공백 및 모든 공백을 제거한 깔끔한 아이디와 이메일 생성
+    const cleanUsername = username.replace(/\s/g, ''); 
+    const cleanEmail = email.trim(); 
+
+    // 1. 필수 입력 확인 (cleanUsername, cleanEmail 사용)
+    if (!cleanUsername || !password || !confirmPassword || !name || !cleanEmail || !phone || !birthDate) {
       Alert.alert('알림', '모든 항목을 입력해주세요.');
       return;
     }
@@ -101,8 +105,8 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
     setIsLoading(true);
 
     try {
-      // 3. 아이디 중복 체크
-      const isDuplicate = await checkDuplicateUsername(username);
+      // 3. 아이디 중복 체크 (cleanUsername 사용)
+      const isDuplicate = await checkDuplicateUsername(cleanUsername);
       if (isDuplicate) {
         Alert.alert('알림', '이미 사용 중인 아이디입니다.');
         setIsLoading(false);
@@ -125,7 +129,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
         const { data } = await supabase
           .from('users')
           .select('id, points')
-          .eq('username', referralCode)
+          .eq('username', referralCode.replace(/\s/g, '')) // 추천인 코드도 공백 제거
           .maybeSingle();
         referrerData = data;
         if (!referrerData) {
@@ -135,9 +139,9 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
         }
       }
 
-      // 5. Supabase Auth 가입
+      // 5. Supabase Auth 가입 (cleanEmail 사용)
       const { data: authData, error: authError } = await supabase.auth.signUp({ 
-        email: email, 
+        email: cleanEmail, 
         password: password 
       });
 
@@ -147,8 +151,8 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
       if (authData.user) {
         if (referrerData) {
           // 추천인의 아이디(username)를 가져와서 더 직관적인 로그를 남깁니다.
-          const referrerUsername = referralCode; 
-          const newUsername = username;
+          const referrerUsername = referralCode.replace(/\s/g, ''); 
+          const newUsername = cleanUsername; // 🚀 클린 아이디 사용
 
           // [A] 추천인 포인트 지급
           await supabase.from('users').update({ points: (referrerData.points || 0) + signupBonus }).eq('id', referrerData.id);
@@ -162,17 +166,17 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
           });
         }
 
-        // [B] 가입자 정보 저장
+        // [B] 가입자 정보 저장 (cleanUsername, cleanEmail 사용)
         const { error: dbError } = await supabase.from('users').insert([{
             id: authData.user.id,
-            username: username,
-            email: email,
+            username: cleanUsername,
+            email: cleanEmail,
             name: name,
             phone: phone.replace(/-/g, ''),
             birth_date: birthDate.replace(/-/g, ''),
             branch_id: branchId,
             role: 'user',
-            referred_by: referralCode || null,
+            referred_by: referralCode ? referralCode.replace(/\s/g, '') : null,
             points: referrerData ? signupBonus : 0 
         }]);
 
@@ -184,7 +188,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             await supabase.from('point_logs').insert({ 
               user_id: authData.user.id, 
               amount: signupBonus, 
-              reason: `${referralCode} 님을 추천하여 받은 포인트`, // 직관적인 이유
+              reason: `${referralCode.replace(/\s/g, '')} 님을 추천하여 받은 포인트`, // 직관적인 이유
               related_user_id: referrerData.id 
             });
         }
@@ -225,7 +229,14 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
         
         <View style={styles.section}>
           <Text style={styles.label}>로그인 정보</Text>
-          <TextInput style={styles.input} placeholder="아이디" value={username} onChangeText={setUsername} autoCapitalize="none" />
+          {/* 🚀 [수정] 아이디 실시간 공백 제거 및 안내 문구 추가 */}
+          <TextInput 
+            style={styles.input} 
+            placeholder="아이디 (공백 없이 입력)" 
+            value={username} 
+            onChangeText={(text) => setUsername(text.replace(/\s/g, ''))} 
+            autoCapitalize="none" 
+          />
           
           <View style={styles.passwordWrapper}>
             <TextInput 
@@ -254,7 +265,15 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
           </View>
           {!isPasswordMatch && <Text style={styles.errorText}>비밀번호가 일치하지 않습니다.</Text>}
 
-          <TextInput style={[styles.input, { marginTop: 12 }]} placeholder="이메일" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+          {/* 🚀 [수정] 이메일 실시간 공백 제거 */}
+          <TextInput 
+            style={[styles.input, { marginTop: 12 }]} 
+            placeholder="이메일" 
+            value={email} 
+            onChangeText={(text) => setEmail(text.replace(/\s/g, ''))} 
+            keyboardType="email-address" 
+            autoCapitalize="none" 
+          />
         </View>
 
         <View style={styles.section}>
@@ -276,12 +295,12 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             keyboardType="number-pad" 
             maxLength={10} 
           />
-          {/* 🚀 [추가] 회원가입 시 추천인 코드 입력란 */}
+          {/* 🚀 [수정] 추천인 코드 실시간 공백 제거 */}
           <TextInput 
             style={styles.input} 
             placeholder="추천인 코드 (선택)" 
             value={referralCode} 
-            onChangeText={setReferralCode} 
+            onChangeText={(text) => setReferralCode(text.replace(/\s/g, ''))} 
             autoCapitalize="none"
           />
         </View>
