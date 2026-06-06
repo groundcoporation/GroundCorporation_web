@@ -48,6 +48,7 @@ import { supabase } from "./src/lib/supabase";
 import PassPurchaseScreen from "./src/screens/pass/PassPurchaseScreen";
 import KSPayService from "./src/services/payment/KSPayService";
 import MyPackageScreen from "./src/screens/pass/MyPackageScreen";
+import CheckoutScreen from "./src/screens/pass/CheckoutScreen"; // 파일 경로에 맞게 수정해주세요!
 // 🚀 [추가] 학부모용 청구서 확인 및 결제 화면
 import InvoiceScreen from "./src/screens/pass/InvoiceScreen";
 
@@ -218,6 +219,7 @@ export default function App() {
           <Stack.Screen name="MyPackage" component={MyPackageScreen} />
           {/* 🚀 [추가] 청구서 결제 화면 등록 */}
           <Stack.Screen name="Invoice" component={InvoiceScreen} />
+          <Stack.Screen name="CheckoutScreen" component={CheckoutScreen} options={{ headerShown: false }} />
 
           {/* <Stack.Screen 
             name="KSPay" 

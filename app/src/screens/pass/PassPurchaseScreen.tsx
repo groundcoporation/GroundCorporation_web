@@ -275,6 +275,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
   };
 
   // --- 결제 프로세스 ---
+  // 🚀 [참고] 이 함수는 추후 CheckoutScreen.tsx로 복사해서 사용하시면 됩니다. 현재 화면에서는 호출되지 않습니다.
   const processCompletePayment = async (payKey: string) => {
     setIsProcessing(true);
     console.log("[Payment] 🚀 결제 승인 프로세스 시작");
@@ -445,18 +446,29 @@ export default function PassPurchaseScreen({ navigation }: any) {
     (p) => p.is_option && !cartItems.some((cart) => cart.pkg.id === p.id),
   );
 
+  // 🚀 [수정됨] 1. handleOpenPayment 함수 수정: PG창 띄우는 대신 CheckoutScreen으로 이동
   const handleOpenPayment = () => {
-    console.log("[Purchase] 💳 결제 준비");
+    console.log("[Purchase] 💳 주문서 확인 준비");
     if (cartItems.length === 0)
       return Alert.alert("알림", "상품을 담아주세요.");
     if (!currentUser)
       return Alert.alert("알림", "유저 정보를 불러올 수 없습니다.");
 
     console.log(
-      `[Purchase] 📊 결제 데이터 요약: ${totalCartCount}개 상품 / 총액 ${finalPrice}원 / MID ${branchMid}`,
+      `[Purchase] 📊 주문서 이동 요약: ${totalCartCount}개 상품 / 총액 ${finalPrice}원`,
     );
     setShowOptionModal(false);
-    setShowKSPay(true);
+    
+    // PG사를 바로 띄우지 않고, CheckoutScreen으로 파라미터와 함께 이동합니다.
+    navigation.navigate("CheckoutScreen", {
+      type: "CART",
+      cartItems: cartItems,
+      totalAmount: finalPrice,
+      currentUser: currentUser,
+      branchId: branchId,
+      branchMid: branchMid,
+      currentBranch: currentBranch,
+    });
   };
 
   const isDeveloper = role === "admin" || currentUser?.role === "admin";
@@ -534,7 +546,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
           <EventBanner
             screenType="purchase"
             branchId={branchId}
-            marginHorizontal={0} // mainPadding(20) 내부 레이아웃에 최적화되도록 설정[cite: 1]
+            marginHorizontal={0} // mainPadding(20) 내부 레이아웃에 최적화되도록 설정
           />
 
           {loading ? (
@@ -790,16 +802,18 @@ export default function PassPurchaseScreen({ navigation }: any) {
               } else if (popupOptions.length > 0) {
                 setShowOptionModal(true);
               } else {
-                setShowKSPay(true);
+                // 🚀 [수정됨] 2. 기존 setShowKSPay(true)를 지우고 handleOpenPayment 호출
+                handleOpenPayment();
               }
             }}
           >
             <Text style={styles.mainActionText}>
+              {/* 🚀 [수정됨] 3. 버튼 텍스트 변경: "결제하기" -> "주문서 확인하기" */}
               {hasConsult
                 ? "상담 전화하기"
                 : !isClassAssigned && hasPendingConsult
                   ? "상담 대기 중"
-                  : "결제하기"}
+                  : "주문서 확인하기"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -901,13 +915,15 @@ export default function PassPurchaseScreen({ navigation }: any) {
                 style={styles.finalPayBtn}
                 onPress={handleOpenPayment}
               >
-                <Text style={styles.finalPayBtnText}>최종 결제 진행</Text>
+                {/* 🚀 [수정됨] 텍스트 변경: "최종 결제 진행" -> "주문서 확인하기" */}
+                <Text style={styles.finalPayBtnText}>주문서 확인하기</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
+      {/* 🚀 [참고] 이제 결제창(KSPayService)은 CheckoutScreen에서 띄웁니다. */}
       {showKSPay && currentUser && cartItems.length > 0 && (
         <KSPayService
           isVisible={showKSPay}
@@ -929,6 +945,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
         />
       )}
 
+      {/* 🚀 [참고] 결제 처리 로딩도 CheckoutScreen으로 이동될 예정입니다. */}
       {isProcessing && (
         <View style={styles.processingOverlay}>
           <ActivityIndicator size="large" color="#6366F1" />
@@ -978,7 +995,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
 
-  // 💡 [중복 제거 완료] bannerDotRow, adBanner, adTitle 등 하드코딩 배너 스타일 파편 전체 청소[cite: 1]
+  // 💡 [중복 제거 완료] bannerDotRow, adBanner, adTitle 등 하드코딩 배너 스타일 파편 전체 청소
 
   activeTab: { borderBottomColor: "#6366F1" },
   tabText: { fontSize: 15, fontWeight: "600", color: "#94A3B8" },

@@ -89,10 +89,18 @@ export default function InvoiceScreen({ navigation }: any) {
     }
   };
 
-  // 결제창 열기
+  // 🚀 [수정] 결제 요청을 CheckoutScreen으로 위임
   const handleOpenPayment = (invoice: any) => {
-    setSelectedInvoice(invoice);
-    setShowKSPay(true);
+    navigation.navigate("CheckoutScreen", {
+      type: "INVOICE",              // 결제 타입을 INVOICE로 설정
+      invoiceId: invoice.id,        // 결제 완료 시 상태 업데이트용 ID
+      cartItems: invoice.cart_items,
+      totalAmount: invoice.total_amount,
+      currentUser,
+      branchId: invoice.branch_id,
+      branchMid: currentBranch?.kspay_mid,
+      currentBranch,
+    });
   };
 
   // KSNET 결제창 닫힘 콜백 -> 성공 시 백엔드 승인 로직 호출
@@ -342,36 +350,6 @@ export default function InvoiceScreen({ navigation }: any) {
           </View>
         )}
       </ScrollView>
-
-      {/* 결제 모듈 */}
-      {showKSPay && currentUser && selectedInvoice && (
-        <KSPayService
-          isVisible={showKSPay}
-          onClose={handleCloseKSPay}
-          paymentData={{
-            amount: selectedInvoice.total_amount,
-            packageName:
-              selectedInvoice.cart_items.length > 1
-                ? `${selectedInvoice.cart_items[0].pkg.name} 외 ${selectedInvoice.cart_items.length - 1}건`
-                : selectedInvoice.cart_items[0].pkg.name,
-            userName: currentUser.name,
-            userPhone: currentUser.phone || "01000000000",
-            kspay_mid: currentBranch?.kspay_mid || "2999199999",
-            userId: currentUser.id,
-            branchId: selectedInvoice.branch_id,
-            branchName: currentBranch?.name || "지점",
-            storeId: currentBranch?.kspay_mid || "2999199999",
-          }}
-        />
-      )}
-
-      {/* 로딩 오버레이 */}
-      {isProcessing && (
-        <View style={styles.processingOverlay}>
-          <ActivityIndicator size="large" color="#6366F1" />
-          <Text style={styles.processingText}>결제를 처리 중입니다...</Text>
-        </View>
-      )}
     </SafeAreaView>
   );
 }
@@ -454,19 +432,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#94A3B8",
     fontWeight: "600",
-  },
-
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 9999,
-  },
-  processingText: {
-    marginTop: 15,
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#111827",
   },
 });
