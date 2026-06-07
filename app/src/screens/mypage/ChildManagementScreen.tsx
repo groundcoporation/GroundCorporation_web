@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../context/AuthContext";
 
 // 💡 휴대폰 번호 자동 하이픈 포맷팅 함수
 const formatPhoneNumber = (value: string) => {
@@ -31,6 +32,7 @@ export default function ChildManagementScreen({ navigation }: any) {
   const [children, setChildren] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const { branchId } = useAuth();
 
   // 💡 모달 상태 관리
   const [modalVisible, setModalVisible] = useState(false);
@@ -117,6 +119,7 @@ export default function ChildManagementScreen({ navigation }: any) {
         child_birth: childBirth.trim(),
         gender: gender,
         child_phone: rawPhone || null, // 비어있으면 null
+        branch_id: branchId || null,
       };
 
       if (isEditing && editingChildId) {
