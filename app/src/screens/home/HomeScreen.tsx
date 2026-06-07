@@ -686,7 +686,8 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       </ScrollView>
 
-      <PopupManager />
+      {/* 🚀 수정됨: 팝업 매니저에게 branchId와 children 데이터를 넘겨줍니다! */}
+      <PopupManager branchId={branchId} childrenData={children} />
     </SafeAreaView>
   );
 }
