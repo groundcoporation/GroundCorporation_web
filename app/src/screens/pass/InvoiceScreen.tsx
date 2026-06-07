@@ -92,8 +92,8 @@ export default function InvoiceScreen({ navigation }: any) {
   // 🚀 [수정] 결제 요청을 CheckoutScreen으로 위임
   const handleOpenPayment = (invoice: any) => {
     navigation.navigate("CheckoutScreen", {
-      type: "INVOICE",              // 결제 타입을 INVOICE로 설정
-      invoiceId: invoice.id,        // 결제 완료 시 상태 업데이트용 ID
+      type: "INVOICE", // 결제 타입을 INVOICE로 설정
+      invoiceId: invoice.id, // 결제 완료 시 상태 업데이트용 ID
       cartItems: invoice.cart_items,
       totalAmount: invoice.total_amount,
       currentUser,
@@ -170,10 +170,12 @@ export default function InvoiceScreen({ navigation }: any) {
       if (authResult.rawText) {
         const segments = authResult.rawText.split("`");
         const cleanSegments = segments.filter((s: string) => s.trim() !== "");
+        console.log("[Invoice] 🧩 파싱된 세그먼트:", cleanSegments);
 
         if (cleanSegments.length >= 5) {
-          extractedTrNo = cleanSegments[1]; // 거래번호 추출
-          extractedAuthNo = cleanSegments[4]; // 승인번호 추출
+          // 🚀 [수정] 응답 전문의 두 번째 요소(index 1)가 실제 거래번호(TRNO)입니다.
+          extractedTrNo = cleanSegments[1];
+          extractedAuthNo = cleanSegments[4]; // 승인번호(AuthNo) 추출
         }
       }
 
@@ -186,7 +188,12 @@ export default function InvoiceScreen({ navigation }: any) {
           total_amount: invoice.total_amount,
           payment_method: "CARD",
           status: "paid", // 트리거가 감지하는 핵심 조건
-          pg_tid: extractedTrNo || authResult.trno || null
+          pg_tid:
+            extractedTrNo ||
+            authResult.trno ||
+            authResult.tid ||
+            authResult.trNo ||
+            null, // 🚀 [보완] 응답 객체의 다양한 필드명(tid, trNo 등)을 확인하여 누락 방지
         })
         .select("id")
         .single();

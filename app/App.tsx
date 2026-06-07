@@ -38,7 +38,7 @@ import { AuthProvider } from "./src/context/AuthContext";
 // 🚀 [인증 및 홈 화면]
 import LoginScreen from "./src/screens/login/LoginScreen";
 import SignUpScreen from "./src/screens/login/SignUpScreen";
-import FindAuthScreen from "./src/screens/login/FindAuthScreen";
+import FindAuthScreen from "./src/screens/Auth/FindAuthScreen";
 import HomeScreen from "./src/screens/home/HomeScreen";
 import ReferralScreen from "./src/screens/referral/ReferralScreen";
 //로그인관련 슈퍼베이스 연결
@@ -219,7 +219,11 @@ export default function App() {
           <Stack.Screen name="MyPackage" component={MyPackageScreen} />
           {/* 🚀 [추가] 청구서 결제 화면 등록 */}
           <Stack.Screen name="Invoice" component={InvoiceScreen} />
-          <Stack.Screen name="CheckoutScreen" component={CheckoutScreen} options={{ headerShown: false }} />
+          <Stack.Screen
+            name="CheckoutScreen"
+            component={CheckoutScreen}
+            options={{ headerShown: false }}
+          />
 
           {/* <Stack.Screen 
             name="KSPay" 
