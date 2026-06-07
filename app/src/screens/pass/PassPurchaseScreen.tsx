@@ -315,7 +315,34 @@ export default function PassPurchaseScreen({ navigation }: any) {
       const resText = await response.text();
       console.log("[Payment] 📥 서버 원본 응답:", resText);
 
-      const authResult = JSON.parse(resText);
+      let authResult: any = {};
+      let tid = "N/A";
+
+      // 🚀 [수정] 거래번호(pg_tid)를 안전하게 추출하는 로직 보강
+      try {
+        authResult = JSON.parse(resText);
+        let extractedTrNo = null;
+
+        if (authResult.rawText) {
+          const segments = authResult.rawText.split("`");
+          const cleanSegments = segments.filter((s: string) => s.trim() !== "");
+          console.log("[PassPurchase] 🧩 파싱된 세그먼트:", cleanSegments);
+
+          if (cleanSegments.length >= 5) {
+            // 🚀 [수정] 응답 전문의 두 번째 요소(index 1)가 실제 거래번호(TRNO)입니다.
+            extractedTrNo = cleanSegments[1];
+          }
+        }
+        tid =
+          extractedTrNo ||
+          authResult.trno ||
+          authResult.tid ||
+          authResult.trNo ||
+          "N/A";
+      } catch (e) {
+        // JSON 파싱 실패 시 폴백 (파이프 구분자 확인)
+        if (resText.includes("|")) tid = resText.split("|")[1] || "N/A";
+      }
 
       if (response.ok) {
         console.log("[Payment] ✅ 승인 성공 - DB 기록 중...");
@@ -329,7 +356,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
             total_amount: finalPrice,
             payment_method: "CARD", // PG 결제이므로 CARD로 고정
             status: "paid",
-            pg_tid: authResult.trno || "N/A", // 서버 응답에서 거래번호 매칭
+            pg_tid: tid, // 🚀 정제된 거래번호 기록
           })
           .select("id")
           .single();
@@ -458,7 +485,7 @@ export default function PassPurchaseScreen({ navigation }: any) {
       `[Purchase] 📊 주문서 이동 요약: ${totalCartCount}개 상품 / 총액 ${finalPrice}원`,
     );
     setShowOptionModal(false);
-    
+
     // PG사를 바로 띄우지 않고, CheckoutScreen으로 파라미터와 함께 이동합니다.
     navigation.navigate("CheckoutScreen", {
       type: "CART",
