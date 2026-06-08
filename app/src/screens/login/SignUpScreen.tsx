@@ -116,8 +116,9 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
       // 4. 추천인 검증 (DB에서 signup_bonus 값과 함께 확인)
       let referrerData = null;
       let signupBonus = 0;
+      let newUserLineage: string[] = []; // 🚀 [추가] 신규 가입자의 족보(Lineage)를 담을 빈 배열
 
-      //포인트 값 가져오기
+      // 포인트 값 가져오기
       const { data: bonusData } = await supabase
         .from('point_settings')
         .select('value')
@@ -126,17 +127,24 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
       signupBonus = bonusData?.value || 0;
 
       if (referralCode) {
+        // 🚀 [수정] 추천인의 id, points 뿐만 아니라 족보(lineage)와 추천수(referral_count)도 같이 가져옵니다!
         const { data } = await supabase
           .from('users')
-          .select('id, points')
+          .select('id, points, lineage, referral_count') 
           .eq('username', referralCode.replace(/\s/g, '')) // 추천인 코드도 공백 제거
           .maybeSingle();
+          
         referrerData = data;
+        
         if (!referrerData) {
           Alert.alert('오류', '존재하지 않는 추천인 코드입니다.');
           setIsLoading(false);
           return;
         }
+
+        // 🚀 [추가: 족보 생성 로직]
+        // 나를 초대한 사람의 족보를 그대로 가져오고, 그 맨 뒤에 '초대한 사람의 ID'를 붙여줍니다.
+        newUserLineage = [...(referrerData.lineage || []), referrerData.id];
       }
 
       // 5. Supabase Auth 가입 (cleanEmail 사용)
@@ -150,23 +158,25 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
       // 6. Auth 성공 시 상세 정보 저장 및 포인트 지급
       if (authData.user) {
         if (referrerData) {
-          // 추천인의 아이디(username)를 가져와서 더 직관적인 로그를 남깁니다.
           const referrerUsername = referralCode.replace(/\s/g, ''); 
-          const newUsername = cleanUsername; // 🚀 클린 아이디 사용
+          const newUsername = cleanUsername; 
 
-          // [A] 추천인 포인트 지급
-          await supabase.from('users').update({ points: (referrerData.points || 0) + signupBonus }).eq('id', referrerData.id);
+          // [A] 추천인 포인트 지급 및 🚀 [수정] 추천인 수(+1) 증가 로직 추가!
+          await supabase.from('users').update({ 
+            points: (referrerData.points || 0) + signupBonus,
+            referral_count: (referrerData.referral_count || 0) + 1 // ✨ 기존 추천수에 +1 더해서 업데이트
+          }).eq('id', referrerData.id);
           
-          // 🚀 로그에 누가 가입했는지 이름을 직접 박습니다!
+          // 가입 로그 기록
           await supabase.from('point_logs').insert({ 
             user_id: referrerData.id, 
             amount: signupBonus, 
-            reason: `${newUsername} 님의 가입으로 받은 포인트`, // 직관적인 이유
+            reason: `${newUsername} 님의 가입으로 받은 포인트`, 
             related_user_id: authData.user.id 
           });
         }
 
-        // [B] 가입자 정보 저장 (cleanUsername, cleanEmail 사용)
+        // [B] 가입자 정보 저장
         const { error: dbError } = await supabase.from('users').insert([{
             id: authData.user.id,
             username: cleanUsername,
@@ -177,24 +187,24 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             branch_id: branchId,
             role: 'user',
             referred_by: referralCode ? referralCode.replace(/\s/g, '') : null,
-            points: referrerData ? signupBonus : 0 
+            points: referrerData ? signupBonus : 0,
+            lineage: newUserLineage // 🚀 [추가] 방금 만든 족보(계보) 배열을 DB에 저장!
         }]);
 
         if (dbError) throw dbError;
 
         // [C] 가입자 로그 기록
         if (referrerData) {
-            // 🚀 로그에 누가 추천했는지 이름을 직접 박습니다!
             await supabase.from('point_logs').insert({ 
               user_id: authData.user.id, 
               amount: signupBonus, 
-              reason: `${referralCode.replace(/\s/g, '')} 님을 추천하여 받은 포인트`, // 직관적인 이유
+              reason: `${referralCode.replace(/\s/g, '')} 님을 추천하여 받은 포인트`, 
               related_user_id: referrerData.id 
             });
         }
 
         // =================================================================
-        // 🚀 [수정] 추천인(referrerData) 유무에 따라 알림 메시지를 다르게 띄움
+        // 추천인(referrerData) 유무에 따라 알림 메시지를 다르게 띄움
         // =================================================================
         const successMessage = referrerData 
           ? `회원가입이 완료되었습니다! (추천 포인트 ${signupBonus}P 지급)` 
@@ -202,7 +212,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
 
         Alert.alert('성공', successMessage, [{ text: '확인', onPress: () => navigation.navigate('Login') }]);
         
-      } // <- if (authData.user) 닫히는 괄호
+      } 
     } catch (error: any) {
       Alert.alert('가입 에러', error.message || '오류가 발생했습니다.');
     } finally {
@@ -229,10 +239,10 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
         
         <View style={styles.section}>
           <Text style={styles.label}>로그인 정보</Text>
-          {/* 🚀 [수정] 아이디 실시간 공백 제거 및 안내 문구 추가 */}
           <TextInput 
             style={styles.input} 
             placeholder="아이디 (공백 없이 입력)" 
+            placeholderTextColor="#999" // 🚀 [추가] 힌트 색상 명시
             value={username} 
             onChangeText={(text) => setUsername(text.replace(/\s/g, ''))} 
             autoCapitalize="none" 
@@ -242,6 +252,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             <TextInput 
               style={[styles.input, { flex: 1, marginBottom: 0 }]} 
               placeholder="비밀번호 (영문 필수, 7자 이상)" 
+              placeholderTextColor="#999"
               value={password} 
               onChangeText={setPassword} 
               secureTextEntry={!showPassword} 
@@ -255,6 +266,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             <TextInput 
               style={[styles.input, { flex: 1, marginBottom: 0 }, !isPasswordMatch && styles.inputError]} 
               placeholder="비밀번호 확인" 
+              placeholderTextColor="#999"
               value={confirmPassword} 
               onChangeText={setConfirmPassword} 
               secureTextEntry={!showConfirmPassword} 
@@ -265,10 +277,10 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
           </View>
           {!isPasswordMatch && <Text style={styles.errorText}>비밀번호가 일치하지 않습니다.</Text>}
 
-          {/* 🚀 [수정] 이메일 실시간 공백 제거 */}
           <TextInput 
             style={[styles.input, { marginTop: 12 }]} 
             placeholder="이메일" 
+            placeholderTextColor="#999"
             value={email} 
             onChangeText={(text) => setEmail(text.replace(/\s/g, ''))} 
             keyboardType="email-address" 
@@ -278,10 +290,11 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
 
         <View style={styles.section}>
           <Text style={styles.label}>사용자 정보</Text>
-          <TextInput style={styles.input} placeholder="이름" value={name} onChangeText={setName} />
+          <TextInput style={styles.input} placeholder="이름" placeholderTextColor="#999" value={name} onChangeText={setName} />
           <TextInput 
             style={styles.input} 
             placeholder="휴대폰 번호" 
+            placeholderTextColor="#999"
             value={phone} 
             onChangeText={(text) => setPhone(formatPhoneNumber(text))} 
             keyboardType="phone-pad" 
@@ -290,15 +303,16 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
           <TextInput 
             style={styles.input} 
             placeholder="생년월일 (예: 19940101)" 
+            placeholderTextColor="#999"
             value={birthDate} 
             onChangeText={(text) => setBirthDate(formatBirthDate(text))} 
             keyboardType="number-pad" 
             maxLength={10} 
           />
-          {/* 🚀 [수정] 추천인 코드 실시간 공백 제거 */}
           <TextInput 
             style={styles.input} 
             placeholder="추천인 코드 (선택)" 
+            placeholderTextColor="#999"
             value={referralCode} 
             onChangeText={(text) => setReferralCode(text.replace(/\s/g, ''))} 
             autoCapitalize="none"
@@ -332,7 +346,16 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 28, fontWeight: 'bold', marginBottom: 30 },
   section: { marginBottom: 25 },
   label: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#555' },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 15, fontSize: 16, backgroundColor: '#fafafa', marginBottom: 12 },
+  input: { 
+    borderWidth: 1, 
+    borderColor: '#ddd', 
+    borderRadius: 8, 
+    padding: 15, 
+    fontSize: 16, 
+    backgroundColor: '#fafafa', 
+    marginBottom: 12,
+    color: '#000' // 🚀 [핵심 수정] 다크 모드 충돌 방지: 어떤 폰이든 무조건 텍스트가 검은색으로 보이게 강제 설정!
+  },
   inputError: { borderColor: '#FF3B30' },
   errorText: { color: '#FF3B30', fontSize: 13, marginTop: 5, marginBottom: 10, marginLeft: 5 },
   passwordWrapper: { flexDirection: 'row', alignItems: 'center', position: 'relative' },
