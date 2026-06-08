@@ -27,6 +27,19 @@ export default function ReferralScreen({ navigation, route }: any) {
   const [alreadyReferred, setAlreadyReferred] = useState(false);
 
   // =========================================================================
+  // 🚀 [추가] 레벨 및 정책 데이터 상태 (등급 표시용)
+  // =========================================================================
+  const [userData, setUserData] = useState<any>(null); // 유저 전체 정보
+  const [levelInfo, setLevelInfo] = useState<any>(null); // 현재 유저의 등급 정책 정보
+  const [nextLevelInfo, setNextLevelInfo] = useState<any>(null); // 다음 등급 정책 정보
+
+  // =========================================================================
+  // 🚀 [추가] DB 정책 수치 상태 (이용 안내 동적 반영용)
+  // =========================================================================
+  const [minWithdraw, setMinWithdraw] = useState(10000);
+  const [minUse, setMinUse] = useState(3000);
+
+  // =========================================================================
   // 🚀 [추가] 인출 모달창 관리를 위한 상태 변수들
   // =========================================================================
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -38,6 +51,21 @@ export default function ReferralScreen({ navigation, route }: any) {
 
   // 딥링크 등을 통해 파라미터로 전달받은 추천인 코드 확인
   const initialReferralCode = route?.params?.referralCode;
+
+  // 🚀 [실시간 구독] 내 데이터 변경 감지 (게이지 및 모든 데이터 자동 반영)
+  useEffect(() => {
+    if (!user) return;
+    
+    // 유저 데이터, 등급 정책, 설정 변경 모두 감지하는 통합 채널
+    const channel = supabase
+      .channel('realtime_sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${user.id}` }, () => fetchUserData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'level_policies' }, () => fetchUserData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'point_settings' }, () => fetchUserData())
+      .subscribe();
+      
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -61,16 +89,44 @@ export default function ReferralScreen({ navigation, route }: any) {
   }, [user, initialReferralCode, alreadyReferred, myReferralCode]);
 
   const fetchUserData = async () => {
-    const { data } = await supabase
-      .from("users")
-      .select("username, points, referred_by")
-      .eq("id", user?.id)
-      .single();
+    // 🚀 [수정] 유저 데이터, 등급 정보, 포인트 설정값을 한 번에 로드
+    const [
+      { data: userData },
+      { data: settings }
+    ] = await Promise.all([
+      supabase.from("users").select("id, username, points, referred_by, level, referral_count, lineage").eq("id", user?.id).single(),
+      supabase.from("point_settings").select("key, value")
+    ]);
 
-    if (data) {
-      setMyReferralCode(data.username); // 아이디를 추천 코드로 사용
-      setPoints(data.points || 0);
-      setAlreadyReferred(!!data.referred_by);
+    if (userData) {
+      setUserData(userData);
+      setMyReferralCode(userData.username); // 아이디를 추천 코드로 사용
+      setPoints(userData.points || 0);
+      setAlreadyReferred(!!userData.referred_by);
+
+      // 🚀 [핵심] 현재 등급 정책 정보 가져오기
+      const { data: currentPolicy } = await supabase
+        .from("level_policies")
+        .select("*")
+        .eq("level", userData.level)
+        .single();
+      setLevelInfo(currentPolicy);
+
+      // 🚀 [핵심] 다음 등급 정책 정보 가져오기 (승급 조건 확인용)
+      const { data: nextPolicy } = await supabase
+        .from("level_policies")
+        .select("*")
+        .eq("level", userData.level + 1)
+        .maybeSingle(); // 최고등급일 경우 null일 수 있으므로 maybeSingle 사용
+      setNextLevelInfo(nextPolicy);
+    }
+    
+    // 🚀 정책 값 동적 매핑
+    if (settings) {
+      const w = settings.find(s => s.key === 'min_withdraw_amount')?.value;
+      const u = settings.find(s => s.key === 'min_use_amount')?.value;
+      if (w) setMinWithdraw(Number(w));
+      if (u) setMinUse(Number(u));
     }
   };
 
@@ -106,7 +162,7 @@ export default function ReferralScreen({ navigation, route }: any) {
       const [{ data: referrer }, { data: bonusData }] = await Promise.all([
         supabase
           .from("users")
-          .select("id, points, username")
+          .select("id, points, username, lineage, referral_count")
           .ilike("username", targetCode)
           .maybeSingle(),
         supabase
@@ -122,43 +178,29 @@ export default function ReferralScreen({ navigation, route }: any) {
       }
 
       const signupBonus = Number(bonusData?.value) || 1000;
-      const myUsername = myReferralCode;
-      const referrerUsername = referrer.username;
+      const newLineage = [...(referrer.lineage || []), referrer.id]; // 🚀 족보 형성
 
-      // 2. 포인트 지급
-      await supabase
-        .from("users")
-        .update({ points: (referrer.points || 0) + signupBonus })
-        .eq("id", referrer.id);
-      await supabase
-        .from("users")
-        .update({ referred_by: targetCode, points: points + signupBonus })
-        .eq("id", user?.id);
+      // 2. 포인트 지급 및 족보/카운트 업데이트
+      await supabase.from("users").update({ 
+        referred_by: targetCode, 
+        points: points + signupBonus,
+        lineage: newLineage 
+      }).eq("id", user?.id);
 
-      // 3. 로그 기록 (이름/아이디 포함하여 직관적으로) - 🚀 type 컬럼 추가 반영
+      await supabase.from("users").update({ 
+        points: (referrer.points || 0) + signupBonus,
+        referral_count: (referrer.referral_count || 0) + 1 
+      }).eq("id", referrer.id);
+
+      // 3. 로그 기록
       await supabase.from("point_logs").insert([
-        {
-          user_id: referrer.id,
-          amount: signupBonus,
-          type: "earn",
-          reason: `${myUsername} 님의 가입으로 받은 포인트`,
-          related_user_id: user?.id,
-        },
-        {
-          user_id: user?.id,
-          amount: signupBonus,
-          type: "earn",
-          reason: `${referrerUsername} 님을 추천하여 받은 포인트`,
-          related_user_id: referrer.id,
-        },
+        { user_id: referrer.id, amount: signupBonus, type: "earn", reason: `${myReferralCode} 님의 가입으로 받은 포인트`, related_user_id: user?.id },
+        { user_id: user?.id, amount: signupBonus, type: "earn", reason: `${referrer.username} 님을 추천하여 받은 포인트`, related_user_id: referrer.id },
       ]);
 
-      Alert.alert(
-        "성공",
-        `추천인(${targetCode}) 등록 완료! ${signupBonus.toLocaleString()} 포인트가 지급되었습니다.`,
-      );
+      Alert.alert("성공", "추천인 등록 완료!");
       setAlreadyReferred(true);
-      fetchUserData();
+      fetchUserData(); 
     } catch (e) {
       Alert.alert("오류", "추천인 등록 중 문제가 발생했습니다.");
     } finally {
@@ -176,8 +218,8 @@ export default function ReferralScreen({ navigation, route }: any) {
       Alert.alert("알림", "계좌 정보를 모두 입력해주세요.");
       return;
     }
-    if (amountNum < 10000) {
-      Alert.alert("알림", "최소 10,000P 이상부터 인출 가능합니다.");
+    if (amountNum < minWithdraw) {
+      Alert.alert("알림", `${minWithdraw.toLocaleString()}P 이상부터 인출 가능합니다.`);
       return;
     }
     if (amountNum > points) {
@@ -187,53 +229,16 @@ export default function ReferralScreen({ navigation, route }: any) {
 
     setIsWithdrawing(true);
     try {
-      // 1. 유저 보유 포인트 자동 차감 (업데이트)
-      const { error: updateError } = await supabase
-        .from("users")
-        .update({ points: points - amountNum })
-        .eq("id", user?.id);
-      
-      if (updateError) throw updateError;
+      await supabase.from("users").update({ points: points - amountNum }).eq("id", user?.id);
+      await supabase.from("withdrawal_requests").insert({ user_id: user?.id, bank_name: bankName, account_number: accountNumber, account_holder: accountHolder, amount: amountNum });
+      await supabase.from("point_logs").insert({ user_id: user?.id, amount: -amountNum, type: "withdraw", reason: "포인트 현금 인출 신청" });
 
-      // 2. 관리자가 볼 인출 요청 DB 인서트
-      const { error: requestError } = await supabase
-        .from("withdrawal_requests")
-        .insert({
-          user_id: user?.id,
-          bank_name: bankName,
-          account_number: accountNumber,
-          account_holder: accountHolder,
-          amount: amountNum,
-        });
-
-      if (requestError) throw requestError;
-
-      // 3. 내역(장부)에 마이너스(-) 로 인출 로그 기록 (type: withdraw 지정!)
-      const { error: logError } = await supabase
-        .from("point_logs")
-        .insert({
-          user_id: user?.id,
-          amount: -amountNum,
-          type: "withdraw",
-          reason: "포인트 현금 인출 신청",
-        });
-
-      if (logError) throw logError;
-
-      Alert.alert("신청 완료", "현금 인출 신청이 정상적으로 접수되었습니다.\n(관리자 확인 후 송금됩니다)");
-      
-      // 모달 닫기 및 초기화
+      Alert.alert("신청 완료", "정상 접수되었습니다.");
       setShowWithdrawModal(false);
-      setBankName("");
-      setAccountNumber("");
-      setAccountHolder("");
-      setWithdrawAmount("");
-      
-      // 최신 잔여 포인트 갱신
+      setBankName(""); setAccountNumber(""); setAccountHolder(""); setWithdrawAmount("");
       fetchUserData();
     } catch (e: any) {
-      console.error(e);
-      Alert.alert("오류", "인출 신청 중 문제가 발생했습니다.");
+      Alert.alert("오류", "인출 중 문제가 발생했습니다.");
     } finally {
       setIsWithdrawing(false);
     }
@@ -243,51 +248,58 @@ export default function ReferralScreen({ navigation, route }: any) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={28} color="black" />
+          <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>친구 추천</Text>
         <View style={{ width: 28 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.label}>나의 보유 포인트</Text>
-            
-            {/* 🚀 [수정] 버튼들을 가로로 나란히 배치 */}
-            <View style={{ flexDirection: 'row' }}>
-              <TouchableOpacity
-                style={[styles.withdrawBtn, { marginRight: 8, backgroundColor: 'rgba(255,255,255,0.1)' }]}
-                onPress={() => navigation.navigate("PointHistory")} // 👈 나중에 만들 새 화면으로 이동
-              >
-                <Text style={styles.withdrawBtnText}>내역 보기</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.withdrawBtn}
-                // 🚀 [수정] 인출하기 클릭 시 모달 띄우기 조건 적용
-                onPress={() => {
-                  if (points < 10000) {
-                    Alert.alert("알림", "포인트 인출은 10,000P 이상부터 가능합니다.");
-                  } else {
-                    setShowWithdrawModal(true);
-                  }
-                }}
-              >
-                <Text style={styles.withdrawBtnText}>인출하기</Text>
-              </TouchableOpacity>
+        {/* 🚀 [최적화된 포인트 카드] 등급 정보를 상단 카드로 배치 */}
+        <View style={styles.mainCard}>
+          {levelInfo && (
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelText}>{levelInfo.level_name}</Text>
             </View>
-          </View>
-          
+          )}
+          <Text style={styles.label}>나의 보유 포인트</Text>
           <Text style={styles.pointsText}>{points.toLocaleString()} P</Text>
+          {levelInfo && (
+            <Text style={styles.rateText}>본인 결제 시 {levelInfo.self_rate}% 적립 중</Text>
+          )}
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.subBtn} onPress={() => navigation.navigate("PointHistory")}>
+              <Text style={styles.subBtnText}>내역 보기</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.subBtn} 
+              onPress={() => points < minWithdraw ? Alert.alert("알림", `${minWithdraw.toLocaleString()}P 이상부터 가능합니다.`) : setShowWithdrawModal(true)}
+            >
+              <Text style={styles.subBtnText}>인출하기</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* 🚀 고정형 배너를 파쇄하고 데이터베이스 연동형 동적 이벤트 배너 연동 유지 */}
-        <EventBanner
-          screenType="referral"
-          branchId={user?.branch_id}
-          marginHorizontal={0} // 좌우 여백 패딩 조율 맞춤
-        />
+        {/* 🚀 [게이지바] 승급 정보 안내 카드 */}
+        {levelInfo && (
+          <View style={styles.upgradeCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <Ionicons name="rocket" size={20} color="#3B82F6" />
+              <Text style={styles.upgradeText}>
+                {nextLevelInfo 
+                  ? `${nextLevelInfo.level_name} 승급까지 ${(nextLevelInfo.min_referrals - (userData?.referral_count || 0))}명 남았습니다.`
+                  : "최고 등급을 달성하셨습니다! 🎉"}
+              </Text>
+            </View>
+            {nextLevelInfo && (
+              <View style={styles.gaugeContainer}>
+                <View style={[styles.gaugeFill, { width: `${Math.min((userData?.referral_count / nextLevelInfo.min_referrals) * 100, 100)}%` }]} />
+              </View>
+            )}
+          </View>
+        )}
+
+        <EventBanner screenType="referral" branchId={user?.branch_id} marginHorizontal={0} />
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>나의 추천 코드 공유</Text>
@@ -298,302 +310,85 @@ export default function ReferralScreen({ navigation, route }: any) {
               <Text style={styles.buttonText}>링크 공유</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.infoText}>
-            링크를 통해 가입하면 두 분 모두에게 포인트가 지급됩니다.
-          </Text>
         </View>
 
         {!alreadyReferred && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>추천인 등록 (1회)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="추천인 아이디 입력"
-              value={referrerInput}
-              onChangeText={setReferrerInput}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity
-              style={[styles.actionButton, isLoading && { opacity: 0.7 }]}
-              onPress={() => handleRegisterReferrer()}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text style={styles.buttonText}>등록하고 포인트 받기</Text>
-              )}
+            <TextInput style={styles.input} placeholder="추천인 아이디 입력" value={referrerInput} onChangeText={setReferrerInput} autoCapitalize="none" />
+            <TouchableOpacity style={styles.actionButton} onPress={() => handleRegisterReferrer()} disabled={isLoading}>
+              {isLoading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>등록하고 포인트 받기</Text>}
             </TouchableOpacity>
-          </View>
-        )}
-
-        {alreadyReferred && (
-          <View style={styles.section}>
-            <Text style={styles.referredNotice}>
-              이미 추천인 등록을 완료하셨습니다.
-            </Text>
-            <Text style={styles.discountBadge}>
-              1,000P 적립 혜택이 적용되었습니다!
-            </Text>
           </View>
         )}
 
         <View style={styles.noticeSection}>
           <Text style={styles.noticeHeader}>💡 이용 안내 및 유의사항</Text>
-          <View style={styles.noticeItem}>
-            <Text style={styles.noticeText}>
-              • 포인트 인출은 10,000P 이상부터 신청 가능합니다.
-            </Text>
-          </View>
-          <View style={styles.noticeItem}>
-            <Text style={styles.noticeText}>
-              • 포인트 사용은 상품 결제 시 3,000P부터 사용하실 수 있습니다.
-            </Text>
-          </View>
-          <View style={styles.noticeItem}>
-            <Text style={styles.noticeText}>
-              • 결제 적립: 추천인 0.1% / 피추천인 0.3% 적립 (개인 결제 시 0.3%
-              기본 적립)
-            </Text>
-          </View>
-          <View style={styles.noticeItem}>
-            <Text style={styles.noticeText}>
-              • 특별 혜택: 10명 이상 추천 시 0.5% 페이백, 30명 이상 추천 시 1%
-              페이백 혜택이 적용됩니다.
-            </Text>
-          </View>
+          <View style={styles.noticeItem}><Text style={styles.noticeText}>• 포인트 인출은 {minWithdraw.toLocaleString()}P 이상부터 신청 가능합니다.</Text></View>
+          <View style={styles.noticeItem}><Text style={styles.noticeText}>• 포인트 사용은 {minUse.toLocaleString()}P부터 자유롭게 사용하실 수 있습니다.</Text></View>
+          <View style={styles.noticeItem}><Text style={styles.noticeText}>• 결제 시 사용하시는 등급에 따라 포인트가 차등 적립됩니다.</Text></View>
         </View>
       </ScrollView>
 
-      {/* ========================================================================= */}
-      {/* 🚀 [추가] 포인트 인출 팝업창 (Modal) */}
-      {/* ========================================================================= */}
+      {/* 포인트 인출 팝업 */}
       <Modal visible={showWithdrawModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>포인트 현금 인출 신청</Text>
-              <TouchableOpacity onPress={() => setShowWithdrawModal(false)}>
-                <Ionicons name="close" size={24} color="#111827" />
-              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowWithdrawModal(false)}><Ionicons name="close" size={24} color="#111827" /></TouchableOpacity>
             </View>
-
             <View style={styles.modalBody}>
-              <Text style={styles.modalSubText}>
-                인출 가능 포인트: <Text style={{ color: '#4D96FF', fontWeight: 'bold' }}>{points.toLocaleString()} P</Text>
-              </Text>
-              
-              <TextInput
-                style={styles.modalInput}
-                placeholder="은행명 (예: 국민은행)"
-                value={bankName}
-                onChangeText={setBankName}
-              />
-              <TextInput
-                style={styles.modalInput}
-                placeholder="계좌번호 (- 제외)"
-                value={accountNumber}
-                onChangeText={setAccountNumber}
-                keyboardType="number-pad"
-              />
-              <TextInput
-                style={styles.modalInput}
-                placeholder="예금주 (실명)"
-                value={accountHolder}
-                onChangeText={setAccountHolder}
-              />
-              <TextInput
-                style={[styles.modalInput, { borderColor: '#4D96FF', borderWidth: 2 }]}
-                placeholder="인출할 금액 (P)"
-                value={withdrawAmount}
-                onChangeText={setWithdrawAmount}
-                keyboardType="number-pad"
-              />
-
-              <TouchableOpacity
-                style={[styles.modalSubmitBtn, isWithdrawing && { opacity: 0.7 }]}
-                onPress={handleWithdrawRequest}
-                disabled={isWithdrawing}
-              >
-                {isWithdrawing ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={styles.modalSubmitBtnText}>신청하기</Text>
-                )}
-              </TouchableOpacity>
+              <TextInput style={styles.modalInput} placeholder="은행명" value={bankName} onChangeText={setBankName} />
+              <TextInput style={styles.modalInput} placeholder="계좌번호 (- 제외)" value={accountNumber} onChangeText={setAccountNumber} keyboardType="number-pad" />
+              <TextInput style={styles.modalInput} placeholder="예금주" value={accountHolder} onChangeText={setAccountHolder} />
+              <TextInput style={styles.modalInput} placeholder="인출 금액 (P)" value={withdrawAmount} onChangeText={setWithdrawAmount} keyboardType="number-pad" />
+              <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleWithdrawRequest}><Text style={styles.modalSubmitBtnText}>신청하기</Text></TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8f9fa" },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 16,
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  headerTitle: { fontSize: 18, fontWeight: "bold" },
+  container: { flex: 1, backgroundColor: "#F9FAFB" },
+  header: { flexDirection: "row", justifyContent: "space-between", padding: 16, alignItems: "center", backgroundColor: "#fff" },
+  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#111" },
   content: { padding: 20 },
-  card: {
-    backgroundColor: "#4D96FF",
-    padding: 24,
-    borderRadius: 20,
-    marginBottom: 15,
-    elevation: 5,
-  },
-  cardHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  withdrawBtn: {
-    backgroundColor: "rgba(255,255,255,0.25)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.4)",
-  },
-  withdrawBtnText: { color: "white", fontSize: 12, fontWeight: "800" },
-  label: { color: "rgba(255,255,255,0.8)", fontSize: 14, marginBottom: 5 },
-  pointsText: {
-    color: "#fff",
-    fontSize: 32,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  section: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#eee",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 15,
-    color: "#333",
-  },
-  codeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  myCode: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#4D96FF",
-    backgroundColor: "#F0F5FF",
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 10,
-    flex: 1,
-    marginRight: 10,
-    textAlign: "center",
-  },
-  shareButton: {
-    backgroundColor: "#4D96FF",
-    flexDirection: "row",
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  actionButton: {
-    backgroundColor: "#333",
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  buttonText: { color: "white", fontWeight: "bold", marginLeft: 5 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 10,
-  },
-  infoText: { color: "#888", fontSize: 12, marginTop: 10 },
-  referredNotice: { textAlign: "center", color: "#666", fontWeight: "bold" },
-  discountBadge: {
-    textAlign: "center",
-    color: "#FF4B4B",
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  noticeSection: {
-    marginTop: 10,
-    paddingHorizontal: 5,
-    paddingBottom: 40,
-  },
-  noticeHeader: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#475569",
-    marginBottom: 12,
-  },
-  noticeItem: {
-    marginBottom: 8,
-  },
-  noticeText: {
-    fontSize: 12,
-    color: "#64748B",
-    lineHeight: 18,
-    fontWeight: "500",
-  },
-
-  // 🚀 [추가] 모달창 스타일
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    padding: 24,
-    paddingBottom: 40,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
+  mainCard: { backgroundColor: "#3B82F6", padding: 24, borderRadius: 24, marginBottom: 15, alignItems: 'center', shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 5 },
+  label: { color: "rgba(255,255,255,0.9)", fontSize: 13, marginBottom: 8 },
+  pointsText: { color: "#fff", fontSize: 40, fontWeight: "900", marginBottom: 5 },
+  rateText: { color: "#EFF6FF", fontSize: 13, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 },
+  levelBadge: { backgroundColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, marginBottom: 12 },
+  levelText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  buttonRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
+  subBtn: { backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginHorizontal: 8 },
+  subBtnText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
+  upgradeCard: { backgroundColor: '#F0F7FF', padding: 16, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: '#DBEAFE' },
+  upgradeText: { marginLeft: 10, fontSize: 14, color: '#1E40AF', fontWeight: '600' },
+  gaugeContainer: { height: 8, backgroundColor: '#DBEAFE', borderRadius: 4, marginTop: 5, overflow: 'hidden' },
+  gaugeFill: { height: '100%', backgroundColor: '#3B82F6', borderRadius: 4 },
+  section: { backgroundColor: "#fff", padding: 20, borderRadius: 20, marginBottom: 20, borderWidth: 1, borderColor: "#f1f5f9" },
+  sectionTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 15, color: "#333" },
+  codeRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  myCode: { fontSize: 20, fontWeight: "bold", color: "#6366F1", backgroundColor: "#EEF2FF", paddingHorizontal: 15, paddingVertical: 12, borderRadius: 12, flex: 1, marginRight: 10, textAlign: "center" },
+  shareButton: { backgroundColor: "#6366F1", flexDirection: "row", paddingHorizontal: 15, paddingVertical: 14, borderRadius: 12, alignItems: "center" },
+  actionButton: { backgroundColor: "#111827", paddingVertical: 16, borderRadius: 12, alignItems: "center", marginTop: 10 },
+  buttonText: { color: "white", fontWeight: "bold" },
+  input: { borderWidth: 1, borderColor: "#ddd", borderRadius: 12, padding: 15, fontSize: 16, marginBottom: 10 },
+  noticeSection: { marginTop: 10, paddingBottom: 40 },
+  noticeHeader: { fontSize: 14, fontWeight: "800", color: "#475569", marginBottom: 12 },
+  noticeItem: { marginBottom: 8 },
+  noticeText: { fontSize: 12, color: "#64748B", lineHeight: 18 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { backgroundColor: "#FFF", borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   modalTitle: { fontSize: 18, fontWeight: "bold", color: "#111827" },
   modalBody: { marginTop: 10 },
   modalSubText: { fontSize: 14, color: "#64748B", marginBottom: 15 },
-  modalInput: {
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 12,
-    padding: 15,
-    fontSize: 15,
-    marginBottom: 12,
-  },
-  modalSubmitBtn: {
-    backgroundColor: "#4D96FF",
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: "center",
-    marginTop: 10,
-  },
+  modalInput: { backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, padding: 15, fontSize: 15, marginBottom: 12 },
+  modalSubmitBtn: { backgroundColor: "#6366F1", paddingVertical: 16, borderRadius: 14, alignItems: "center", marginTop: 10 },
   modalSubmitBtnText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
 });
