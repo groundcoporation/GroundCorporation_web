@@ -15,10 +15,12 @@ import {
 } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useAuth } from "../../context/AuthContext";
 import { supabase } from "../../lib/supabase"; // 👈 팀장님 프로젝트의 supabase 설정 경로
 
 export default function PickupMainScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
+  const { branchId } = useAuth();
   // 💡 이용권 보유 상태 (null: 확인 중, false: 없음, true: 있음)
   const [hasPickupPass, setHasPickupPass] = useState<boolean | null>(null);
 
@@ -32,6 +34,11 @@ export default function PickupMainScreen({ navigation }: any) {
 
   // 1. DB에서 실시간 데이터 및 설정 정보 가져오기
   const fetchLiveStatus = async () => {
+    if (!branchId) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       console.log("🔄 [디버그] fetchLiveStatus 데이터 조회 시작");
@@ -107,6 +114,7 @@ export default function PickupMainScreen({ navigation }: any) {
         .from("shuttle_status")
         .select("is_driving")
         .eq("is_driving", true)
+        .eq("branch_id", branchId)
         .limit(1)
         .maybeSingle();
 
@@ -123,6 +131,7 @@ export default function PickupMainScreen({ navigation }: any) {
         .from("pickup_settings")
         .select("child_id, area, apartment, detail_location")
         .in("child_id", targetIds)
+        .eq("branch_id", branchId)
         .eq("is_active", true);
 
       // (6) 화면용 데이터 결합
@@ -142,16 +151,23 @@ export default function PickupMainScreen({ navigation }: any) {
 
   useFocusEffect(
     useCallback(() => {
-      fetchLiveStatus();
-    }, []),
+      if (branchId) fetchLiveStatus();
+    }, [branchId]),
   );
 
   useEffect(() => {
+    if (!branchId) return;
+
     const shuttleSubscription = supabase
-      .channel("live_shuttle_main")
+      .channel(`live_shuttle_main:${branchId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "shuttle_status" },
+        {
+          event: "*",
+          schema: "public",
+          table: "shuttle_status",
+          filter: `branch_id=eq.${branchId}`,
+        },
         fetchLiveStatus,
       )
       .subscribe();
@@ -159,7 +175,7 @@ export default function PickupMainScreen({ navigation }: any) {
     return () => {
       supabase.removeChannel(shuttleSubscription);
     };
-  }, []);
+  }, [branchId]);
 
   if (loading || hasPickupPass === null) {
     return (

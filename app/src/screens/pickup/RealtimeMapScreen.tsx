@@ -15,6 +15,7 @@ import { Ionicons, Feather } from "@expo/vector-icons";
 import MapView, { Marker } from "react-native-maps";
 import { supabase } from "../../lib/supabase";
 import * as Location from "expo-location";
+import { useAuth } from "../../context/AuthContext";
 
 // =========================================================================
 // 🚀 [GPS 추적 주기 수정 메뉴얼]
@@ -35,6 +36,7 @@ import * as Location from "expo-location";
 
 const RealtimeMapScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
+  const { branchId } = useAuth();
   const [loading, setLoading] = useState(true);
   const [shuttle, setShuttle] = useState<any>(null);
   const mapRef = useRef<MapView>(null);
@@ -43,12 +45,19 @@ const RealtimeMapScreen = ({ navigation }: any) => {
   // 1. [초기 데이터 로딩] 화면을 처음 켰을 때 현재 운행 중인 셔틀버스를 찾아옵니다.
   // =========================================================================
   const fetchShuttleStatus = async () => {
+    if (!branchId) {
+      setShuttle(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from("shuttle_status")
         .select("*")
         .eq("is_driving", true)
+        .eq("branch_id", branchId)
         .limit(1)
         .maybeSingle();
 
@@ -68,6 +77,11 @@ const RealtimeMapScreen = ({ navigation }: any) => {
   // 2. [실시간 구독 & 권한 설정] 위치 권한을 묻고, Supabase 실시간 데이터를 구독합니다.
   // =========================================================================
   useEffect(() => {
+    if (!branchId) {
+      setLoading(false);
+      return;
+    }
+
     const requestPermission = async () => {
       await Location.requestForegroundPermissionsAsync();
     };
@@ -76,13 +90,14 @@ const RealtimeMapScreen = ({ navigation }: any) => {
     fetchShuttleStatus();
 
     const subscription = supabase
-      .channel("shuttle_move")
+      .channel(`shuttle_move:${branchId}`)
       .on(
         "postgres_changes",
         {
           event: "UPDATE",
           schema: "public",
           table: "shuttle_status",
+          filter: `branch_id=eq.${branchId}`,
         },
         (payload) => {
           console.log(
@@ -114,7 +129,7 @@ const RealtimeMapScreen = ({ navigation }: any) => {
     return () => {
       supabase.removeChannel(subscription);
     };
-  }, []);
+  }, [branchId]);
 
   // =========================================================================
   // 3. [화면 렌더링 (UI)] 실제 스마트폰에 보여지는 화면 구성입니다.
