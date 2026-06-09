@@ -187,7 +187,8 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             branch_id: branchId,
             role: 'user',
             referred_by: referralCode ? referralCode.replace(/\s/g, '') : null,
-            points: referrerData ? signupBonus : 0,
+            // points: referrerData ? signupBonus : 0, // 추천인 있으면 보너스 포인트, 없으면 0
+            points: signupBonus, //추천인 있든없든 본인한테는 가입시 1000포인트 지급
             lineage: newUserLineage // 🚀 [추가] 방금 만든 족보(계보) 배열을 DB에 저장!
         }]);
 
@@ -195,11 +196,20 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
 
         // [C] 가입자 로그 기록
         if (referrerData) {
+            // 추천인이 있을 때의 기록
             await supabase.from('point_logs').insert({ 
               user_id: authData.user.id, 
               amount: signupBonus, 
               reason: `${referralCode.replace(/\s/g, '')} 님을 추천하여 받은 포인트`, 
               related_user_id: referrerData.id 
+            });
+        } else {
+            // 🚀 추천인이 없을 때의 기록 (기본 가입 축하금 영수증)
+            await supabase.from('point_logs').insert({ 
+              user_id: authData.user.id, 
+              amount: signupBonus, 
+              reason: `회원가입 축하 기본 포인트`, 
+              related_user_id: authData.user.id 
             });
         }
 
