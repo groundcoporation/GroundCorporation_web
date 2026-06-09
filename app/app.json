@@ -20,13 +20,6 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
-      ],
       "edgeToEdgeEnabled": true,
       "package": "com.goundcorp.ipasscare",
       "googleServicesFile": "./google-services.json",
@@ -49,8 +42,9 @@
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true,
           "foregroundService": {
-            "notificationTitle": "IPASSCARE 셔틀 운행 중",
-            "notificationBody": "백그라운드에서 위치를 실시간으로 공유하고 있습니다."
+            "notificationTitle": "셔틀 위치 추적 중",
+            "notificationBody": "앱이 닫혀있어도 실시간 위치를 공유합니다.",
+            "notificationColor": "#6366F1"
           }
         }
       ]

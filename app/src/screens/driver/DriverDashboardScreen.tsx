@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
-  Linking,
   ActivityIndicator,
   Switch,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as TaskManager from "expo-task-manager";
@@ -27,9 +27,10 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.locale("ko");
 
-// 🚀 [백그라운드 위치 추적 태스크 정의]
-// 이 부분은 반드시 컴포넌트 외부(최상단)에 있어야 합니다.
+// 🚀 [백그라운드 위치 태스크 정의]
 const LOCATION_TASK_NAME = "SHUTTLE_LOCATION_TRACKING";
+const LOCATION_UPDATE_INTERVAL_MS = 10000;
+const TRACKING_LAST_SENT_AT_KEY = "tracking_last_sent_at";
 
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
   if (error) {
@@ -42,11 +43,22 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
     if (location) {
       const { latitude, longitude } = location.coords;
 
-      // 백그라운드 태스크는 Hook을 못 쓰므로 AsyncStorage에서 정보를 직접 꺼내야 합니다.
+      // 태스크 내에서는 Hook을 못 쓰므로 AsyncStorage에서 정보를 꺼냅니다.
       const driverId = await AsyncStorage.getItem("tracking_driver_id");
       const branchId = await AsyncStorage.getItem("tracking_branch_id");
 
       if (driverId && branchId) {
+        const now = Date.now();
+        const lastSentAt = Number(
+          (await AsyncStorage.getItem(TRACKING_LAST_SENT_AT_KEY)) || 0,
+        );
+
+        if (lastSentAt && now - lastSentAt < LOCATION_UPDATE_INTERVAL_MS) {
+          return;
+        }
+
+        await AsyncStorage.setItem(TRACKING_LAST_SENT_AT_KEY, String(now));
+
         await supabase.from("shuttle_status").upsert({
           shuttle_id: driverId,
           driver_id: driverId,
@@ -62,6 +74,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
 });
 
 // 🚀 [좀비 원천 봉쇄]
+let globalLocationSub: Location.LocationSubscription | null = null;
 let globalIsDriving = false;
 let currentTrackingSessionId: string | null = null;
 
@@ -113,50 +126,46 @@ export default function DriverDashboardScreen({ navigation }: any) {
   }, [isDeveloper, branchId, driverInfo, selectedDate]);
 
   const startLocationTracking = async (profile: any) => {
-    // 1. 포그라운드 권한 요청
-    const { status: fgStatus } = await Location.getForegroundPermissionsAsync();
-    if (fgStatus !== "granted") {
-      const { status: newFgStatus } =
-        await Location.requestForegroundPermissionsAsync();
-      if (newFgStatus !== "granted") return;
-    }
+    const { status: fgStatus } =
+      await Location.requestForegroundPermissionsAsync();
+    if (fgStatus !== "granted") return;
 
-    // 2. 백그라운드(항상 허용) 권한 요청 (매우 중요!)
+    // 2. 백그라운드(항상 허용) 권한 요청
     const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
-
     if (bgStatus !== "granted") {
-      Alert.alert(
-        "위치 권한 설정 필요",
-        "앱을 닫아도 셔틀 위치를 전송하려면 위치 권한을 반드시 '항상 허용'으로 설정해야 합니다.\n\n설정 화면에서 [권한 -> 위치 -> 항상 허용]을 선택해주세요.",
-        [
-          { text: "취소", style: "cancel" },
-          {
-            text: "설정으로 이동",
-            onPress: () => Linking.openSettings(),
-          },
-        ],
-      );
-      return;
+      // 항상 허용이 없으면 설정 화면으로 보냄
+      const { status: newBgStatus } =
+        await Location.requestBackgroundPermissionsAsync();
+      if (newBgStatus !== "granted") {
+        Alert.alert(
+          "위치 권한 설정 필요",
+          "앱을 닫아도 위치를 공유하려면 위치 권한을 [항상 허용]으로 설정해야 합니다. 설정 화면에서 변경해주세요.",
+          [
+            { text: "취소", style: "cancel" },
+            { text: "설정으로 이동", onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
     }
 
     const mySessionId = Math.random().toString(36).substring(7);
     currentTrackingSessionId = mySessionId;
 
-    // 3. 백그라운드 태스크에서 사용할 데이터 저장
+    // 3. 백그라운드 태스크에서 사용할 정보 저장
     const targetBranch = isDeveloper ? branchId : profile.branch_id;
     await AsyncStorage.setItem("tracking_driver_id", profile.id);
     await AsyncStorage.setItem("tracking_branch_id", targetBranch);
+    await AsyncStorage.removeItem(TRACKING_LAST_SENT_AT_KEY);
 
-    // 4. 백그라운드 위치 업데이트 시작
+    // 4. 백그라운드 전용 추적 API 시작
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
       accuracy: Location.Accuracy.High,
-      timeInterval: 10000, // 10초마다
-      distanceInterval: 5, // 5미터 이동시
-      deferredUpdatesInterval: 10000,
-      // 안드로이드 전용: 상단바 알림을 띄워 서비스 유지
+      timeInterval: LOCATION_UPDATE_INTERVAL_MS, // 10초마다
+      distanceInterval: 5, // 5미터 이동 시
       foregroundService: {
-        notificationTitle: "아이패스케어 셔틀 운행 중",
-        notificationBody: "실시간 위치를 전송하고 있습니다.",
+        notificationTitle: "셔틀 실시간 운행 중",
+        notificationBody: "백그라운드에서 위치 정보를 공유하고 있습니다.",
         notificationColor: "#6366F1",
       },
       pausesUpdatesAutomatically: false,
@@ -388,14 +397,16 @@ export default function DriverDashboardScreen({ navigation }: any) {
         setIsDriving(false);
         currentTrackingSessionId = null;
 
-        // 🚀 태스크가 실행 중인지 확인 후 종료 (에러 방지)
         const isTaskRunning =
           await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
         if (isTaskRunning) {
           await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
         }
-        await AsyncStorage.removeItem("tracking_driver_id");
-        await AsyncStorage.removeItem("tracking_branch_id");
+        await AsyncStorage.multiRemove([
+          "tracking_driver_id",
+          "tracking_branch_id",
+          TRACKING_LAST_SENT_AT_KEY,
+        ]);
 
         await supabase.from("shuttle_status").upsert({
           shuttle_id: driverInfo.id,
