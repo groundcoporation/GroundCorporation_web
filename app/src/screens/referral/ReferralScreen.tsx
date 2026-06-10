@@ -34,10 +34,11 @@ export default function ReferralScreen({ navigation, route }: any) {
   const [nextLevelInfo, setNextLevelInfo] = useState<any>(null); // 다음 등급 정책 정보
 
   // =========================================================================
-  // 🚀 [추가] DB 정책 수치 상태 (이용 안내 동적 반영용)
+  // 🚀 [추가/수정] DB 정책 수치 상태 (이용 안내 및 공유 문구 동적 반영용)
   // =========================================================================
   const [minWithdraw, setMinWithdraw] = useState(10000);
   const [minUse, setMinUse] = useState(3000);
+  const [signupBonus, setSignupBonus] = useState(2000); // 🚀 [추가] 가입 보너스 동적 관리
 
   // =========================================================================
   // 🚀 [추가] 인출 모달창 관리를 위한 상태 변수들
@@ -125,18 +126,36 @@ export default function ReferralScreen({ navigation, route }: any) {
     if (settings) {
       const w = settings.find(s => s.key === 'min_withdraw_amount')?.value;
       const u = settings.find(s => s.key === 'min_use_amount')?.value;
+      const b = settings.find(s => s.key === 'signup_bonus')?.value; // 🚀 [추가] 가입 보너스 가져오기
+      
       if (w) setMinWithdraw(Number(w));
       if (u) setMinUse(Number(u));
+      if (b) setSignupBonus(Number(b)); // 🚀 [추가] 상태 업데이트
     }
   };
 
   // 추천 링크 공유하기
   const onShare = async () => {
-    const playStoreLink = `https://play.google.com/store/apps/details?id=com.goundcorp.ipasscare&referrer=${myReferralCode}`;
+    // 🚀 [수정] 우리가 방금 배포한 만능 엣지 펑션 주소로 교체
+    const shareLink = `https://wsdyrercgbvwlssntwvy.supabase.co/functions/v1/invite?ref=${myReferralCode}`;
+
+    // 🚀 [수정] 하드코딩 제거: DB에서 가져온 signupBonus 값을 천 단위 콤마와 함께 동적 삽입
+    const shareMessage = `[🎁 특별 초대장] 
+안전한 학원 픽업 서비스 '아이패스케어'에 초대합니다!
+
+지금 아래 링크를 통해 앱을 설치하고 바로 가입하시면, 즉시 사용 가능한 ${signupBonus.toLocaleString()}P가 자동으로 적립됩니다. 🎉
+(※ 앱 실행 시 초대 팝업을 꼭 확인해 주세요!)
+
+👇 ${signupBonus.toLocaleString()}P 혜택 받고 가입하기
+${shareLink}
+
+💡 혹시 가입창에 추천인이 안 보인다면?
+• 추천인 ID: ${myReferralCode}
+(직접 입력하셔도 동일하게 ${signupBonus.toLocaleString()}P가 지급됩니다!)`;
 
     try {
       await Share.share({
-        message: `[아이패스케어] 저와 함께 시작해요! \n\n추천인 코드: ${myReferralCode}\n지금 다운로드: ${playStoreLink}`,
+        message: shareMessage,
       });
     } catch (error) {
       console.log(error);
@@ -177,25 +196,25 @@ export default function ReferralScreen({ navigation, route }: any) {
         return;
       }
 
-      const signupBonus = Number(bonusData?.value) || 1000;
+      const currentSignupBonus = Number(bonusData?.value) || 1000;
       const newLineage = [...(referrer.lineage || []), referrer.id]; // 🚀 족보 형성
 
       // 2. 포인트 지급 및 족보/카운트 업데이트
       await supabase.from("users").update({ 
         referred_by: targetCode, 
-        points: points + signupBonus,
+        points: points + currentSignupBonus,
         lineage: newLineage 
       }).eq("id", user?.id);
 
       await supabase.from("users").update({ 
-        points: (referrer.points || 0) + signupBonus,
+        points: (referrer.points || 0) + currentSignupBonus,
         referral_count: (referrer.referral_count || 0) + 1 
       }).eq("id", referrer.id);
 
       // 3. 로그 기록
       await supabase.from("point_logs").insert([
-        { user_id: referrer.id, amount: signupBonus, type: "earn", reason: `${myReferralCode} 님의 가입으로 받은 포인트`, related_user_id: user?.id },
-        { user_id: user?.id, amount: signupBonus, type: "earn", reason: `${referrer.username} 님을 추천하여 받은 포인트`, related_user_id: referrer.id },
+        { user_id: referrer.id, amount: currentSignupBonus, type: "earn", reason: `${myReferralCode} 님의 가입으로 받은 포인트`, related_user_id: user?.id },
+        { user_id: user?.id, amount: currentSignupBonus, type: "earn", reason: `${referrer.username} 님을 추천하여 받은 포인트`, related_user_id: referrer.id },
       ]);
 
       Alert.alert("성공", "추천인 등록 완료!");

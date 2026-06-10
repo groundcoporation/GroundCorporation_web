@@ -220,6 +220,23 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
           ? `회원가입이 완료되었습니다! (추천 포인트 ${signupBonus}P 지급)` 
           : '회원가입이 완료되었습니다!';
 
+        // =================================================================
+        // 🚀 [추가] 어뷰징 방어: 가입 성공 시 temp_redirects에서 내 IP 기록 삭제
+        // =================================================================
+        try {
+          const ipResponse = await fetch("https://api.ipify.org?format=json");
+          const ipData = await ipResponse.json();
+          const myIp = ipData.ip;
+
+          await supabase
+            .from('temp_redirects')
+            .delete()
+            .eq('ip_address', myIp);
+        } catch (cleanupError) {
+          console.log('임시 흔적 삭제 중 에러 발생 (무시 가능):', cleanupError);
+        }
+        // =================================================================
+
         Alert.alert('성공', successMessage, [{ text: '확인', onPress: () => navigation.navigate('Login') }]);
         
       } 
