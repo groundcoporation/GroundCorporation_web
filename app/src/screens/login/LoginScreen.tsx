@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Modal, // 🚀 [추가] 예쁜 팝업을 띄우기 위한 컴포넌트
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,9 +32,86 @@ export default function LoginScreen({ navigation }: any) {
   // 🚀 [추가됨] 전역 상태를 수동으로 새로고침하는 함수 꺼내기
   const { refreshAuth } = useAuth();
 
+  // =========================================================================
+  // 🚀 [추가] 가입 유도 팝업창을 위한 상태 변수들
+  // =========================================================================
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupType, setPopupType] = useState<"general" | "referral" | null>(null);
+  const [popupReferralCode, setPopupReferralCode] = useState("");
+  const [signupBonus, setSignupBonus] = useState(1000); // DB에서 가져올 혜택금
+
   useEffect(() => {
     loadSavedCredentials();
+    checkWelcomePopup(); // 🚀 [추가] 화면이 켜지면 팝업 띄울지 검사 시작
   }, []);
+
+  // =========================================================================
+  // 🚀 [추가] IP 스캔 및 팝업 노출 여부 결정 로직
+  // =========================================================================
+  const checkWelcomePopup = async () => {
+    try {
+      // 1. '오늘 하루 안 보기' 설정 검사
+      const today = new Date().toISOString().split("T")[0]; // 예: "2026-06-11"
+      const hideDate = await AsyncStorage.getItem("hide_signup_popup_date");
+      if (hideDate === today) return; // 오늘 안 보기 설정했으면 바로 종료
+
+      // 2. DB에서 가입 축하금(signup_bonus) 실시간으로 가져오기
+      const { data: pointData } = await supabase
+        .from("point_settings")
+        .select("value")
+        .eq("key", "signup_bonus")
+        .maybeSingle();
+      
+      const currentBonus = Number(pointData?.value) || 1000;
+      setSignupBonus(currentBonus);
+
+      // 3. 내 스마트폰의 현재 접속 IP 가져오기 (무료 IP 확인 API 활용)
+      const ipResponse = await fetch("https://api.ipify.org?format=json");
+      const ipData = await ipResponse.json();
+      const myIp = ipData.ip;
+
+      // 4. 최근 30분 이내에 내 IP로 저장된 추천 링크 클릭 흔적이 있는지 DB 검색
+      const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: redirectData } = await supabase
+        .from("temp_redirects")
+        .select("referral_code")
+        .eq("ip_address", myIp)
+        .gte("created_at", thirtyMinsAgo)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // 5. 결과에 따라 맞춤형 팝업 세팅
+      if (redirectData && redirectData.referral_code) {
+        setPopupType("referral");
+        setPopupReferralCode(redirectData.referral_code);
+      } else {
+        setPopupType("general");
+      }
+
+      // 팝업 짠! 띄우기
+      setShowPopup(true);
+    } catch (error) {
+      console.log("팝업 검사 중 에러 (조용히 무시):", error);
+      // 에러가 나도 로그인은 되어야 하므로 팝업만 안 띄우고 패스합니다.
+    }
+  };
+
+  // 🚀 [추가] 오늘 하루 보지 않기 처리 함수
+  const handleHidePopupToday = async () => {
+    const today = new Date().toISOString().split("T")[0];
+    await AsyncStorage.setItem("hide_signup_popup_date", today);
+    setShowPopup(false);
+  };
+
+  // 🚀 [추가] 팝업에서 가입하기 버튼 누를 때 (추천인 코드 넘겨주기)
+  const handleGoToSignUp = () => {
+    setShowPopup(false);
+    navigation.navigate("SignUp", {
+      referralCode: popupType === "referral" ? popupReferralCode : undefined,
+    });
+  };
+  // =========================================================================
 
   const loadSavedCredentials = async () => {
     try {
@@ -268,6 +346,57 @@ export default function LoginScreen({ navigation }: any) {
           <Text style={styles.linkTextGrey}>아이디/비밀번호 찾기</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ========================================================================= */}
+      {/* 🚀 [추가] 예쁜 마케팅 가입 팝업 모달창 */}
+      {/* ========================================================================= */}
+      <Modal visible={showPopup} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            
+            {/* 팝업 아이콘 영역 */}
+            <View style={styles.iconCircle}>
+              <Ionicons name="gift" size={40} color="#fff" />
+            </View>
+
+            {/* 맞춤형 텍스트 영역 */}
+            {popupType === "referral" ? (
+              <>
+                <Text style={styles.popupTitle}>특별한 초대장이 도착했어요!</Text>
+                <Text style={styles.popupDesc}>
+                  <Text style={styles.highlightText}>{popupReferralCode}</Text> 님의 초대로 오셨군요.{"\n"}지금 가입하시면 축하금{" "}
+                  <Text style={styles.highlightText}>{signupBonus.toLocaleString()}P</Text>를 즉시 드립니다!
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.popupTitle}>아이패스케어에 오신 걸 환영합니다!</Text>
+                <Text style={styles.popupDesc}>
+                  아직 회원이 아니신가요?{"\n"}지금 가입하시면 현금처럼 쓰는{" "}
+                  <Text style={styles.highlightText}>{signupBonus.toLocaleString()}P</Text>를 즉시 드립니다!
+                </Text>
+              </>
+            )}
+
+            {/* 버튼 영역 */}
+            <TouchableOpacity style={styles.popupMainBtn} onPress={handleGoToSignUp}>
+              <Text style={styles.popupMainBtnText}>혜택 받고 가입하기</Text>
+            </TouchableOpacity>
+
+            <View style={styles.popupFooterRow}>
+              <TouchableOpacity onPress={handleHidePopupToday}>
+                <Text style={styles.popupSubBtnText}>오늘 하루 보지 않기</Text>
+              </TouchableOpacity>
+              <Text style={styles.popupDivider}>|</Text>
+              <TouchableOpacity onPress={() => setShowPopup(false)}>
+                <Text style={styles.popupSubBtnText}>닫기</Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -333,4 +462,81 @@ const styles = StyleSheet.create({
   linkContainer: { flexDirection: "row", justifyContent: "space-between" },
   linkTextBlue: { color: "#007AFF", fontSize: 14 },
   linkTextGrey: { color: "grey", fontSize: 14 },
+
+  // =========================================================================
+  // 🚀 [추가] 팝업창 디자인 스타일
+  // =========================================================================
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    width: "100%",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  iconCircle: {
+    width: 70,
+    height: 70,
+    backgroundColor: "teal",
+    borderRadius: 35,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: -10, // 살짝 위로 띄워서 강조
+  },
+  popupTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#111",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  popupDesc: {
+    fontSize: 14,
+    color: "#555",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  highlightText: {
+    color: "teal",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  popupMainBtn: {
+    backgroundColor: "teal",
+    width: "100%",
+    paddingVertical: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  popupMainBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  popupFooterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  popupSubBtnText: {
+    color: "#888",
+    fontSize: 13,
+  },
+  popupDivider: {
+    color: "#ddd",
+    marginHorizontal: 15,
+  },
 });
