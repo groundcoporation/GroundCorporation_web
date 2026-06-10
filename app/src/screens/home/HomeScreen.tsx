@@ -9,7 +9,6 @@ import {
   StatusBar,
   FlatList,
   Linking,
-  ImageBackground,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -37,6 +36,9 @@ import EventBanner from "../../components/EventBanner";
 import PopupManager from "../../components/popups/PopupManager";
 // 🚀 [알림 종 임포트] 실시간 알림 및 모달 기능 추가
 import NotificationBell from "../../components/notification/NotificationBell";
+import HomeStatusScene, {
+  HomeStatusSceneType,
+} from "../../components/status/HomeStatusScene";
 
 // 💡 biz_info 데이터 타입에 이용약관 및 개인정보 링크 추가
 interface BizInfo {
@@ -213,6 +215,7 @@ export default function HomeScreen({ navigation }: any) {
     // 기본 상태
     let statusLabel = "오늘의 일정을 기다리고 있어요";
     let statusBg = "rgba(255,255,255,0.2)";
+    let sceneType: HomeStatusSceneType = "waiting";
     let bgImage =
       "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800"; // 기본 축구장 배경
 
@@ -224,21 +227,25 @@ export default function HomeScreen({ navigation }: any) {
         if (attStatus === "하차") {
           statusLabel = "안전하게 셔틀에서 하차했어요 🏠";
           statusBg = "#64748B";
+          sceneType = "home";
           bgImage =
             "https://images.unsplash.com/photo-1490139177067-2819828d54d1?q=80&w=800";
         } else if (attStatus === "하원") {
           statusLabel = "집으로 가는 셔틀을 타고 있어요 🚌";
           statusBg = "#3D56B2";
+          sceneType = "moving";
           bgImage =
             "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
         } else if (attStatus === "등원") {
           statusLabel = "학원에 도착해 열심히 수업 중이에요 ⚽";
           statusBg = "#10B981";
+          sceneType = "arrived";
           bgImage =
             "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
         } else if (attStatus === "승차") {
           statusLabel = "학원 가는 셔틀에 탑승했어요 🚌";
           statusBg = "#3D56B2";
+          sceneType = "boarding";
           bgImage =
             "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
         }
@@ -246,11 +253,13 @@ export default function HomeScreen({ navigation }: any) {
         if (attStatus === "하원") {
           statusLabel = "수업을 안전하게 마쳤어요 👋";
           statusBg = "#F59E0B";
+          sceneType = "class";
           bgImage =
             "https://images.unsplash.com/photo-1516733725897-1aa73b87c8e8?q=80&w=800";
         } else if (attStatus === "등원") {
           statusLabel = "학원에 도착해 열심히 수업 중이에요 ⚽";
           statusBg = "#10B981";
+          sceneType = "arrived";
           bgImage =
             "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
         }
@@ -260,12 +269,8 @@ export default function HomeScreen({ navigation }: any) {
     return (
       <View style={styles.cardShadow}>
         {hasReservation ? (
-          <ImageBackground
-            source={{ uri: bgImage }}
-            style={styles.cardInner}
-            imageStyle={{ borderRadius: 16 }}
-          >
-            <View style={styles.cardOverlay} />
+          <View style={[styles.cardInner, styles.animatedStatusCard]}>
+            <HomeStatusScene type={sceneType} />
             <View style={styles.cardContent}>
               <View>
                 <View style={[styles.tag, { backgroundColor: statusBg }]}>
@@ -290,7 +295,7 @@ export default function HomeScreen({ navigation }: any) {
                 </Text>
               </View>
             </View>
-          </ImageBackground>
+          </View>
         ) : (
           <View style={[styles.cardInner, styles.emptyCard]}>
             <MaterialCommunityIcons
@@ -774,6 +779,12 @@ const styles = StyleSheet.create({
     height: 160,
     justifyContent: "flex-end",
   },
+  animatedStatusCard: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 16,
+    backgroundColor: "#EAF4FF",
+  },
   cardOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
@@ -784,6 +795,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
+    zIndex: 2,
   },
   tag: {
     backgroundColor: "rgba(255,255,255,0.2)",
@@ -797,17 +809,16 @@ const styles = StyleSheet.create({
   cardDateText: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#fff",
+    color: "#111827",
     letterSpacing: -0.5,
   },
   cardChildText: {
     fontSize: 15,
-    color: "#fff",
+    color: "#334155",
     marginTop: 2,
     fontWeight: "600",
-    opacity: 0.9,
   },
-  branchText: { fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 4 },
+  branchText: { fontSize: 12, color: "#64748B", marginTop: 4 },
   quickMenuGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
