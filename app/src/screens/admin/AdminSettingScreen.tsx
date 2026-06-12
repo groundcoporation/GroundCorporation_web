@@ -44,6 +44,7 @@ export default function AdminPackageScreen({ navigation }: any) {
     is_consult: false, // 상담 필요 여부
     is_option: false, // 🚀 [추가] 팝업 추천 여부
     is_shuttle: false, // 셔틀 여부
+    is_item: false, // 🚀 [추가] 단품/일회성 여부
     options: [{ label: "주 1회", price: "", total_count: "1" }],
   });
 
@@ -186,6 +187,7 @@ export default function AdminPackageScreen({ navigation }: any) {
         is_consult: pkgForm.is_consult, // 상담 필요 여부 저장
         is_option: pkgForm.is_option, // 🚀 [추가] 팝업 노출 여부 저장
         is_shuttle: pkgForm.is_shuttle, // 셔틀 여부 저장
+        is_item: pkgForm.is_item, // 🚀 [추가] 단품/일회성 여부 저장
       };
       let pkgId = editingPkgId;
       if (editingPkgId) {
@@ -250,6 +252,7 @@ export default function AdminPackageScreen({ navigation }: any) {
       is_consult: item.is_consult || false,
       is_option: item.is_option || false, // 🚀 [추가] 팝업 노출 여부 불러오기
       is_shuttle: item.is_shuttle || false,
+      is_item: item.is_item || false, // 🚀 [추가] 단품/일회성 여부 불러오기
       options:
         item.package_options.length > 0
           ? item.package_options.map((o: any) => ({
@@ -384,6 +387,7 @@ export default function AdminPackageScreen({ navigation }: any) {
                 is_consult: false,
                 is_option: false, // 초기화
                 is_shuttle: false, // 초기화
+                is_item: false, // 초기화
                 options: [{ label: "주 1회", price: "", total_count: "1" }],
               });
               setIsPkgFormVisible(true);
@@ -471,6 +475,19 @@ export default function AdminPackageScreen({ navigation }: any) {
                     value={pkgForm.is_shuttle}
                     onValueChange={(val) =>
                       setPkgForm({ ...pkgForm, is_shuttle: val })
+                    }
+                    trackColor={{ false: "#E2E8F0", true: "#6366F1" }}
+                  />
+                </View>
+                {/* 🚀 [추가] 단품/일회성 상품 스위치 */}
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>
+                    📦 일회성 단품 상품 (수업 예약 불가)
+                  </Text>
+                  <Switch
+                    value={pkgForm.is_item}
+                    onValueChange={(val) =>
+                      setPkgForm({ ...pkgForm, is_item: val })
                     }
                     trackColor={{ false: "#E2E8F0", true: "#6366F1" }}
                   />

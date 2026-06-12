@@ -237,7 +237,10 @@ export default function ReservationScreen({ navigation }: any) {
       .eq("status", "active")
       .gt("remaining_count", 0)
       .gte("expiry_date", today)
-      .or("is_shuttle.is.null,is_shuttle.eq.false");
+      .or("is_shuttle.is.null,is_shuttle.eq.false") //셔틀 안나오게하는것
+      .or("is_item.is.null,is_item.eq.false");      // 🎯 단품/대관 방어
+      
+      
 
     if (child) {
       // 자녀 수강권: child_id가 비어있거나, 선택한 자녀 ID와 일치하는 것
