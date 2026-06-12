@@ -585,9 +585,19 @@ export default function ReservationScreen({ navigation }: any) {
       </View>
 
       {/* 🚀 자녀 선택 모달 */}
-      <Modal visible={childModalVisible} transparent animationType="slide">
+      <Modal
+        visible={childModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setChildModalVisible(false)}
+      >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalContent,
+              { paddingBottom: Math.max(insets.bottom + 20, 25) },
+            ]}
+          >
             <Text style={styles.modalTitle}>누구의 수업을 예약할까요?</Text>
             {allChildren.map((child) => (
               <TouchableOpacity
@@ -614,9 +624,19 @@ export default function ReservationScreen({ navigation }: any) {
       </Modal>
 
       {/* 🚀 이용권 선택 모달 */}
-      <Modal visible={packageModalVisible} transparent animationType="slide">
+      <Modal
+        visible={packageModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPackageModalVisible(false)}
+      >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalContent,
+              { paddingBottom: Math.max(insets.bottom + 20, 25) },
+            ]}
+          >
             <Text style={styles.modalTitle}>사용할 이용권을 선택하세요</Text>
             {availablePackages.map((pkg) => (
               <TouchableOpacity

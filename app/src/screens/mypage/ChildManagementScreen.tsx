@@ -348,8 +348,15 @@ export default function ChildManagementScreen({ navigation }: any) {
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.modalContent}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+            style={styles.modalKeyboard}
           >
+            <View
+              style={[
+                styles.modalContent,
+                { paddingBottom: Math.max(insets.bottom + 16, 24) },
+              ]}
+            >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {isEditing ? "자녀 정보 수정" : "새 자녀 등록"}
@@ -359,7 +366,14 @@ export default function ChildManagementScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={[
+                styles.modalScrollContent,
+                { paddingBottom: insets.bottom + 20 },
+              ]}
+            >
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>
                   자녀 이름 <Text style={{ color: "#EF4444" }}>*</Text>
@@ -465,6 +479,7 @@ export default function ChildManagementScreen({ navigation }: any) {
               </TouchableOpacity>
               <View style={{ height: 20 }} />
             </ScrollView>
+            </View>
           </KeyboardAvoidingView>
         </View>
       </Modal>
@@ -584,13 +599,20 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
+    justifyContent: "flex-end",
     alignItems: "center",
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+  },
+  modalKeyboard: {
+    width: "100%",
+    flex: 1,
+    justifyContent: "flex-end",
   },
   modalContent: {
     width: "100%",
-    maxHeight: "90%",
+    maxHeight: "88%",
     backgroundColor: "#FFF",
     borderRadius: 24,
     padding: 24,
@@ -600,6 +622,7 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
+  modalScrollContent: { flexGrow: 1 },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",

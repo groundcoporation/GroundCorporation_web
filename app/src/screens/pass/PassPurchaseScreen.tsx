@@ -893,9 +893,19 @@ export default function PassPurchaseScreen({ navigation }: any) {
         </View>
       </Modal>
 
-      <Modal visible={showOptionModal} transparent animationType="slide">
+      <Modal
+        visible={showOptionModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowOptionModal(false)}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalContent,
+              { paddingBottom: Math.max(insets.bottom + 20, 24) },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>추가 혜택 추천</Text>
               <TouchableOpacity onPress={() => setShowOptionModal(false)}>

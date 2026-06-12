@@ -1,23 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  StatusBar,
-  BackHandler,
   ActivityIndicator,
+  BackHandler,
+  SectionList,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "../../lib/supabase"; // 🚀 경로 확인 완료!
-import { Picker } from "@react-native-picker/picker"; // 🚀 어드민 필터용
-
-// 🚀 [추가] 화면이 유저 눈에 보일 때마다 공지사항을 즉시 리로드하기 위해 useIsFocused 임포트
+import { Picker } from "@react-native-picker/picker";
 import { useIsFocused } from "@react-navigation/native";
-
-// 🚀 [완벽 적용됨] 전역 상태에서 branchId와 권한 스위치 가져오기
+import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 
 interface Notice {
@@ -29,86 +25,72 @@ interface Notice {
   branch_id?: string | null;
 }
 
-export default function NoticeListScreen({ navigation }: any) {
-  // 🚀 [리팩토링 완료] 하드코딩된 role 대신 깔끔한 스위치(isAdmin, isStaff)를 꺼내옵니다!
-  const { branchId, isAdmin, isStaff } = useAuth();
+interface NoticeSection {
+  title: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap | string;
+  data: Notice[];
+  totalCount: number;
+}
 
-  // 🚀 [추가] 현재 화면의 포커스 상태(유저가 이 스크린을 보고 있는지 여부)를 실시간 감시하는 센서 선언
+export default function NoticeListScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
+  const { branchId, isAdmin, isStaff } = useAuth();
   const isFocused = useIsFocused();
 
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // 🚀 [추가] 어드민 전용 지점 필터 상태 (기본값은 'all' 또는 현재 지점)
-  const [selectedFilterBranch, setSelectedFilterBranch] =
-    useState<string>("all");
-  const [branches, setBranches] = useState<any[]>([]); // 지점 목록 저장
+  const [selectedFilterBranch, setSelectedFilterBranch] = useState("all");
+  const [branches, setBranches] = useState<any[]>([]);
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >({});
 
   useEffect(() => {
-    // 💡 [적용] role === "admin" 대신 isAdmin 스위치 사용!
-    if (isAdmin) {
-      fetchBranches();
-    }
+    if (isAdmin) fetchBranches();
   }, [isAdmin]);
+
   useEffect(() => {
     const handleBackButton = () => {
-      // 이 화면이 눈에 보이고 있을 때(isFocused) 하단 뒤로가기를 누르면
-      if (isFocused) {
-        if (navigation.canGoBack()) {
-          navigation.goBack(); // 안전하게 이전 화면으로 이동
-        } else {
-          navigation.navigate("AdminHome"); // 만약 백스택이 비어있다면 홈이나 지정된 안전한 화면으로 유도
-        }
-        return true; // 튕기지 않고 리액트 네이티브 안에서 처리했음을 OS에 알림
+      if (!isFocused) return false;
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate(isAdmin ? "AdminHome" : "Home");
       }
-      return false; // 이 화면을 안 보고 있을 때는 기본 동작 유지
+      return true;
     };
 
-    // 안드로이드 하드웨어 뒤로가기 리스너 등록
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",
       handleBackButton,
     );
-
-    // 컴포넌트가 사라질 때 리스너 해제 (메모리 누수 방지)
     return () => backHandler.remove();
-  }, [isFocused, navigation]);
-  // =========================================================================
-  useEffect(() => {
-    // 🚀 [수정] 지점 필터가 바뀔 때는 물론이고, 유저가 글쓰기를 마치고 이 목록 화면으로 '리턴(포커스)'하는 순간 즉시 새로고침을 실행합니다!
-    if (isFocused) {
-      console.log(
-        "📢 [포커스 감지] 공지사항 목록 화면이 노출되어 최신 데이터를 실시간 리로드합니다.",
-      );
-      fetchNotices();
-    }
-  }, [branchId, selectedFilterBranch, isFocused]); // 🚀 감시 대상에 isFocused 센서 바인딩 추가!
+  }, [isAdmin, isFocused, navigation]);
 
-  // 🚀 [추가] 어드민용 지점 목록 가져오기
+  useEffect(() => {
+    if (isFocused) fetchNotices();
+  }, [branchId, selectedFilterBranch, isFocused]);
+
   const fetchBranches = async () => {
-    try {
-      const { data } = await supabase.from("branches").select("id, name");
-      if (data) setBranches(data);
-    } catch (e) {
-      console.log("지점 목록 로드 실패:", e);
-    }
+    const { data, error } = await supabase
+      .from("branches")
+      .select("id, name")
+      .order("display_order", { ascending: true });
+
+    if (!error && data) setBranches(data);
   };
 
   const fetchNotices = async () => {
     try {
       setLoading(true);
-
-      // 💡 [핵심] 권한 및 필터에 따른 쿼리 구성 (완벽합니다!)
       let query = supabase.from("notices").select("*");
 
-      // 💡 [적용] role === "admin" 대신 isAdmin 스위치 사용!
       if (isAdmin) {
-        // 어드민: 필터가 'all'이 아니면 해당 지점만, 'all'이면 전체 조회
         if (selectedFilterBranch !== "all") {
           query = query.eq("branch_id", selectedFilterBranch);
         }
       } else {
-        // 학부모/코치: 본인 지점 데이터이거나 전체공지(null)인 것만 가져옴
         query = query.or(`branch_id.eq.${branchId},branch_id.is.null`);
       }
 
@@ -117,80 +99,137 @@ export default function NoticeListScreen({ navigation }: any) {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      if (data) setNotices(data);
+      setNotices(data || []);
     } catch (error) {
-      console.log("공지사항 로드 에러:", error);
-
-      // 🚀 실데이터가 없을 경우를 대비한 테스트용 가짜 데이터 (UI 확인용)
-      if (notices.length === 0) {
-        setNotices([
-          {
-            id: "1",
-            title: "[필독] IPASSCARE 시스템 점검 안내 (5/10 새벽 2시)",
-            content: "원활한 서비스 제공을 위해 시스템 점검을 진행합니다.",
-            created_at: "2026-05-02T10:00:00Z",
-            is_important: true,
-            branch_id: null,
-          },
-          {
-            id: "2",
-            title: "지점 전용 공지 테스트",
-            content: "해당 지점 학부모님들께만 보이는 공지입니다.",
-            created_at: "2026-04-28T14:30:00Z",
-            is_important: false,
-            branch_id: branchId,
-          },
-        ]);
-      }
+      console.log("공지사항 로드 오류:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  const noticeSections = useMemo<NoticeSection[]>(() => {
+    const important = notices.filter((notice) => notice.is_important);
+    const global = notices.filter(
+      (notice) => !notice.is_important && notice.branch_id === null,
+    );
+    const branch = notices.filter(
+      (notice) => !notice.is_important && notice.branch_id !== null,
+    );
+
+    const sections: Omit<NoticeSection, "totalCount">[] = [
+      {
+        title: "중요 공지",
+        description: "우선 확인이 필요한 안내",
+        icon: "alert-circle-outline",
+        data: important,
+      },
+      {
+        title: "전체 공지",
+        description: "모든 지점에 공통 노출",
+        icon: "megaphone-outline",
+        data: global,
+      },
+      {
+        title: "지점 공지",
+        description: "선택 지점 또는 내 지점 안내",
+        icon: "business-outline",
+        data: branch,
+      },
+    ].filter((section) => section.data.length > 0);
+
+    return sections.map((section) => ({
+      ...section,
+      data: expandedSections[section.title]
+        ? section.data
+        : section.data.slice(0, 5),
+      totalCount: section.data.length,
+    }));
+  }, [expandedSections, notices]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
   };
 
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate(isAdmin ? "AdminHome" : "Home");
+    }
+  };
+
+  const toggleSection = (title: string) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [title]: !prev[title],
+    }));
+  };
+
+  const renderSectionHeader = ({ section }: { section: NoticeSection }) => (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionIcon}>
+        <Ionicons name={section.icon as any} size={18} color="#4F46E5" />
+      </View>
+      <View style={styles.sectionCopy}>
+        <Text style={styles.sectionTitle}>{section.title}</Text>
+        <Text style={styles.sectionDescription}>{section.description}</Text>
+      </View>
+      {section.totalCount > 5 ? (
+        <TouchableOpacity
+          style={styles.sectionMoreButton}
+          onPress={() => toggleSection(section.title)}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.sectionMoreText}>
+            {expandedSections[section.title] ? "접기" : "전체보기"}
+          </Text>
+          <Ionicons
+            name={expandedSections[section.title] ? "chevron-up" : "chevron-down"}
+            size={16}
+            color="#4F46E5"
+          />
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.sectionCount}>{section.totalCount}</Text>
+      )}
+    </View>
+  );
+
   const renderItem = ({ item }: { item: Notice }) => {
     const isGlobal = item.branch_id === null;
 
     return (
       <TouchableOpacity
-        style={styles.noticeCard}
-        // 💡 여기서 상세 페이지로 데이터(item)를 싸들고 넘어갑니다!
+        style={styles.noticeRow}
         onPress={() => navigation.navigate("NoticeDetail", { notice: item })}
-        activeOpacity={0.7}
+        activeOpacity={0.76}
       >
-        <View style={styles.cardHeader}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {item.is_important && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>중요</Text>
-              </View>
-            )}
-            {/* 🚀 전체 공지 배지 추가 */}
-            {isGlobal && (
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: "#FEF3C7", marginLeft: 6 },
-                ]}
-              >
-                <Text style={[styles.badgeText, { color: "#D97706" }]}>
-                  전체공지
-                </Text>
-              </View>
-            )}
+        <View style={styles.noticeRowBody}>
+          <View style={styles.noticeMetaRow}>
+            <View style={styles.badgeRow}>
+              {item.is_important && (
+                <View style={styles.importantBadge}>
+                  <Text style={styles.importantBadgeText}>중요</Text>
+                </View>
+              )}
+              {isGlobal && (
+                <View style={styles.globalBadge}>
+                  <Text style={styles.globalBadgeText}>전체</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
           </View>
-          <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
+
+          <Text style={styles.noticeTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={styles.noticePreview} numberOfLines={1}>
+            {item.content}
+          </Text>
         </View>
-        <Text style={styles.titleText} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.previewText} numberOfLines={1}>
-          {item.content}
-        </Text>
+        <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
       </TouchableOpacity>
     );
   };
@@ -199,17 +238,20 @@ export default function NoticeListScreen({ navigation }: any) {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
 
-      {/* 헤더 */}
       <View style={styles.appBar}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={28} color="#111827" />
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={handleBack}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-back" size={24} color="#111827" />
+        </TouchableOpacity>
+        <View style={styles.titleBlock}>
           <Text style={styles.appBarTitle}>공지사항</Text>
+          <Text style={styles.appBarSub}>분류별로 빠르게 확인하세요</Text>
         </View>
 
-        {/* 🚀 [적용] 어드민일 때만 보이는 지점 필터 드롭다운 */}
-        {isAdmin && (
+        {isAdmin ? (
           <View style={styles.filterContainer}>
             <Picker
               selectedValue={selectedFilterBranch}
@@ -217,24 +259,36 @@ export default function NoticeListScreen({ navigation }: any) {
               style={styles.picker}
               dropdownIconColor="#6366F1"
             >
-              <Picker.Item label="전체 보기" value="all" />
-              {branches.map((b) => (
-                <Picker.Item key={b.id} label={b.name} value={b.id} />
+              <Picker.Item label="전체" value="all" />
+              {branches.map((branch) => (
+                <Picker.Item
+                  key={branch.id}
+                  label={branch.name}
+                  value={branch.id}
+                />
               ))}
             </Picker>
           </View>
+        ) : (
+          <View style={styles.headerSpacer} />
         )}
       </View>
 
-      {/* 리스트 */}
       {loading ? (
-        <ActivityIndicator size="large" color="#4F46E5" style={styles.loader} />
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#4F46E5" />
+        </View>
       ) : (
-        <FlatList
-          data={notices}
+        <SectionList
+          sections={noticeSections}
           keyExtractor={(item) => item.id}
+          renderSectionHeader={renderSectionHeader}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: 112 + insets.bottom },
+          ]}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -245,12 +299,11 @@ export default function NoticeListScreen({ navigation }: any) {
         />
       )}
 
-      {/* 💡 [핵심 정답] 직원이면(admin 또는 coach) 글쓰기 버튼이 보입니다. */}
       {isStaff && (
         <TouchableOpacity
-          style={styles.fab}
+          style={[styles.fab, { bottom: 28 + insets.bottom }]}
           onPress={() => navigation.navigate("NoticeEdit")}
-          activeOpacity={0.8}
+          activeOpacity={0.82}
         >
           <Ionicons name="pencil" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -264,100 +317,168 @@ const styles = StyleSheet.create({
   appBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
-  headerLeft: { flexDirection: "row", alignItems: "center" },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFC",
+    marginRight: 10,
+  },
+  titleBlock: { flex: 1 },
   appBarTitle: {
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#111827",
-    marginLeft: 10,
   },
-
-  /* 🚀 추가된 필터 스타일 */
+  appBarSub: {
+    marginTop: 2,
+    fontSize: 11,
+    color: "#94A3B8",
+    fontWeight: "700",
+  },
+  headerSpacer: { width: 84 },
   filterContainer: {
-    width: 140,
+    width: 112,
     height: 40,
     justifyContent: "center",
     backgroundColor: "#F1F5F9",
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: "hidden",
   },
   picker: {
     width: "100%",
     color: "#1E293B",
   },
-
-  loader: { flex: 1, justifyContent: "center" },
-  listContent: { padding: 20, paddingBottom: 100 }, // 버튼에 안 가려지도록 하단 여백 추가
-
-  noticeCard: {
-    backgroundColor: "#FFFFFF",
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  cardHeader: {
+  loader: { flex: 1, alignItems: "center", justifyContent: "center" },
+  listContent: { padding: 18 },
+  sectionHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 8,
+    marginBottom: 8,
   },
-  badge: {
+  sectionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#EEF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  sectionCopy: { flex: 1 },
+  sectionTitle: { fontSize: 15, fontWeight: "900", color: "#1E293B" },
+  sectionDescription: {
+    marginTop: 2,
+    fontSize: 11,
+    color: "#94A3B8",
+    fontWeight: "700",
+  },
+  sectionCount: {
+    minWidth: 28,
+    textAlign: "center",
+    color: "#4F46E5",
+    fontWeight: "900",
+  },
+  sectionMoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EEF2FF",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  sectionMoreText: {
+    color: "#4F46E5",
+    fontSize: 12,
+    fontWeight: "900",
+    marginRight: 2,
+  },
+  noticeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  noticeRowBody: { flex: 1, paddingRight: 10 },
+  noticeMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  badgeRow: { flexDirection: "row", alignItems: "center" },
+  importantBadge: {
     backgroundColor: "#FEE2E2",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  importantBadgeText: {
+    color: "#EF4444",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  globalBadge: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 6,
   },
-  badgeText: {
-    color: "#EF4444",
-    fontSize: 11,
-    fontWeight: "800",
+  globalBadgeText: {
+    color: "#D97706",
+    fontSize: 10,
+    fontWeight: "900",
   },
   dateText: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#94A3B8",
-    fontWeight: "500",
-  },
-  titleText: {
-    fontSize: 16,
     fontWeight: "700",
-    color: "#1E293B",
-    marginBottom: 8,
-    lineHeight: 22,
   },
-  previewText: {
-    fontSize: 14,
+  noticeTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#1E293B",
+    marginBottom: 4,
+  },
+  noticePreview: {
+    fontSize: 13,
     color: "#64748B",
-    lineHeight: 20,
+    lineHeight: 18,
   },
   emptyContainer: { alignItems: "center", marginTop: 100 },
   emptyText: {
     marginTop: 16,
     fontSize: 15,
     color: "#94A3B8",
-    fontWeight: "500",
+    fontWeight: "700",
   },
-
-  /* 💡 추가된 플로팅 버튼 스타일 */
   fab: {
     position: "absolute",
     right: 24,
-    bottom: 32,
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#111827", // 다크 네이비로 깔끔하게
+    backgroundColor: "#111827",
     justifyContent: "center",
     alignItems: "center",
     elevation: 6,
