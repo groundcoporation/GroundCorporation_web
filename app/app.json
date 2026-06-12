@@ -23,6 +23,13 @@
       "edgeToEdgeEnabled": true,
       "package": "com.goundcorp.ipasscare",
       "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ],
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyAU57YxeP5CM9akxV7qBMckyLhpYl02ZEQ"
