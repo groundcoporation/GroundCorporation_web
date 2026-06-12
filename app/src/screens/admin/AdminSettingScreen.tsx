@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   FlatList,
   Modal,
   Platform,
@@ -16,11 +15,11 @@ import {
   StatusBar,
   Switch, // 🚀 Switch 컴포넌트 임포트
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function AdminPackageScreen() {
+export default function AdminPackageScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   // --- 데이터 상태 ---
   const [branches, setBranches] = useState<any[]>([]);
@@ -270,7 +269,15 @@ export default function AdminPackageScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
-        <View>
+        <TouchableOpacity
+          style={styles.headerBackButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-back" size={22} color="#1E293B" />
+        </TouchableOpacity>
+
+        <View style={styles.headerTitleBlock}>
           <Text style={styles.headerSubtitle}>PRODUCT SETTINGS</Text>
           <Text style={styles.headerTitle}>🏫 {currentBranch?.name}</Text>
         </View>
@@ -314,7 +321,7 @@ export default function AdminPackageScreen() {
       />
 
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: 24 + insets.bottom }]}
         onPress={() => setIsCatModalVisible(true)}
       >
         <Ionicons name="add" size={32} color="#FFF" />
@@ -327,7 +334,7 @@ export default function AdminPackageScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setIsPkgListModalVisible(false)} // 하드웨어 뒤로가기 지원
       >
-        <View style={styles.modalFull}>
+        <SafeAreaView style={styles.modalFull}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{selectedCategory?.name}</Text>
             <TouchableOpacity onPress={() => setIsPkgListModalVisible(false)}>
@@ -337,7 +344,7 @@ export default function AdminPackageScreen() {
           <FlatList
             data={packages}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={{ padding: 24 }}
+            contentContainerStyle={{ padding: 24, paddingBottom: 24 + insets.bottom }}
             renderItem={({ item }) => (
               <View style={styles.pkgCard}>
                 <View style={{ flex: 1 }}>
@@ -364,7 +371,10 @@ export default function AdminPackageScreen() {
             )}
           />
           <TouchableOpacity
-            style={styles.modalBottomBtn}
+            style={[
+              styles.modalBottomBtn,
+              { marginBottom: Math.max(insets.bottom + 16, 24) },
+            ]}
             onPress={() => {
               setEditingPkgId(null);
               setPkgForm({
@@ -381,7 +391,7 @@ export default function AdminPackageScreen() {
           >
             <Text style={styles.modalBottomBtnText}>+ 새 패키지 추가</Text>
           </TouchableOpacity>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       {/* --- 📝 패키지 폼 모달 --- */}
@@ -394,7 +404,11 @@ export default function AdminPackageScreen() {
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.alertModal}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+            style={[
+              styles.alertModal,
+              { paddingBottom: Math.max(insets.bottom + 20, 24) },
+            ]}
           >
             <View style={styles.alertHeader}>
               <Text style={styles.alertTitle}>
@@ -404,7 +418,11 @@ export default function AdminPackageScreen() {
                 <Ionicons name="close" size={24} color="#000" />
               </TouchableOpacity>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+              keyboardShouldPersistTaps="handled"
+            >
               <Text style={styles.label}>상품 명</Text>
               <TextInput
                 style={styles.input}
@@ -546,11 +564,20 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     padding: 24,
     backgroundColor: "#FFF",
   },
+  headerBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  headerTitleBlock: { flex: 1 },
   headerSubtitle: {
     fontSize: 10,
     color: "#6366F1",

@@ -227,19 +227,25 @@ export default function HomeScreen({ navigation }: any) {
         if (attStatus === "하차") {
           statusLabel = "안전하게 셔틀에서 하차했어요 🏠";
           statusBg = "#64748B";
-          sceneType = "home";
+          sceneType = "dropoff";
           bgImage =
             "https://images.unsplash.com/photo-1490139177067-2819828d54d1?q=80&w=800";
         } else if (attStatus === "하원") {
           statusLabel = "집으로 가는 셔틀을 타고 있어요 🚌";
           statusBg = "#3D56B2";
+          sceneType = "goingHome";
+          bgImage =
+            "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
+        } else if (attStatus === "이동중") {
+          statusLabel = "셔틀이 안전하게 이동 중이에요 🚌";
+          statusBg = "#2563EB";
           sceneType = "moving";
           bgImage =
             "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800";
         } else if (attStatus === "등원") {
           statusLabel = "학원에 도착해 열심히 수업 중이에요 ⚽";
           statusBg = "#10B981";
-          sceneType = "arrived";
+          sceneType = "class";
           bgImage =
             "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
         } else if (attStatus === "승차") {
@@ -253,13 +259,13 @@ export default function HomeScreen({ navigation }: any) {
         if (attStatus === "하원") {
           statusLabel = "수업을 안전하게 마쳤어요 👋";
           statusBg = "#F59E0B";
-          sceneType = "class";
+          sceneType = "dropoff";
           bgImage =
             "https://images.unsplash.com/photo-1516733725897-1aa73b87c8e8?q=80&w=800";
         } else if (attStatus === "등원") {
           statusLabel = "학원에 도착해 열심히 수업 중이에요 ⚽";
           statusBg = "#10B981";
-          sceneType = "arrived";
+          sceneType = "class";
           bgImage =
             "https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800";
         }
@@ -297,29 +303,19 @@ export default function HomeScreen({ navigation }: any) {
             </View>
           </View>
         ) : (
-          <View style={[styles.cardInner, styles.emptyCard]}>
-            <MaterialCommunityIcons
-              name="calendar-blank"
-              size={32}
-              color="#D1D5DB"
-            />
-            <Text style={[styles.emptyText, { marginTop: 8 }]}>
-              예정된 수업이 없습니다.
-            </Text>
-            <TouchableOpacity
-              style={{
-                marginTop: 12,
-                paddingVertical: 8,
-                paddingHorizontal: 16,
-                backgroundColor: "#4F46E5",
-                borderRadius: 8,
-              }}
-              onPress={() => navigation.navigate("Reservation")}
-            >
-              <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>
-                예약하러 가기
-              </Text>
-            </TouchableOpacity>
+          <View
+            style={[styles.cardInner, styles.emptyCard, styles.emptyStatusCard]}
+          >
+            <HomeStatusScene type="waiting" />
+            <View style={styles.emptyCardContent}>
+              <Text style={styles.emptyText}>예정된 수업이 없습니다.</Text>
+              <TouchableOpacity
+                style={styles.emptyActionBtn}
+                onPress={() => navigation.navigate("Reservation")}
+              >
+                <Text style={styles.emptyActionText}>예약하러 가기</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -847,6 +843,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 16,
   },
+  emptyStatusCard: {
+    position: "relative",
+    overflow: "hidden",
+    backgroundColor: "#F5F3FF",
+  },
+  emptyCardContent: {
+    zIndex: 2,
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+    paddingLeft: 24,
+  },
+  emptyActionBtn: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: "#4F46E5",
+    borderRadius: 8,
+  },
+  emptyActionText: { color: "white", fontSize: 12, fontWeight: "700" },
   emptyText: { fontSize: 14, color: "#9CA3AF", fontWeight: "500" },
   dotRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
   dot: {

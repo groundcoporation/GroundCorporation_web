@@ -12,6 +12,14 @@ import { Ionicons } from "@expo/vector-icons";
 export default function PurchaseSuccessScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container}>
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={() => navigation.replace("Home")}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="close" size={26} color="#64748B" />
+      </TouchableOpacity>
+
       <View style={styles.content}>
         <View style={styles.iconCircle}>
           {/* 결제 성공을 의미하는 카드/체크 아이콘 */}
@@ -54,6 +62,18 @@ export default function PurchaseSuccessScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF" },
+  closeButton: {
+    position: "absolute",
+    top: 14,
+    right: 18,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFC",
+  },
   content: {
     flex: 1,
     justifyContent: "center",

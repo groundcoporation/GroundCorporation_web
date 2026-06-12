@@ -107,7 +107,17 @@ export default function AdminHomeScreen({ navigation }: any) {
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.minimalHeader}>
-        <View>
+        <TouchableOpacity
+          style={styles.headerBackButton}
+          onPress={() =>
+            navigation.canGoBack() ? navigation.goBack() : navigation.replace("Home")
+          }
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-back" size={22} color="#1E293B" />
+        </TouchableOpacity>
+
+        <View style={styles.headerTitleBlock}>
           <Text style={styles.welcomeText}>안녕하세요, 관리자님</Text>
           <Text style={styles.mainBrandText}>Admin Dashboard</Text>
         </View>
@@ -262,12 +272,21 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
   minimalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 25,
     paddingVertical: 20,
     backgroundColor: "#FFF",
   },
+  headerBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  headerTitleBlock: { flex: 1 },
   welcomeText: { fontSize: 13, color: "#94A3B8", fontWeight: "600" },
   mainBrandText: {
     fontSize: 22,

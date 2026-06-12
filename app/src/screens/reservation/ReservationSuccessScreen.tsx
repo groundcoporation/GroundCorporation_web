@@ -17,6 +17,14 @@ export default function ReservationSuccessScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   return (
     <SafeAreaView style={styles.container}>
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={() => navigation.replace("Home")}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="close" size={26} color="#64748B" />
+      </TouchableOpacity>
+
       <View style={styles.content}>
         <View style={styles.iconCircle}>
           {/* 예약 완료를 상징하는 캘린더 체크 아이콘으로 변경 */}
@@ -66,6 +74,18 @@ export default function ReservationSuccessScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF" },
+  closeButton: {
+    position: "absolute",
+    top: 14,
+    right: 18,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFC",
+  },
   content: {
     flex: 1,
     justifyContent: "center",

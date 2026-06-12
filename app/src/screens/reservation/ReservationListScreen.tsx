@@ -16,7 +16,7 @@ import {
 import { supabase } from "../../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function ReservationListScreen() {
+export default function ReservationListScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const [reservations, setReservations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,7 +174,15 @@ export default function ReservationListScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-back" size={24} color="#1E293B" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>나의 수업 예약</Text>
+        <View style={styles.headerSpacer} />
       </View>
       <FlatList
         data={reservations}
@@ -195,7 +203,22 @@ export default function ReservationListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { paddingHorizontal: 24, paddingVertical: 20 },
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  headerSpacer: { width: 40, height: 40 },
   headerTitle: { fontSize: 24, fontWeight: "900", color: "#1E293B" },
 
   card: {

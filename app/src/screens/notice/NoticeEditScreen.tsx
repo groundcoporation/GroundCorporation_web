@@ -10,8 +10,10 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase"; // 🚨 Supabase 연동 필수!
 import dayjs from "dayjs";
@@ -24,6 +26,7 @@ import { useAuth } from "../../context/AuthContext";
 import { sendGlobalPushNotification } from "../../services/notificationService";
 
 export default function NoticeEditScreen({ route, navigation }: any) {
+  const insets = useSafeAreaInsets();
   // 🚀 [리팩토링 완료] role 대신 명품 스위치 isAdmin을 가져옵니다!
   const { branchId: myBranchId, isAdmin } = useAuth();
 
@@ -196,7 +199,20 @@ export default function NoticeEditScreen({ route, navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        style={styles.keyboardArea}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
+      >
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom + 40, 64) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         {/* 🚀 [수정] 지점 선택 영역 UI 개선 (isAdmin 스위치 적용) */}
         <View style={styles.branchSelectSection}>
           <Text style={styles.sectionLabel}>게시 대상 설정</Text>
@@ -307,7 +323,8 @@ export default function NoticeEditScreen({ route, navigation }: any) {
           multiline
           textAlignVertical="top"
         />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -325,7 +342,9 @@ const styles = StyleSheet.create({
   },
   appBarTitle: { fontSize: 18, fontWeight: "800", color: "#111827" },
   saveBtnText: { fontSize: 16, fontWeight: "700", color: "#4F46E5" },
+  keyboardArea: { flex: 1 },
   container: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
 
   branchSelectSection: { padding: 20, backgroundColor: "#F8FAFC" },
   sectionLabel: {
@@ -379,6 +398,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#334155",
     lineHeight: 24,
-    minHeight: 300,
+    minHeight: 360,
   },
 });

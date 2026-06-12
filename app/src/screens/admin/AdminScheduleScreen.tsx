@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   FlatList,
   Modal,
   Platform,
@@ -16,7 +15,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -35,7 +34,7 @@ dayjs.extend(timezone);
 dayjs.tz.setDefault("Asia/Seoul");
 dayjs.locale("ko");
 
-export default function AdminScheduleScreen() {
+export default function AdminScheduleScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   // --- 데이터 상태 ---
   const [branches, setBranches] = useState<any[]>([]); // DB 지점 목록
@@ -412,7 +411,15 @@ export default function AdminScheduleScreen() {
       <SafeAreaView style={styles.safeArea}>
         {/* 1. 헤더 */}
         <View style={styles.header}>
-          <View>
+          <TouchableOpacity
+            style={styles.headerBackButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-back" size={22} color="#1E293B" />
+          </TouchableOpacity>
+
+          <View style={styles.headerTitleBlock}>
             <Text style={styles.headerSubtitle}>ADMIN DASHBOARD</Text>
             <Text style={styles.headerTitle}>
               🏫 {currentBranch?.name || "지점 로딩 중..."}
@@ -772,7 +779,7 @@ export default function AdminScheduleScreen() {
             />
 
             <TouchableOpacity
-              style={styles.fab}
+              style={[styles.fab, { bottom: 30 + insets.bottom }]}
               onPress={() => {
                 setEditingId(null);
                 setForm({
@@ -799,6 +806,7 @@ export default function AdminScheduleScreen() {
         >
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
             style={{ flex: 1 }}
           >
             <SafeAreaView style={styles.modalContainer}>
@@ -811,7 +819,14 @@ export default function AdminScheduleScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={{ padding: 20 }}>
+              <ScrollView
+                style={styles.modalFormScroll}
+                contentContainerStyle={[
+                  styles.modalFormContent,
+                  { paddingBottom: 40 + insets.bottom },
+                ]}
+                keyboardShouldPersistTaps="handled"
+              >
                 <Text style={styles.label}>프로그램 명</Text>
                 <TextInput
                   style={styles.input}
@@ -911,13 +926,22 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 24,
     paddingTop: Platform.OS === "android" ? 20 : 10,
     paddingBottom: 20,
     backgroundColor: "#FFF",
   },
+  headerBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  headerTitleBlock: { flex: 1 },
   headerSubtitle: {
     fontSize: 10,
     color: "#6366F1",
@@ -1159,6 +1183,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F1F5F9",
   },
   modalTitle: { fontSize: 18, fontWeight: "800", color: "#1E293B" },
+  modalFormScroll: { flex: 1 },
+  modalFormContent: { padding: 20 },
   label: {
     fontSize: 12,
     fontWeight: "700",
