@@ -1,11 +1,11 @@
 const googleMapsApiKey =
   process.env.GOOGLE_MAPS_API_KEY || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-if (!googleMapsApiKey) {
-  throw new Error(
-    "GOOGLE_MAPS_API_KEY is required. Add it to app/.env.local or EAS environment variables.",
-  );
-}
+// if (!googleMapsApiKey) {
+//   throw new Error(
+//     "GOOGLE_MAPS_API_KEY is required. Add it to app/.env.local or EAS environment variables.",
+//   );
+// }
 
 module.exports = ({ config }) => ({
   ...config,
