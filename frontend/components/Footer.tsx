@@ -1,5 +1,5 @@
 import React from "react";
-import { Camera, Mail } from "lucide-react"; // 사용하는 아이콘 라이브러리에 맞게 수정하세요
+import { Camera, Mail } from "lucide-react"; // 사용하는 아이콘 라이브러리에 맞게 수정
 
 export default function Footer() {
   return (
