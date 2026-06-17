@@ -29,11 +29,11 @@ const googleMapsApiKey =
   readEnvFileValue(".env.local", "GOOGLE_MAPS_API_KEY") ||
   readEnvFileValue(".env", "GOOGLE_MAPS_API_KEY");
 
-if (!googleMapsApiKey) {
-  throw new Error(
-    "GOOGLE_MAPS_API_KEY is required. Add it to app/.env.local or EAS environment variables.",
-  );
-}
+// if (!googleMapsApiKey) {
+//   throw new Error(
+//     "GOOGLE_MAPS_API_KEY is required. Add it to app/.env.local or EAS environment variables.",
+//   );
+// }
 
 module.exports = ({ config }) => ({
   ...config,

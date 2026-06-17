@@ -13,7 +13,7 @@ export default function Footer() {
           />
           <p className="text-white/40 font-medium leading-relaxed text-xs">
             (주)그라운드코퍼레이션 | 대표이사: 김강태 <br />
-            본사: 경기도 시흥시 서울대학로278번길 61 7층 713호 <br />
+            본사: 경기도 시흥시 서울대학로278번길 61 7층 711~713호 <br />
             문의: groundcoporation@gmail.com
           </p>
         </div>
