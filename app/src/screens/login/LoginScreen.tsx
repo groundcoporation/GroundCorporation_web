@@ -268,6 +268,7 @@ export default function LoginScreen({ navigation }: any) {
       <TextInput
         style={styles.input}
         placeholder="아이디" // 👈 이메일 문구 삭제
+        placeholderTextColor="#999" // 🚀 [추가] 다크 모드 가독성을 위해 플레이스홀더 색상 고정
         value={identifier}
         onChangeText={setIdentifier}
         autoCapitalize="none"
@@ -278,6 +279,7 @@ export default function LoginScreen({ navigation }: any) {
         <TextInput
           style={styles.passwordInput}
           placeholder="비밀번호"
+          placeholderTextColor="#999" // 🚀 [추가] 다크 모드 가독성을 위해 플레이스홀더 색상 고정
           value={password}
           onChangeText={setPassword}
           secureTextEntry={!showPassword} // 💡 showPassword 상태에 따라 가림/보임
@@ -372,7 +374,7 @@ export default function LoginScreen({ navigation }: any) {
               <>
                 <Text style={styles.popupTitle}>아이패스케어에 오신 걸 환영합니다!</Text>
                 <Text style={styles.popupDesc}>
-                  아직 회원이 아니신가요?{"\n"}지금 가입하시면 현금처럼 쓰는{" "}
+                   아직 회원이 아니신가요?{"\n"}지금 가입하시면 현금처럼 쓰는{" "}
                   <Text style={styles.highlightText}>{signupBonus.toLocaleString()}P</Text>를 즉시 드립니다!
                 </Text>
               </>
@@ -413,6 +415,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 40,
+    color: '#000', // 🚀 추가: 제목 색상 고정
   },
   input: {
     borderWidth: 1,
@@ -421,6 +424,8 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 15,
     fontSize: 16,
+    color: '#000', // 🚀 추가: 입력창 텍스트 색상 고정
+    backgroundColor: '#fff', // 배경색 명시
   },
 
   // 💡 비밀번호 입력창 스타일 추가
@@ -437,6 +442,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 15,
     fontSize: 16,
+    color: '#000', // 🚀 추가: 비밀번호 입력창 텍스트 색상 고정
   },
   eyeIcon: {
     padding: 10,
@@ -449,13 +455,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   checkboxWrapper: { flexDirection: "row", alignItems: "center" },
-  checkboxText: { marginLeft: 8, fontSize: 14 },
+  checkboxText: { marginLeft: 8, fontSize: 14, color: '#000' }, // 🚀 추가: 체크박스 텍스트 색상 고정
   loginButton: {
     backgroundColor: "teal",
     padding: 15,
     borderRadius: 8,
     alignItems: "center",
     marginBottom: 20,
+    // 🎯 TouchablOpacity 컨테이너의 잘못된 color 속성 제거 완료
   },
   loginButtonDisabled: { backgroundColor: "#a0c4c4" },
   loginButtonText: { color: "white", fontSize: 18, fontWeight: "bold" },
