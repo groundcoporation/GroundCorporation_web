@@ -7,7 +7,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-const EAS_PROJECT_ID = 'de548348-97b7-4c03-aebd-2cddafdba3d4';
+const EAS_PROJECT_ID = '3d6a4ab8-2046-4626-ad3a-eb1a76df0118';
 
 const getEasProjectId = () =>
   Constants.easConfig?.projectId ||

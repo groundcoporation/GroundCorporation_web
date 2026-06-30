@@ -38,7 +38,7 @@ const shouldEnableEasUpdates =
   process.env.EAS_BUILD === "true" ||
   process.env.ENABLE_EAS_UPDATES === "true";
 
-const easProjectId = "de548348-97b7-4c03-aebd-2cddafdba3d4";
+const easProjectId = "3d6a4ab8-2046-4626-ad3a-eb1a76df0118";
 
 const iosPaymentUrlSchemes = [
   "ispmobile",
