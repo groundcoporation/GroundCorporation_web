@@ -2,6 +2,7 @@
   "expo": {
     "name": "app",
     "slug": "app",
+    "scheme": "ipasscare",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,7 +14,18 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.goundcorp.ipasscare",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "셔틀 운행 및 픽업 위치 확인을 위해 현재 위치 권한이 필요합니다.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "셔틀 운행 중 백그라운드에서도 위치를 공유하기 위해 위치 권한이 필요합니다.",
+        "NSLocationAlwaysUsageDescription": "셔틀 운행 중 백그라운드에서도 위치를 공유하기 위해 위치 권한이 필요합니다.",
+        "UIBackgroundModes": [
+          "location",
+          "remote-notification"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -58,12 +70,6 @@
       "eas": {
         "projectId": "de548348-97b7-4c03-aebd-2cddafdba3d4"
       }
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/de548348-97b7-4c03-aebd-2cddafdba3d4"
     }
   }
 }

@@ -20,6 +20,13 @@ import Constants from "expo-constants";
 // 🚀 [추가됨] 방금 만든 전역 상태 보관소에서 useAuth 가져오기
 import { useAuth } from "../../context/AuthContext";
 
+const EAS_PROJECT_ID = "de548348-97b7-4c03-aebd-2cddafdba3d4";
+
+const getEasProjectId = () =>
+  Constants.easConfig?.projectId ||
+  Constants.expoConfig?.extra?.eas?.projectId ||
+  EAS_PROJECT_ID;
+
 export default function LoginScreen({ navigation }: any) {
   // 사용자가 입력하는 값 (아이디 또는 이메일)
   const [identifier, setIdentifier] = useState("");
@@ -221,7 +228,7 @@ export default function LoginScreen({ navigation }: any) {
         try {
           // 1. 기기에서 진짜 Expo 푸시 토큰을 발급받습니다.
           const tokenResponse = await Notifications.getExpoPushTokenAsync({
-            projectId: Constants.expoConfig?.extra?.eas?.projectId, // app.json의 projectId 자동 참조
+            projectId: getEasProjectId(),
           });
           const realToken = tokenResponse.data;
 

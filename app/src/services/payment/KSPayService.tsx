@@ -13,6 +13,28 @@ import {
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 
+const parseAndroidIntentUrl = (url: string) => {
+  const [intentUrl, intentParams = ""] = url.split("#Intent;");
+  const parts = intentParams.split(";");
+  const scheme = parts
+    .find((part) => part.startsWith("scheme="))
+    ?.replace("scheme=", "");
+  const packageName = parts
+    .find((part) => part.startsWith("package="))
+    ?.replace("package=", "");
+  const fallbackUrl = parts
+    .find((part) => part.startsWith("S.browser_fallback_url="))
+    ?.replace("S.browser_fallback_url=", "");
+
+  return {
+    appUrl: scheme
+      ? `${scheme}://${intentUrl.replace(/^intent:\/\//, "")}`
+      : url,
+    packageName,
+    fallbackUrl: fallbackUrl ? decodeURIComponent(fallbackUrl) : undefined,
+  };
+};
+
 export default function KSPayService({ isVisible, onClose, paymentData }: any) {
   const webViewRef = useRef<WebView>(null);
   const [loading, setLoading] = useState(true);
@@ -56,6 +78,51 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
       }
     } catch (e) {
       console.error("[KSPay] ❌ 앱 실행 중 에러:", e);
+    }
+  };
+
+  const handlePaymentAppLink = async (url: string) => {
+    try {
+      let finalUrl = url;
+      let androidPackageName: string | undefined;
+      let androidFallbackUrl: string | undefined;
+
+      if (Platform.OS === "android" && url.startsWith("intent:")) {
+        const parsedIntent = parseAndroidIntentUrl(url);
+        finalUrl = parsedIntent.appUrl;
+        androidPackageName = parsedIntent.packageName;
+        androidFallbackUrl = parsedIntent.fallbackUrl;
+      }
+
+      try {
+        const canOpen = await Linking.canOpenURL(finalUrl);
+        if (!canOpen) {
+          throw new Error(`Cannot open payment URL: ${finalUrl}`);
+        }
+
+        await Linking.openURL(finalUrl);
+      } catch (err) {
+        if (Platform.OS === "android") {
+          if (androidFallbackUrl) {
+            await Linking.openURL(androidFallbackUrl);
+            return;
+          }
+
+          const packageName =
+            androidPackageName || url.split("package=")[1]?.split(";")[0];
+          if (packageName) {
+            await Linking.openURL(`market://details?id=${packageName}`);
+            return;
+          }
+        }
+
+        Alert.alert(
+          "결제 앱 실행 실패",
+          "결제에 필요한 카드사 또는 간편결제 앱이 설치되어 있는지 확인해주세요.",
+        );
+      }
+    } catch (e) {
+      console.error("[KSPay] 앱 실행 중 에러:", e);
     }
   };
 
@@ -169,7 +236,7 @@ export default function KSPayService({ isVisible, onClose, paymentData }: any) {
                 !url.startsWith("https://") &&
                 !url.startsWith("about:blank")
               ) {
-                handleAppLink(url);
+                handlePaymentAppLink(url);
                 return false;
               }
 

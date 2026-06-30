@@ -4,7 +4,15 @@ import { supabase } from '../lib/supabase';
 // 🚀 [추가] 푸시 알림 토큰 수집을 위한 패키지 임포트
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+
+const EAS_PROJECT_ID = 'de548348-97b7-4c03-aebd-2cddafdba3d4';
+
+const getEasProjectId = () =>
+  Constants.easConfig?.projectId ||
+  Constants.expoConfig?.extra?.eas?.projectId ||
+  EAS_PROJECT_ID;
 
 // 보관소에 담길 데이터의 타입 정의
 interface AuthContextType {
@@ -70,7 +78,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 4. 토큰 발급 및 DB 저장
     try {
       // Expo 고유 푸시 토큰 발급
-      const tokenData = await Notifications.getExpoPushTokenAsync();
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: getEasProjectId(),
+      });
       const token = tokenData.data;
       console.log("📲 [발급된 푸시 토큰]:", token);
 
