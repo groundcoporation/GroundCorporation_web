@@ -127,10 +127,10 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
       signupBonus = bonusData?.value || 0;
 
       if (referralCode) {
-        // 🚀 [수정] 추천인의 id, points 뿐만 아니라 족보(lineage)와 추천수(referral_count)도 같이 가져옵니다!
+        // 🚀 [수정] 추천인의 id, name, points 뿐만 아니라 족보(lineage)와 추천수(referral_count)도 같이 가져옵니다!
         const { data } = await supabase
           .from('users')
-          .select('id, points, lineage, referral_count') 
+          .select('id, name, points, lineage, referral_count') 
           .eq('username', referralCode.replace(/\s/g, '')) // 추천인 코드도 공백 제거
           .maybeSingle();
           
@@ -157,26 +157,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
 
       // 6. Auth 성공 시 상세 정보 저장 및 포인트 지급
       if (authData.user) {
-        if (referrerData) {
-          const referrerUsername = referralCode.replace(/\s/g, ''); 
-          const newUsername = cleanUsername; 
-
-          // [A] 추천인 포인트 지급 및 🚀 [수정] 추천인 수(+1) 증가 로직 추가!
-          await supabase.from('users').update({ 
-            points: (referrerData.points || 0) + signupBonus,
-            referral_count: (referrerData.referral_count || 0) + 1 // ✨ 기존 추천수에 +1 더해서 업데이트
-          }).eq('id', referrerData.id);
-          
-          // 가입 로그 기록
-          await supabase.from('point_logs').insert({ 
-            user_id: referrerData.id, 
-            amount: signupBonus, 
-            reason: `${newUsername} 님의 가입으로 받은 포인트`, 
-            related_user_id: authData.user.id 
-          });
-        }
-
-        // [B] 가입자 정보 저장
+        // [B] 가입자 정보 저장 (먼저 저장하여 users 테이블에 신규 가입자 ID가 등록되게 함)
         const { error: dbError } = await supabase.from('users').insert([{
             id: authData.user.id,
             username: cleanUsername,
@@ -187,12 +168,22 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             branch_id: branchId,
             role: 'user',
             referred_by: referralCode ? referralCode.replace(/\s/g, '') : null,
-            // points: referrerData ? signupBonus : 0, // 추천인 있으면 보너스 포인트, 없으면 0
             points: signupBonus, //추천인 있든없든 본인한테는 가입시 1000포인트 지급
             lineage: newUserLineage // 🚀 [추가] 방금 만든 족보(계보) 배열을 DB에 저장!
         }]);
 
         if (dbError) throw dbError;
+
+        if (referrerData) {
+          // [A] 추천인 포인트 지급 & 추천인 수 증가 & 적립 로그 기록을 안전한 RPC로 한 방에 처리!
+          const { error: rpcError } = await supabase.rpc('process_referral_points', {
+            referrer_id: referrerData.id,
+            new_user_id: authData.user.id,
+            bonus_amount: signupBonus,
+            new_user_name: name
+          });
+          if (rpcError) console.error('추천인 포인트 RPC 처리 에러:', rpcError);
+        }
 
         // [C] 가입자 로그 기록
         if (referrerData) {
@@ -200,7 +191,8 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             await supabase.from('point_logs').insert({ 
               user_id: authData.user.id, 
               amount: signupBonus, 
-              reason: `${referralCode.replace(/\s/g, '')} 님을 추천하여 받은 포인트`, 
+              type: 'earn',
+              reason: `추천인 등록 가입 포인트 적립 (추천인: ${referrerData.name || referralCode.replace(/\s/g, '')})`, 
               related_user_id: referrerData.id 
             });
         } else {
@@ -208,6 +200,7 @@ export default function SignUpScreen({ navigation, route }: any) { // 🚀 route
             await supabase.from('point_logs').insert({ 
               user_id: authData.user.id, 
               amount: signupBonus, 
+              type: 'earn',
               reason: `회원가입 축하 기본 포인트`, 
               related_user_id: authData.user.id 
             });

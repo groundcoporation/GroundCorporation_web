@@ -95,7 +95,7 @@ export default function ReferralScreen({ navigation, route }: any) {
       { data: userData },
       { data: settings }
     ] = await Promise.all([
-      supabase.from("users").select("id, username, points, referred_by, level, referral_count, lineage").eq("id", user?.id).single(),
+      supabase.from("users").select("id, name, username, points, referred_by, level, referral_count, lineage").eq("id", user?.id).single(),
       supabase.from("point_settings").select("key, value")
     ]);
 
@@ -181,7 +181,7 @@ ${shareLink}
       const [{ data: referrer }, { data: bonusData }] = await Promise.all([
         supabase
           .from("users")
-          .select("id, points, username, lineage, referral_count")
+          .select("id, name, points, username, lineage, referral_count")
           .ilike("username", targetCode)
           .maybeSingle(),
         supabase
@@ -206,16 +206,23 @@ ${shareLink}
         lineage: newLineage 
       }).eq("id", user?.id);
 
-      await supabase.from("users").update({ 
-        points: (referrer.points || 0) + currentSignupBonus,
-        referral_count: (referrer.referral_count || 0) + 1 
-      }).eq("id", referrer.id);
+      // 3. 추천인 포인트 지급 & 추천수 증가 & 적립 로그 기록을 안전한 RPC로 한 방에 처리!
+      const { error: rpcError } = await supabase.rpc('process_referral_points', {
+        referrer_id: referrer.id,
+        new_user_id: user?.id,
+        bonus_amount: currentSignupBonus,
+        new_user_name: userData?.name || myReferralCode
+      });
+      if (rpcError) console.error('추천인 포인트 RPC 처리 에러:', rpcError);
 
-      // 3. 로그 기록
-      await supabase.from("point_logs").insert([
-        { user_id: referrer.id, amount: currentSignupBonus, type: "earn", reason: `${myReferralCode} 님의 가입으로 받은 포인트`, related_user_id: user?.id },
-        { user_id: user?.id, amount: currentSignupBonus, type: "earn", reason: `${referrer.username} 님을 추천하여 받은 포인트`, related_user_id: referrer.id },
-      ]);
+      // 4. 가입자 본인의 적립 로그 기록 (본인 계정은 RLS 정책 통과 가능)
+      await supabase.from("point_logs").insert({ 
+        user_id: user?.id, 
+        amount: currentSignupBonus, 
+        type: "earn", 
+        reason: `추천인 등록 가입 포인트 적립 (추천인: ${referrer.name || referrer.username})`, 
+        related_user_id: referrer.id 
+      });
 
       Alert.alert("성공", "추천인 등록 완료!");
       setAlreadyReferred(true);
