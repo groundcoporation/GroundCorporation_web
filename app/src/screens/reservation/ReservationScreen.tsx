@@ -237,9 +237,7 @@ export default function ReservationScreen({ navigation }: any) {
       .eq("status", "active")
       .gt("remaining_count", 0)
       .gte("expiry_date", today)
-      .or("is_shuttle.is.null,is_shuttle.eq.false") //셔틀 안나오게하는것
-      .or("is_item.is.null,is_item.eq.false");      // 🎯 단품/대관 방어
-      
+      .eq("voucher_type", "lesson");
       
 
     if (child) {
@@ -272,67 +270,38 @@ export default function ReservationScreen({ navigation }: any) {
     }
   };
 
-  // 🚀 [단계 3] 최종 DB 저장, 횟수 차감, 그리고 수강권 Lock 처리
+  // 🚀 [단계 3] 최종 DB 저장, 횟수 차감, 그리고 수강권 Lock 처리 (서버사이드 트랜잭션 함수 perform_bulk_reservation 연동)
   const processFinalReservation = async (child: any, pkg: any) => {
     setPackageModalVisible(false);
-
-    if (pkg.remaining_count < cart.length) {
-      Alert.alert("알림", `잔여 횟수(${pkg.remaining_count}회)가 부족합니다.`);
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      // 💡 1. 예약 데이터 생성
-      const reservationsToInsert = cart.map((item) => ({
-        // 🚀 [수정] 혹시 모를 오류 방지를 위해 무조건 현재 활성화된 전역 branchId로 예약을 꽂아 넣습니다.
-        branch_id: branchId,
-        user_id: currentUser.id,
-        child_id: child ? child.id : null,
-        child_name: child ? child.child_name : currentUser.name,
+      const bookingsJson = cart.map((item) => ({
         schedule_id: item.id,
-        package_id: pkg.id,
         class_date: item.date,
-        status: "pending",
-        attendance_status: "yet",
       }));
 
-      const { error: insertError } = await supabase
-        .from("reservations")
-        .insert(reservationsToInsert);
+      const { data, error } = await supabase.rpc("perform_bulk_reservation", {
+        p_user_id: currentUser.id,
+        p_child_id: child ? child.id : null,
+        p_child_name: child ? child.child_name : `${currentUser.name}(본인)`,
+        p_package_id: pkg.id,
+        p_branch_id: branchId,
+        p_bookings: bookingsJson,
+      });
 
-      if (insertError) throw insertError;
+      if (error) throw error;
 
-      // 💡 2. 수강권 횟수 차감 및 자녀 락(Lock) 처리
-      // 만약 이용권이 null 상태였다면, 이번 수강생으로 고정시킵니다.
-      const updatePayload: any = {
-        remaining_count: pkg.remaining_count - cart.length,
-      };
-
-      if (!pkg.child_id) {
-        if (child) {
-          updatePayload.child_id = child.id;
-          updatePayload.child_name = child.child_name;
-        } else {
-          // 성인인 경우 본인 이름으로 락 (child_id는 null로 유지하거나 특정값 부여 가능)
-          updatePayload.child_name = `${currentUser.name}(본인)`;
-        }
+      if (data && data.success) {
+        setCart([]);
+        setIsCartExpanded(false);
+        navigation.navigate("ReservationSuccess");
+      } else {
+        Alert.alert("예약 실패", data?.message || "처리에 실패했습니다.");
       }
-
-      const { error: updateError } = await supabase
-        .from("user_packages")
-        .update(updatePayload)
-        .eq("id", pkg.id);
-
-      if (updateError) throw updateError;
-
-      setCart([]);
-      setIsCartExpanded(false);
-      navigation.navigate("ReservationSuccess");
-    } catch (error) {
-      console.error("예약 오류:", error);
-      Alert.alert("오류", "예약 처리 중 문제가 발생했습니다.");
+    } catch (e: any) {
+      console.error("예약 오류:", e);
+      Alert.alert("오류", e.message || "예약 처리 중 문제가 발생했습니다.");
     } finally {
       setIsSubmitting(false);
     }

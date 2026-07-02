@@ -252,32 +252,22 @@ export default function AdminScheduleScreen({ navigation }: any) {
           text: "승인 및 복구",
           onPress: async () => {
             try {
-              const { error: resError } = await supabase
-                .from("reservations")
-                .update({ status: "canceled", attendance_status: "취소완료" })
-                .eq("id", reservation.id);
+              const { data, error } = await supabase.rpc("cancel_class_reservation", {
+                p_reservation_id: reservation.id,
+                p_user_id: reservation.user_id,
+              });
 
-              if (resError) throw resError;
+              if (error) throw error;
 
-              if (reservation.package_id) {
-                const { data: pkg, error: pkgFetchError } = await supabase
-                  .from("user_packages")
-                  .select("remaining_count")
-                  .eq("id", reservation.package_id)
-                  .single();
-
-                if (!pkgFetchError && pkg) {
-                  await supabase
-                    .from("user_packages")
-                    .update({ remaining_count: pkg.remaining_count + 1 })
-                    .eq("id", reservation.package_id);
-                }
+              if (data && data.success) {
+                Alert.alert("성공", "취소 승인 및 수강권 복구가 완료되었습니다.");
+                fetchStatusData();
+              } else {
+                Alert.alert("실패", data?.message || "처리에 실패했습니다.");
               }
-
-              Alert.alert("성공", "취소 승인 및 수강권 복구가 완료되었습니다.");
-              fetchStatusData();
-            } catch (e) {
-              Alert.alert("오류", "처리에 실패했습니다.");
+            } catch (e: any) {
+              console.error("취소 승인 에러:", e);
+              Alert.alert("오류", e.message || "처리에 실패했습니다.");
             }
           },
         },
