@@ -49,6 +49,7 @@ export default function ReferralScreen({ navigation, route }: any) {
   const [dailyMax, setDailyMax] = useState(50000); // 🚀 [DB연동] 일일 최대 전환
   const [monthlyMax, setMonthlyMax] = useState(500000); // 🚀 [DB연동] 월간 최대 전환
   const [convertPolicyText, setConvertPolicyText] = useState(""); // 🚀 [DB연동] 정책 설명 문구
+  const [convertRateText, setConvertRateText] = useState(""); // 🚀 [DB연동] 전환 비율 설명 문구
 
   // =========================================================================
   // 🚀 [기존] 인출 모달창 관리를 위한 상태 변수들
@@ -154,7 +155,10 @@ export default function ReferralScreen({ navigation, route }: any) {
       
       // 🚀 포인트 전환 정책 DB 동적 매핑
       if (s('min_convert_amount')) setMinConvert(Number(s('min_convert_amount')!.value));
-      if (s('convert_rate')) setConvertRate(Number(s('convert_rate')!.value));
+      if (s('convert_rate')) {
+        setConvertRate(Number(s('convert_rate')!.value));
+        setConvertRateText(s('convert_rate')!.value_text || "");
+      }
       if (s('daily_max_convert')) setDailyMax(Number(s('daily_max_convert')!.value));
       if (s('monthly_max_convert')) setMonthlyMax(Number(s('monthly_max_convert')!.value));
       if (s('convert_policy_text')) setConvertPolicyText(s('convert_policy_text')!.value_text || "");
@@ -587,6 +591,8 @@ ${shareLink}
               <Text>• 최소 전환: {minConvert.toLocaleString()} P</Text>
               <Text>• 1일 최대: {dailyMax.toLocaleString()} P</Text>
               <Text>• 월간 최대: {monthlyMax.toLocaleString()} P</Text>
+              <Text>• 전환 비율: {convertRateText}</Text>
+
               <Text style={{color: '#4F46E5', marginTop: 8, fontStyle: 'italic'}}>{convertPolicyText}</Text>
             </View>
 
