@@ -139,6 +139,7 @@ module.exports = ({ config }) => {
 
   // Local Expo Go sessions should load from Metro, not EAS Update.
   if (shouldEnableEasUpdates) {
+    nextConfig.name = "IPASSCARE";
     nextConfig.slug = "app";
     nextConfig.extra = {
       ...nextConfig.extra,

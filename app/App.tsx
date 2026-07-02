@@ -104,6 +104,7 @@ import AdminBannerScreen from "./src/screens/admin/AdminBannerScreen"; // 🚀 �
 
 // 💰 [포인트 관리 시스템] // 👈 새로 추가된 섹션!
 import PointHistoryScreen from "./src/screens/referral/PointHistoryScreen";
+import CheckInScreen from "./src/screens/referral/CheckInScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -321,6 +322,7 @@ export default function App() {
 
           {/* 10. 포인트 내역 및 관리 프로세스 👈 추가된 부분! */}
           <Stack.Screen name="PointHistory" component={PointHistoryScreen} />
+          <Stack.Screen name="CheckIn" component={CheckInScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </AuthProvider>

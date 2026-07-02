@@ -438,6 +438,24 @@ export default function HomeScreen({ navigation }: any) {
             )}
           </View>
 
+          {/* 📅 [추가] 매일 한글 모으기 출석체크 이벤트 배너 */}
+          <TouchableOpacity
+            style={styles.checkInEventBanner}
+            onPress={() => navigation.navigate("CheckIn")}
+            activeOpacity={0.9}
+          >
+            <View style={styles.checkInEventLeft}>
+              <View style={styles.eventLabelBadge}>
+                <Text style={styles.eventLabelBadgeText}>EVENT</Text>
+              </View>
+              <Text style={styles.checkInEventTitle}>매일 출석체크 하고 포인트 받기</Text>
+              <Text style={styles.checkInEventSub}>'아이패스케어' 한글을 한 자씩 모아보세요!</Text>
+            </View>
+            <View style={styles.checkInEventRight}>
+              <MaterialCommunityIcons name="calendar-check" size={32} color="#6366F1" />
+            </View>
+          </TouchableOpacity>
+
           {/* 2. Quick Menu */}
           <View style={styles.quickMenuGrid}>
             <TouchableOpacity
@@ -695,6 +713,53 @@ export default function HomeScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
+  checkInEventBanner: {
+    flexDirection: "row",
+    backgroundColor: "#EEF2FF",
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#E0E7FF",
+  },
+  checkInEventLeft: {
+    flex: 1,
+  },
+  eventLabelBadge: {
+    backgroundColor: "#6366F1",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  eventLabelBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  checkInEventTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#1E293B",
+  },
+  checkInEventSub: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  checkInEventRight: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 12,
+  },
   container: { flex: 1 },
   appBar: {
     flexDirection: "row",

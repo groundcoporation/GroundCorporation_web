@@ -20,7 +20,7 @@ import Constants from "expo-constants";
 // 🚀 [추가됨] 방금 만든 전역 상태 보관소에서 useAuth 가져오기
 import { useAuth } from "../../context/AuthContext";
 
-const EAS_PROJECT_ID = undefined;
+const EAS_PROJECT_ID = "3d6a4ab8-2046-4626-ad3a-eb1a76df0118";
 
 const getEasProjectId = () =>
   Constants.easConfig?.projectId ||

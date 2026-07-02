@@ -12,7 +12,7 @@ export type NotificationType =
   | "attendance";
 
 // =========================================================================
-// 1️⃣ 본부장님이 기존에 만드신 알림 서비스 (DB 저장용)
+// 1️⃣ 알림 서비스 (DB 저장용)
 // =========================================================================
 export const NotificationService = {
   // 1. 기초 발송 함수
@@ -124,6 +124,7 @@ export const sendGlobalPushNotification = async ({
       created_at: dayjs().tz().format("YYYY-MM-DDTHH:mm:ssZ"), // 명시적으로 KST 오프셋 포함
     }));
 
+    
     const { error: notiError } = await supabase
       .from("notifications")
       .insert(notificationRows);
@@ -150,18 +151,29 @@ export const sendGlobalPushNotification = async ({
         },
       }));
 
-      await fetch("https://exp.host/--/api/v2/push/send", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Accept-encoding": "gzip, deflate",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(pushMessages),
-      });
-      console.log(
-        `🎉 [전역 푸시 배달부] ${type} 타입 시스템 팝업 발송 통신 완료! (발송 인원: ${validPushTokens.length}명)`,
-      );
+      const response = await fetch("https://exp.host/--/api/v2/push/send", {
+  method: "POST",
+  headers: {
+    Accept: "application/json",
+    "Accept-encoding": "gzip, deflate",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(pushMessages),
+});
+
+const result = await response.json();
+
+console.log("📨 Expo Push API status:", response.status);
+console.log("📨 Expo Push API result:", JSON.stringify(result, null, 2));
+
+if (!response.ok || result.errors?.length) {
+  console.log("🚨 [전역 푸시 실패] Expo Push API가 요청을 거절했습니다.");
+  return;
+}
+
+console.log(
+  `✅ [전역 푸시 배달부] ${type} 대상 푸시 발송 요청 완료! (발송 인원: ${validPushTokens.length}명)`,
+);
     }
   } catch (error) {
     console.log("🚨 [전역 푸시 배달부] 시스템 치명적 에러 발생:", error);
