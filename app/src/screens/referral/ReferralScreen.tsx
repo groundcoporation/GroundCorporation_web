@@ -308,6 +308,7 @@ ${shareLink}
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         },
         body: `mb_id=${encodeURIComponent(mallId)}&mb_password=${encodeURIComponent(mallPw)}`,
       });
@@ -367,6 +368,7 @@ ${shareLink}
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         },
         body: `secret_key=${encodeURIComponent('ipasscare_secret_key_2026_vogsports')}&mb_id=${encodeURIComponent(userData?.shopping_mall_id)}&point_value=${amountNum}`,
       });
