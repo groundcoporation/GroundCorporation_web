@@ -120,7 +120,7 @@ export default function MyPackageScreen({ navigation }: any) {
     const expired = isExpired(pkg);
     const exhausted = isExhausted(pkg);
     const inactive = expired || exhausted;
-    const isShuttle = pkg.is_shuttle || false;
+    const isShuttle = pkg.voucher_type === "shuttle";
 
     // 남은 일수 계산 (셔틀용)
     const remainingDays = dayjs(pkg.expiry_date).diff(dayjs().startOf("day"), "day");
