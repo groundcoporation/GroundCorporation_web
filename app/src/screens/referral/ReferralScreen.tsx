@@ -316,10 +316,16 @@ ${shareLink}
         // 4. 대답이 '실패'면 경고창 띄우기 (비밀번호 틀림 등)
         Alert.alert("인증 실패", result.message || "아이디 또는 비밀번호가 틀렸습니다.");
       }
-    } catch (error) {
-      Alert.alert("통신 오류", "쇼핑몰 서버와 연결할 수 없습니다.");
-      console.log("인증 API 에러:", error);
+    } catch (error: any) {
+      // 🚀 에러의 상세 정보를 터미널에 뱉어내기!
+      console.error("--- 상세 에러 시작 ---");
+      console.error("에러 메시지:", error.message);
+      console.error("에러 객체 상세:", JSON.stringify(error, null, 2));
+      console.error("--- 상세 에러 끝 ---");
+      
+      Alert.alert("통신 오류", "서버와 연결할 수 없습니다. 터미널 로그를 확인해주세요.");
     } finally {
+      // ⭐️ 이 코드는 절대 지우지 마세요! 버튼 로딩을 멈추는 핵심입니다.
       setIsAuthenticating(false);
     }
   };
