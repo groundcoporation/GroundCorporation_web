@@ -157,7 +157,7 @@ export default function MyPackageScreen({ navigation }: any) {
             {expired && <Text style={styles.expiredLabel}>만료됨</Text>}
             {exhausted && !expired && !isShuttle && <Text style={styles.usedLabel}>사용완료</Text>}
           </View>
-          {!inactive && !isShuttle && TABS[activeTab] === "AVAILABLE" && (
+          {!inactive && (pkg.voucher_type === "lesson" || !pkg.voucher_type) && TABS[activeTab] === "AVAILABLE" && (
             <TouchableOpacity
               style={styles.reserveBtn}
               onPress={() =>

@@ -71,7 +71,7 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
           `
           id, name, phone, role, target_class, branch_id,
           children!fk_children_parent (id, child_name, target_class),
-          user_packages!fk_user_packages_user (id, package_name, remaining_count, total_count, created_at, expiry_date, is_shuttle)
+          user_packages!fk_user_packages_user (id, package_name, remaining_count, total_count, created_at, expiry_date, voucher_type)
         `,
         )
         .eq("id", userId)
@@ -110,7 +110,7 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
     try {
       const { data, error } = await supabase.from("package_options").select(`
           id, label, total_count, price,
-          packages!fk_package_option_parent ( id, name, is_shuttle )
+          packages!fk_package_option_parent ( id, name, voucher_type )
         `);
       if (error) throw error;
       setAvailableOptions(data || []);
@@ -122,11 +122,11 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
 
   const handleGrantPackage = async (option: any) => {
     try {
-      const isShuttle = option.packages?.is_shuttle || false;
-      const fullPackageName = `${option.packages?.name || "수강권"} - ${option.label}`;
+      const pkg = option.packages || option["packages!fk_package_option_parent"];
+      const fullPackageName = `${pkg?.name || "수강권"} - ${option.label}`;
       const { error } = await supabase.from("user_packages").insert({
         user_id: userId,
-        package_id: option.packages?.id,
+        package_id: pkg?.id,
         option_id: option.id,
         package_name: fullPackageName,
         total_count: option.total_count || 0,
@@ -134,7 +134,7 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
         status: "active",
         branch_id: member.branch_id,
         expiry_date: dayjs().endOf("month").format("YYYY-MM-DD"),
-        is_shuttle: isShuttle, // 🚀 셔틀 여부 연동
+        voucher_type: pkg?.voucher_type || "lesson",
       });
       if (error) throw error;
       Alert.alert("완료", "수강권이 부여되었습니다.");
@@ -449,7 +449,7 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
                     </View>
 
                     <View style={styles.countControlRow}>
-                      {pkg.is_shuttle ? (
+                      {pkg.voucher_type === "shuttle" ? (
                         <View>
                           <Text style={[styles.countNum, { fontSize: 18 }]}>
                             {dayjs(pkg.expiry_date).diff(dayjs().startOf("day"), "day")}일 남음
@@ -688,7 +688,7 @@ export default function AdminMemberDetailScreen({ navigation, route }: any) {
                 >
                   <View>
                     <Text style={styles.optParent}>
-                      {opt.packages?.name} {opt.packages?.is_shuttle && "(셔틀)"}
+                      {opt.packages?.name} {opt.packages?.voucher_type === "shuttle" && "(셔틀)"}
                     </Text>
                     <Text style={styles.optLabel}>
                       {opt.label} ({opt.total_count}회)

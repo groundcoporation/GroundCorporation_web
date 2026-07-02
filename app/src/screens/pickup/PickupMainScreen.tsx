@@ -74,10 +74,10 @@ export default function PickupMainScreen({ navigation }: any) {
       // (2) 셔틀버스 월 이용권 보유 개수 확인
       const { data: passData, error: passError } = await supabase
         .from("user_packages")
-        .select("id, package_name, expiry_date, is_shuttle")
+        .select("id, package_name, expiry_date, voucher_type")
         .eq("user_id", user.id)
         .eq("status", "active") // ilike 대신 정확한 상태값 비교
-        .eq("is_shuttle", true);
+        .eq("voucher_type", "shuttle");
 
       if (passError) console.error("❌ [디버그] 이용권 조회 에러:", passError);
 

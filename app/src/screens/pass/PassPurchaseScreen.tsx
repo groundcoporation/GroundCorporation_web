@@ -44,7 +44,8 @@ interface Package {
   total_count?: number;
   duration_in_days?: number;
   weekly_limit?: number;
-  is_shuttle?: boolean; // 🚀 [추가] 타입 정의에 셔틀 여부 추가
+  is_shuttle?: boolean;
+  voucher_type?: string;
   package_options: PackageOption[];
 }
 interface CartItem {
@@ -381,7 +382,8 @@ export default function PassPurchaseScreen({ navigation }: any) {
               item.pkg.price ||
               0,
             status: "active",
-            is_shuttle: item.pkg.is_shuttle || false,
+            voucher_type: item.pkg.voucher_type || "lesson",
+            option_id: item.pkg.package_options?.[item.optIndex]?.id,
             expiry_date: dayjs().endOf("month").format("YYYY-MM-DD"),
           }),
         );

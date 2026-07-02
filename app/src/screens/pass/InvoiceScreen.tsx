@@ -231,7 +231,8 @@ export default function InvoiceScreen({ navigation }: any) {
             item.pkg.price ||
             0,
           status: "active",
-          is_shuttle: item.pkg.is_shuttle || false,
+          voucher_type: item.pkg.voucher_type || "lesson",
+          option_id: item.pkg.package_options?.[item.optIndex]?.id,
           expiry_date: dayjs().endOf("month").format("YYYY-MM-DD"),
         }),
       );
