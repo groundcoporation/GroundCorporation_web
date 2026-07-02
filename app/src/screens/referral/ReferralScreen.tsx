@@ -293,7 +293,7 @@ ${shareLink}
     setIsAuthenticating(true);
     try {
       // 1. 쇼핑몰 PHP API로 아이디와 비밀번호 쏘기 (도메인 주소를 팀장님 쇼핑몰로 바꾸세요!)
-      const response = await fetch("https://vogsports.com/api_verify_user.php", {
+      const response = await fetch("http://vog-sports.com/api_verify_user.php", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -346,7 +346,7 @@ ${shareLink}
     setIsConverting(true);
     try {
       // 1. 쇼핑몰 PHP API로 포인트 적립 요청 쏘기
-      const response = await fetch("https://vogsports.com/api_receive_point.php", {
+      const response = await fetch("http://vog-sports.com/api_receive_point.php", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
