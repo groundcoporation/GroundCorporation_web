@@ -666,7 +666,7 @@ export default function HomeScreen({ navigation }: any) {
               </Text>
             </View>
 
-            {bizInfo?.tongshin_no && (
+            {!!bizInfo?.tongshin_no && (
               <Text style={styles.footerText}>
                 통신판매업 신고번호 : {bizInfo.tongshin_no}
               </Text>
