@@ -42,6 +42,15 @@ export default function ReferralScreen({ navigation, route }: any) {
   const [shareMessageTemplate, setShareMessageTemplate] = useState<string>(""); // 🚀 [추가] 공유 메시지 템플릿 DB화
 
   // =========================================================================
+  // 🚀 [신규] 포인트 전환 정책 DB 동적 관리 상태
+  // =========================================================================
+  const [minConvert, setMinConvert] = useState(5000); // 🚀 [DB연동] 최소 전환 금액
+  const [convertRate, setConvertRate] = useState(1); // 🚀 [DB연동] 전환 비율
+  const [dailyMax, setDailyMax] = useState(50000); // 🚀 [DB연동] 일일 최대 전환
+  const [monthlyMax, setMonthlyMax] = useState(500000); // 🚀 [DB연동] 월간 최대 전환
+  const [convertPolicyText, setConvertPolicyText] = useState(""); // 🚀 [DB연동] 정책 설명 문구
+
+  // =========================================================================
   // 🚀 [기존] 인출 모달창 관리를 위한 상태 변수들
   // =========================================================================
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -137,15 +146,18 @@ export default function ReferralScreen({ navigation, route }: any) {
     
     // 🚀 정책 값 동적 매핑
     if (settings) {
-      const w = settings.find(s => s.key === 'min_withdraw_amount')?.value;
-      const u = settings.find(s => s.key === 'min_use_amount')?.value;
-      const b = settings.find(s => s.key === 'signup_bonus')?.value; // 🚀 [추가] 가입 보너스 가져오기
-      const msg = settings.find(s => s.key === 'referral_share_message')?.value_text; // 🚀 [추가] 공유 메시지 템플릿 가져오기
+      const s = (key: string) => settings.find(item => item.key === key);
+      if (s('min_withdraw_amount')) setMinWithdraw(Number(s('min_withdraw_amount')!.value));
+      if (s('min_use_amount')) setMinUse(Number(s('min_use_amount')!.value));
+      if (s('signup_bonus')) setSignupBonus(Number(s('signup_bonus')!.value));
+      if (s('referral_share_message')) setShareMessageTemplate(s('referral_share_message')!.value_text || "");
       
-      if (w) setMinWithdraw(Number(w));
-      if (u) setMinUse(Number(u));
-      if (b) setSignupBonus(Number(b)); // 🚀 [추가] 상태 업데이트
-      if (msg) setShareMessageTemplate(msg);
+      // 🚀 포인트 전환 정책 DB 동적 매핑
+      if (s('min_convert_amount')) setMinConvert(Number(s('min_convert_amount')!.value));
+      if (s('convert_rate')) setConvertRate(Number(s('convert_rate')!.value));
+      if (s('daily_max_convert')) setDailyMax(Number(s('daily_max_convert')!.value));
+      if (s('monthly_max_convert')) setMonthlyMax(Number(s('monthly_max_convert')!.value));
+      if (s('convert_policy_text')) setConvertPolicyText(s('convert_policy_text')!.value_text || "");
     }
   };
 
@@ -348,12 +360,14 @@ ${shareLink}
   const handlePointConvert = async () => {
     const amountNum = Number(convertAmount);
 
-    if (!convertAmount) {
-      Alert.alert("알림", "전환할 금액을 입력해주세요.");
+    // 🚀 [DB기반 검증] 최소 전환 금액
+    if (amountNum < minConvert) { 
+      Alert.alert("알림", `${minConvert.toLocaleString()}P 이상부터 전환 가능합니다.`);
       return;
     }
-    if (amountNum < 5000) { 
-      Alert.alert("알림", "5,000P 이상부터 전환 가능합니다.");
+    // 🚀 [DB기반 검증] 일일 최대 전환 금액
+    if (amountNum > dailyMax) { 
+      Alert.alert("알림", `1일 최대 전환 한도는 ${dailyMax.toLocaleString()}P입니다.`);
       return;
     }
     if (amountNum > points) {
@@ -362,6 +376,9 @@ ${shareLink}
     }
 
     setIsConverting(true);
+    // 🚀 실제 쇼핑몰 적립액 계산 (전환포인트 * 비율)
+    const actualAmount = Math.floor(amountNum * convertRate);
+
     try {
       // 1. 쇼핑몰 PHP API로 포인트 적립 요청 쏘기
       const response = await fetch("http://vog-sports.com/api_receive_point.php", {
@@ -370,7 +387,7 @@ ${shareLink}
           "Content-Type": "application/x-www-form-urlencoded",
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         },
-        body: `secret_key=${encodeURIComponent('ipasscare_secret_key_2026_vogsports')}&mb_id=${encodeURIComponent(userData?.shopping_mall_id)}&point_value=${amountNum}`,
+        body: `secret_key=${encodeURIComponent('ipasscare_secret_key_2026_vogsports')}&mb_id=${encodeURIComponent(userData?.shopping_mall_id)}&point_value=${actualAmount}`,
       });
 
       const result = await response.json();
@@ -388,7 +405,7 @@ ${shareLink}
           reason: `쇼핑몰(${userData?.shopping_mall_id}) 포인트 전환` 
         });
 
-        Alert.alert("전환 완료", `${amountNum.toLocaleString()}P가 쇼핑몰 포인트로 정상 전환되었습니다!`);
+        Alert.alert("전환 완료", `${actualAmount.toLocaleString()}P가 쇼핑몰 포인트로 정상 전환되었습니다!`);
         setShowConvertModal(false);
         setConvertAmount("");
         fetchUserData(); // 상단 포인트 카드 금액 실시간 갱신
@@ -563,10 +580,20 @@ ${shareLink}
             <View style={{ backgroundColor: '#EEF2FF', padding: 12, borderRadius: 8, marginBottom: 15 }}>
               <Text style={{ color: '#4F46E5', fontWeight: 'bold' }}>연결된 쇼핑몰 계정: {userData?.shopping_mall_id}</Text>
             </View>
+            
+            {/* 🚀 DB 기반 정책 안내 UI */}
+            <View style={styles.policyNotice}>
+              <Text style={{fontWeight:'bold', marginBottom: 5}}>💡 전환 정책 안내</Text>
+              <Text>• 최소 전환: {minConvert.toLocaleString()} P</Text>
+              <Text>• 1일 최대: {dailyMax.toLocaleString()} P</Text>
+              <Text>• 월간 최대: {monthlyMax.toLocaleString()} P</Text>
+              <Text style={{color: '#4F46E5', marginTop: 8, fontStyle: 'italic'}}>{convertPolicyText}</Text>
+            </View>
+
             <View style={styles.modalBody}>
               <TextInput 
                 style={styles.modalInput} 
-                placeholder="전환할 포인트 입력 (최소 5,000P)" 
+                placeholder={`예상 적립액: ${Math.floor(Number(convertAmount) * convertRate).toLocaleString()}P`} 
                 value={convertAmount} 
                 onChangeText={setConvertAmount} 
                 keyboardType="number-pad" 
@@ -622,4 +649,6 @@ const styles = StyleSheet.create({
   modalInput: { backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, padding: 15, fontSize: 15, marginBottom: 12 },
   modalSubmitBtn: { backgroundColor: "#6366F1", paddingVertical: 16, borderRadius: 14, alignItems: "center", marginTop: 10 },
   modalSubmitBtnText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
+  // 🚀 [추가] 정책 안내 박스 스타일
+  policyNotice: { backgroundColor: '#F9FAFB', padding: 15, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: '#E5E7EB' },
 });
