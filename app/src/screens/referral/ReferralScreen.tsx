@@ -39,6 +39,7 @@ export default function ReferralScreen({ navigation, route }: any) {
   const [minWithdraw, setMinWithdraw] = useState(10000);
   const [minUse, setMinUse] = useState(3000);
   const [signupBonus, setSignupBonus] = useState(2000); // 🚀 [추가] 가입 보너스 동적 관리
+  const [shareMessageTemplate, setShareMessageTemplate] = useState<string>(""); // 🚀 [추가] 공유 메시지 템플릿 DB화
 
   // =========================================================================
   // 🚀 [기존] 인출 모달창 관리를 위한 상태 변수들
@@ -108,7 +109,7 @@ export default function ReferralScreen({ navigation, route }: any) {
       { data: settings }
     ] = await Promise.all([
       supabase.from("users").select("id, name, username, points, referred_by, level, referral_count, lineage, shopping_mall_id").eq("id", user?.id).single(),
-      supabase.from("point_settings").select("key, value")
+      supabase.from("point_settings").select("key, value, value_text")
     ]);
 
     if (userData) {
@@ -139,10 +140,12 @@ export default function ReferralScreen({ navigation, route }: any) {
       const w = settings.find(s => s.key === 'min_withdraw_amount')?.value;
       const u = settings.find(s => s.key === 'min_use_amount')?.value;
       const b = settings.find(s => s.key === 'signup_bonus')?.value; // 🚀 [추가] 가입 보너스 가져오기
+      const msg = settings.find(s => s.key === 'referral_share_message')?.value_text; // 🚀 [추가] 공유 메시지 템플릿 가져오기
       
       if (w) setMinWithdraw(Number(w));
       if (u) setMinUse(Number(u));
       if (b) setSignupBonus(Number(b)); // 🚀 [추가] 상태 업데이트
+      if (msg) setShareMessageTemplate(msg);
     }
   };
 
@@ -151,19 +154,27 @@ export default function ReferralScreen({ navigation, route }: any) {
     // 🚀 [수정] 우리가 방금 배포한 만능 엣지 펑션 주소로 교체
     const shareLink = `https://wsdyrercgbvwlssntwvy.supabase.co/functions/v1/invite?ref=${myReferralCode}`;
 
-    // 🚀 [수정] 하드코딩 제거: DB에서 가져온 signupBonus 값을 천 단위 콤마와 함께 동적 삽입
-    const shareMessage = `[🎁 특별 초대장] 
+    // 🚀 DB에서 가져온 템플릿이 있으면 동적 치환하고, 없으면 기본 하드코딩 템플릿 사용
+    let shareMessage = "";
+    if (shareMessageTemplate) {
+      shareMessage = shareMessageTemplate
+        .replace(/{signup_bonus}/g, signupBonus.toLocaleString())
+        .replace(/{share_link}/g, shareLink)
+        .replace(/{referral_code}/g, myReferralCode);
+    } else {
+      shareMessage = `[🎁 특별 초대장] 
 안전한 학원 픽업 서비스 '아이패스케어'에 초대합니다!
 
 지금 아래 링크를 통해 앱을 설치하고 바로 가입하시면, 즉시 사용 가능한 ${signupBonus.toLocaleString()}P가 자동으로 적립됩니다. 🎉
 (※ 앱 실행 시 초대 팝업을 꼭 확인해 주세요!)
 
-👇 ${signupBonus.toLocaleString()}P 혜택 받고 가입하기
+👇 ${signupBonus.toLocaleString()}P 혜택 받고 가입하기 (자동 추천인 등록)
 ${shareLink}
 
 💡 혹시 가입창에 추천인이 안 보인다면?
 • 추천인 ID: ${myReferralCode}
 (직접 입력하셔도 동일하게 ${signupBonus.toLocaleString()}P가 지급됩니다!)`;
+    }
 
     try {
       await Share.share({
