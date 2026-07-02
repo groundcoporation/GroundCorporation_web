@@ -41,7 +41,7 @@ export default function ReferralScreen({ navigation, route }: any) {
   const [signupBonus, setSignupBonus] = useState(2000); // 🚀 [추가] 가입 보너스 동적 관리
 
   // =========================================================================
-  // 🚀 [추가] 인출 모달창 관리를 위한 상태 변수들
+  // 🚀 [기존] 인출 모달창 관리를 위한 상태 변수들
   // =========================================================================
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [bankName, setBankName] = useState("");
@@ -49,6 +49,18 @@ export default function ReferralScreen({ navigation, route }: any) {
   const [accountHolder, setAccountHolder] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+
+  // =========================================================================
+  // 🚀 [신규] 포인트 전환을 위한 상태 변수들 (인증 & 전환 팝업)
+  // =========================================================================
+  const [showAuthModal, setShowAuthModal] = useState(false); // 쇼핑몰 계정 인증 팝업
+  const [mallId, setMallId] = useState("");
+  const [mallPw, setMallPw] = useState("");
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  const [showConvertModal, setShowConvertModal] = useState(false); // 포인트 전환 팝업
+  const [convertAmount, setConvertAmount] = useState("");
+  const [isConverting, setIsConverting] = useState(false);
 
   // 딥링크 등을 통해 파라미터로 전달받은 추천인 코드 확인
   const initialReferralCode = route?.params?.referralCode;
@@ -90,12 +102,12 @@ export default function ReferralScreen({ navigation, route }: any) {
   }, [user, initialReferralCode, alreadyReferred, myReferralCode]);
 
   const fetchUserData = async () => {
-    // 🚀 [수정] 유저 데이터, 등급 정보, 포인트 설정값을 한 번에 로드
+    // 🚀 [수정] 유저 데이터, 등급 정보, 포인트 설정값을 한 번에 로드 (shopping_mall_id도 가져옴!)
     const [
       { data: userData },
       { data: settings }
     ] = await Promise.all([
-      supabase.from("users").select("id, name, username, points, referred_by, level, referral_count, lineage").eq("id", user?.id).single(),
+      supabase.from("users").select("id, name, username, points, referred_by, level, referral_count, lineage, shopping_mall_id").eq("id", user?.id).single(),
       supabase.from("point_settings").select("key, value")
     ]);
 
@@ -235,7 +247,7 @@ ${shareLink}
   };
 
   // =========================================================================
-  // 🚀 [추가] 포인트 현금 인출 신청 핵심 로직 (DB 연동 + 자동차감)
+  // 🚀 [기존] 포인트 현금 인출 신청 핵심 로직
   // =========================================================================
   const handleWithdrawRequest = async () => {
     const amountNum = Number(withdrawAmount);
@@ -267,6 +279,109 @@ ${shareLink}
       Alert.alert("오류", "인출 중 문제가 발생했습니다.");
     } finally {
       setIsWithdrawing(false);
+    }
+  };
+
+  // =========================================================================
+  // 🚀 [진짜 로직] 쇼핑몰 계정 인증 (PHP API 실제 연동 완료!)
+  // =========================================================================
+  const handleMallAuth = async () => {
+    if (!mallId || !mallPw) {
+      Alert.alert("알림", "쇼핑몰 아이디와 비밀번호를 입력해주세요.");
+      return;
+    }
+    setIsAuthenticating(true);
+    try {
+      // 1. 쇼핑몰 PHP API로 아이디와 비밀번호 쏘기 (도메인 주소를 팀장님 쇼핑몰로 바꾸세요!)
+      const response = await fetch("https://vogsports.com/api_verify_user.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: `mb_id=${encodeURIComponent(mallId)}&mb_password=${encodeURIComponent(mallPw)}`,
+      });
+
+      // 2. 쇼핑몰의 대답(JSON) 확인하기
+      const result = await response.json();
+
+      if (result.success) {
+        // 3. 대답이 '성공'이면 그때서야 Supabase DB에 아이디를 쾅! 박아줍니다.
+        // result.mb_id 를 통해 쇼핑몰에서 확인된 정확한 ID를 저장합니다.
+        await supabase.from("users").update({ shopping_mall_id: result.mb_id }).eq("id", user?.id);
+        
+        Alert.alert("인증 완료", "쇼핑몰 계정 연동이 완료되었습니다!");
+        setShowAuthModal(false);
+        fetchUserData(); // 데이터 갱신 (버튼 상태 변경용)
+      } else {
+        // 4. 대답이 '실패'면 경고창 띄우기 (비밀번호 틀림 등)
+        Alert.alert("인증 실패", result.message || "아이디 또는 비밀번호가 틀렸습니다.");
+      }
+    } catch (error) {
+      Alert.alert("통신 오류", "쇼핑몰 서버와 연결할 수 없습니다.");
+      console.log("인증 API 에러:", error);
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  // =========================================================================
+  // 🚀 [진짜 로직 완료] 포인트 전환 로직 (쇼핑몰 실제 포인트 충전 연동!)
+  // =========================================================================
+  const handlePointConvert = async () => {
+    const amountNum = Number(convertAmount);
+
+    if (!convertAmount) {
+      Alert.alert("알림", "전환할 금액을 입력해주세요.");
+      return;
+    }
+    if (amountNum < 5000) { 
+      Alert.alert("알림", "5,000P 이상부터 전환 가능합니다.");
+      return;
+    }
+    if (amountNum > points) {
+      Alert.alert("알림", "보유 포인트가 부족합니다.");
+      return;
+    }
+
+    setIsConverting(true);
+    try {
+      // 1. 쇼핑몰 PHP API로 포인트 적립 요청 쏘기
+      const response = await fetch("https://vogsports.com/api_receive_point.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: `secret_key=${encodeURIComponent('ipasscare_secret_key_2026_vogsports')}&mb_id=${encodeURIComponent(userData?.shopping_mall_id)}&point_value=${amountNum}`,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // 2. 쇼핑몰에서 적립 성공 대답이 왔을 때만 앱(Supabase) 보유 포인트를 차감합니다!
+        const nextPoints = points - amountNum;
+        await supabase.from("users").update({ points: nextPoints }).eq("id", user?.id);
+        
+        // 3. 앱 포인트 영수증(로그) 기록
+        await supabase.from("point_logs").insert({ 
+          user_id: user?.id, 
+          amount: -amountNum, 
+          type: "withdraw", 
+          reason: `쇼핑몰(${userData?.shopping_mall_id}) 포인트 전환` 
+        });
+
+        Alert.alert("전환 완료", `${amountNum.toLocaleString()}P가 쇼핑몰 포인트로 정상 전환되었습니다!`);
+        setShowConvertModal(false);
+        setConvertAmount("");
+        fetchUserData(); // 상단 포인트 카드 금액 실시간 갱신
+      } else {
+        // 쇼핑몰 오류 발생 시 차감 안 함
+        Alert.alert("전환 실패", result.message || "쇼핑몰 포인트 적립 중 문제가 발생했습니다.");
+      }
+    } catch (error) {
+      Alert.alert("통신 오류", "쇼핑몰 서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+      console.log("포인트 전환 API 에러:", error);
+    } finally {
+      setIsConverting(false);
     }
   };
 
@@ -302,6 +417,20 @@ ${shareLink}
               onPress={() => points < minWithdraw ? Alert.alert("알림", `${minWithdraw.toLocaleString()}P 이상부터 가능합니다.`) : setShowWithdrawModal(true)}
             >
               <Text style={styles.subBtnText}>인출하기</Text>
+            </TouchableOpacity>
+
+            {/* 🚀 [팀장님 기획 반영] 포인트 전환 버튼 */}
+            <TouchableOpacity 
+              style={[styles.subBtn, { backgroundColor: '#1E40AF' }]} // 강조 컬러
+              onPress={() => {
+                if (!userData?.shopping_mall_id) {
+                  setShowAuthModal(true); // 쇼핑몰 ID가 없으면 '인증 팝업'
+                } else {
+                  setShowConvertModal(true); // 있으면 '전환 팝업'
+                }
+              }}
+            >
+              <Text style={styles.subBtnText}>포인트 전환</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -350,13 +479,16 @@ ${shareLink}
 
         <View style={styles.noticeSection}>
           <Text style={styles.noticeHeader}>💡 이용 안내 및 유의사항</Text>
-          <View style={styles.noticeItem}><Text style={styles.noticeText}>• 포인트 인출은 {minWithdraw.toLocaleString()}P 이상부터 신청 가능합니다.</Text></View>
-          <View style={styles.noticeItem}><Text style={styles.noticeText}>• 포인트 사용은 {minUse.toLocaleString()}P부터 자유롭게 사용하실 수 있습니다.</Text></View>
-          <View style={styles.noticeItem}><Text style={styles.noticeText}>• 결제 시 사용하시는 등급에 따라 포인트가 차등 적립됩니다.</Text></View>
+          <Text style={styles.noticeText}>• 쇼핑몰 포인트 전환은 아이패스케어 제휴 쇼핑몰 계정 인증 후 가능합니다.</Text>
+          <Text style={styles.noticeText}>• 포인트 인출은 {minWithdraw.toLocaleString()}P 이상부터 신청 가능합니다.</Text>
+          <Text style={styles.noticeText}>• 포인트 사용은 {minUse.toLocaleString()}P부터 자유롭게 사용하실 수 있습니다.</Text>
+          <Text style={styles.noticeText}>• 결제 시 사용하시는 등급에 따라 포인트가 차등 적립됩니다.</Text>
         </View>
       </ScrollView>
 
-      {/* 포인트 인출 팝업 */}
+      {/* ========================================================= */}
+      {/* 🚀 모달 1: 현금 인출 팝업 (기존 유지) */}
+      {/* ========================================================= */}
       <Modal visible={showWithdrawModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -369,11 +501,65 @@ ${shareLink}
               <TextInput style={styles.modalInput} placeholder="계좌번호 (- 제외)" value={accountNumber} onChangeText={setAccountNumber} keyboardType="number-pad" />
               <TextInput style={styles.modalInput} placeholder="예금주" value={accountHolder} onChangeText={setAccountHolder} />
               <TextInput style={styles.modalInput} placeholder="인출 금액 (P)" value={withdrawAmount} onChangeText={setWithdrawAmount} keyboardType="number-pad" />
-              <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleWithdrawRequest}><Text style={styles.modalSubmitBtnText}>신청하기</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleWithdrawRequest}>
+                {isWithdrawing ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalSubmitBtnText}>신청하기</Text>}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* ========================================================= */}
+      {/* 🚀 모달 2: 쇼핑몰 계정 인증 팝업 (최초 1회) */}
+      {/* ========================================================= */}
+      <Modal visible={showAuthModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>쇼핑몰 계정 인증</Text>
+              <TouchableOpacity onPress={() => setShowAuthModal(false)}><Ionicons name="close" size={24} color="#111827" /></TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubText}>포인트 전환을 위해 제휴 쇼핑몰 계정을 최초 1회 인증해 주세요.</Text>
+            <View style={styles.modalBody}>
+              <TextInput style={styles.modalInput} placeholder="쇼핑몰 아이디" value={mallId} onChangeText={setMallId} autoCapitalize="none" />
+              <TextInput style={styles.modalInput} placeholder="쇼핑몰 비밀번호" value={mallPw} onChangeText={setMallPw} secureTextEntry />
+              <TouchableOpacity style={[styles.modalSubmitBtn, { backgroundColor: '#1E40AF' }]} onPress={handleMallAuth}>
+                {isAuthenticating ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalSubmitBtnText}>인증하기</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* 🚀 모달 3: 포인트 전환 팝업 (인증 완료된 유저용) */}
+      {/* ========================================================= */}
+      <Modal visible={showConvertModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>포인트 전환</Text>
+              <TouchableOpacity onPress={() => setShowConvertModal(false)}><Ionicons name="close" size={24} color="#111827" /></TouchableOpacity>
+            </View>
+            <View style={{ backgroundColor: '#EEF2FF', padding: 12, borderRadius: 8, marginBottom: 15 }}>
+              <Text style={{ color: '#4F46E5', fontWeight: 'bold' }}>연결된 쇼핑몰 계정: {userData?.shopping_mall_id}</Text>
+            </View>
+            <View style={styles.modalBody}>
+              <TextInput 
+                style={styles.modalInput} 
+                placeholder="전환할 포인트 입력 (최소 5,000P)" 
+                value={convertAmount} 
+                onChangeText={setConvertAmount} 
+                keyboardType="number-pad" 
+              />
+              <TouchableOpacity style={[styles.modalSubmitBtn, { backgroundColor: '#1E40AF' }]} onPress={handlePointConvert}>
+                {isConverting ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalSubmitBtnText}>쇼핑몰로 전환하기</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -390,7 +576,7 @@ const styles = StyleSheet.create({
   levelBadge: { backgroundColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, marginBottom: 12 },
   levelText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   buttonRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
-  subBtn: { backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginHorizontal: 8 },
+  subBtn: { backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, marginHorizontal: 4 }, // 간격 살짝 조정
   subBtnText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   upgradeCard: { backgroundColor: '#F0F7FF', padding: 16, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: '#DBEAFE' },
   upgradeText: { marginLeft: 10, fontSize: 14, color: '#1E40AF', fontWeight: '600' },
@@ -407,13 +593,13 @@ const styles = StyleSheet.create({
   noticeSection: { marginTop: 10, paddingBottom: 40 },
   noticeHeader: { fontSize: 14, fontWeight: "800", color: "#475569", marginBottom: 12 },
   noticeItem: { marginBottom: 8 },
-  noticeText: { fontSize: 12, color: "#64748B", lineHeight: 18 },
+  noticeText: { fontSize: 12, color: "#64748B", lineHeight: 18, marginBottom: 8 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalContent: { backgroundColor: "#FFF", borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   modalTitle: { fontSize: 18, fontWeight: "bold", color: "#111827" },
   modalBody: { marginTop: 10 },
-  modalSubText: { fontSize: 14, color: "#64748B", marginBottom: 15 },
+  modalSubText: { fontSize: 14, color: "#64748B", marginBottom: 15, lineHeight: 20 },
   modalInput: { backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, padding: 15, fontSize: 15, marginBottom: 12 },
   modalSubmitBtn: { backgroundColor: "#6366F1", paddingVertical: 16, borderRadius: 14, alignItems: "center", marginTop: 10 },
   modalSubmitBtnText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
