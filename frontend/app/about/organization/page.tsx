@@ -139,62 +139,70 @@ export default function OrganizationPage() {
             <div className="w-12 h-1 bg-blue-600 mx-auto rounded-full" />
           </div>
 
-          <div className="relative flex flex-col items-center">
-            {/* [Level 1] CEO */}
-            <div className="relative z-30" data-aos="zoom-in">
-              <div className="bg-white px-12 py-8 rounded-2xl border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] text-center">
-                <p className="text-blue-600 font-bold text-[10px] tracking-widest uppercase mb-1">
-                  Chief Executive Officer
-                </p>
-                <h3 className="text-2xl font-black text-gray-900 tracking-tight">
-                  김 강 태
-                </h3>
+          {/* 모바일 화면 가로 스크롤 안내 팁 */}
+          <div className="xl:hidden flex items-center justify-center gap-2 mb-6 text-xs text-gray-400 font-semibold animate-pulse">
+            <span>← 좌우로 스크롤하여 전체 조직도를 확인하세요 →</span>
+          </div>
+
+          {/* 가로 스크롤 컨테이너 */}
+          <div className="w-full overflow-x-auto pb-12 scrollbar-thin select-none">
+            <div className="min-w-[1200px] relative flex flex-col items-center px-4">
+              {/* [Level 1] CEO */}
+              <div className="relative z-30" data-aos="zoom-in">
+                <div className="bg-white px-12 py-8 rounded-2xl border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] text-center">
+                  <p className="text-blue-600 font-bold text-[10px] tracking-widest uppercase mb-1">
+                    Chief Executive Officer
+                  </p>
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">
+                    김 강 태
+                  </h3>
+                </div>
+                <div className="absolute left-1/2 top-full w-[2px] h-20 bg-gray-200 -translate-x-1/2"></div>
               </div>
-              <div className="hidden xl:block absolute left-1/2 top-full w-[2px] h-20 bg-gray-200 -translate-x-1/2"></div>
-            </div>
 
-            {/* [Level 2] Branch Area */}
-            <div className="w-full relative pt-20">
-              {/* 상단 메인 가로선 (법률 ~ 개발 연결) */}
-              <div className="hidden xl:block absolute top-0 left-[10%] right-[10%] h-[2px] bg-gray-200"></div>
+              {/* [Level 2] Branch Area */}
+              <div className="w-full relative pt-20">
+                {/* 상단 메인 가로선 (법률 ~ 개발 연결) */}
+                <div className="absolute top-0 left-[calc(10%-4px)] right-[calc(10%-4px)] h-[2px] bg-gray-200"></div>
 
-              <div className="flex flex-col xl:flex-row items-start justify-center gap-8 xl:gap-0 w-full">
-                {/* 좌측: 법률 자문 */}
-                <div className="w-full xl:w-[20%] flex flex-col items-center px-4 relative">
-                  <div className="hidden xl:block absolute top-[-80px] w-[2px] h-20 bg-gray-200"></div>
-                  <DeptCard data={organization.legal} />
-                </div>
-
-                {/* 중앙: 비즈니스 운영 */}
-                <div className="w-full xl:w-[60%] flex flex-col items-center px-4 relative">
-                  <div className="hidden xl:block absolute top-[-80px] w-[2px] h-20 bg-blue-500"></div>
-
-                  <div className="bg-blue-50 text-blue-600 px-6 py-2 rounded-full mb-12 z-20 font-bold text-[10px] tracking-widest border border-blue-100">
-                    BUSINESS OPERATION
+                <div className="flex flex-row items-start justify-center w-full">
+                  {/* 좌측: 법률 자문 */}
+                  <div className="w-[20%] flex flex-col items-center px-4 relative">
+                    <div className="absolute top-[-80px] w-[2px] h-20 bg-gray-200"></div>
+                    <DeptCard data={organization.legal} />
                   </div>
 
-                  {/* 하위 4개 팀 뿌리 수정 영역 */}
-                  <div className="w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 relative">
-                    {/* [수정] 4개 카드일 때 첫 번째 카드 중앙(12.5%)에서 마지막 카드 중앙(87.5%)까지 가로선 연장 */}
-                    <div className="hidden xl:block absolute top-[-24px] left-[12.5%] right-[12.5%] h-[2px] bg-blue-100"></div>
+                  {/* 중앙: 비즈니스 운영 */}
+                  <div className="w-[60%] flex flex-col items-center px-4 relative">
+                    <div className="absolute top-[-80px] w-[2px] h-20 bg-blue-500"></div>
 
-                    {organization.business.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="flex flex-col items-center relative"
-                      >
-                        {/* 각 팀 수직선 */}
-                        <div className="hidden xl:block absolute top-[-24px] w-[2px] h-6 bg-blue-100"></div>
-                        <DeptCard data={item} isSmall />
-                      </div>
-                    ))}
+                    <div className="bg-blue-50 text-blue-600 px-6 py-2 rounded-full mb-12 z-20 font-bold text-[10px] tracking-widest border border-blue-100">
+                      BUSINESS OPERATION
+                    </div>
+
+                    {/* 하위 4개 팀 뿌리 수정 영역 */}
+                    <div className="w-full grid grid-cols-4 gap-4 relative">
+                      {/* [수정] 4개 카드일 때 첫 번째 카드 중앙(12.5%)에서 마지막 카드 중앙(87.5%)까지 가로선 연장 */}
+                      <div className="absolute top-[-24px] left-[calc(12.5%-4px)] right-[calc(12.5%-4px)] h-[2px] bg-blue-100"></div>
+
+                      {organization.business.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex flex-col items-center relative"
+                        >
+                          {/* 각 팀 수직선 */}
+                          <div className="absolute top-[-24px] w-[2px] h-6 bg-blue-100"></div>
+                          <DeptCard data={item} isSmall />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* 우측: 개발본부 */}
-                <div className="w-full xl:w-[20%] flex flex-col items-center px-4 relative">
-                  <div className="hidden xl:block absolute top-[-80px] w-[2px] h-20 bg-gray-200"></div>
-                  <DeptCard data={organization.dev} />
+                  {/* 우측: 개발본부 */}
+                  <div className="w-[20%] flex flex-col items-center px-4 relative">
+                    <div className="absolute top-[-80px] w-[2px] h-20 bg-gray-200"></div>
+                    <DeptCard data={organization.dev} />
+                  </div>
                 </div>
               </div>
             </div>
