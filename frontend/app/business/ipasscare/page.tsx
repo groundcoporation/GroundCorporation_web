@@ -80,14 +80,8 @@ export default function IPassCarePage() {
             </p>
 
             <div className="flex flex-wrap gap-4 mb-12 relative z-10">
-              {/* <Link href="#" className="hover:opacity-80 transition-opacity">
-    <img
-      src="/resource/image/app_store_btn.png"
-      alt="App Store"
-      className="h-[52px]"
-    />
-  </Link> */}
-              <Link
+
+<Link
                 href="https://play.google.com/store/apps/details?id=com.goundcorp.ipasscare&pcampaignid=web_share"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -99,6 +93,19 @@ export default function IPassCarePage() {
                   className="h-[52px]"
                 />
               </Link>
+
+
+              <Link href="https://apps.apple.com/kr/app/아이패스케어-ipasscare/id6785789500"
+             target="_blank"
+                rel="noopener noreferrer"
+                className="hover:opacity-80 transition-opacity">
+    <img
+      src="/resource/image/app_store_btn.png"
+      alt="App Store"
+      className="h-[52px]"
+    />
+  </Link>
+              
             </div>
 
             <div className="flex items-center gap-6 p-6 rounded-3xl bg-white/5 border border-white/10 w-fit relative z-10">
