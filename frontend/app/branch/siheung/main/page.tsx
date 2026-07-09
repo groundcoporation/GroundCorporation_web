@@ -93,7 +93,7 @@ export default function SiheungBranch() {
     {
       title: "예약",
       submenu: [
-        { name: "이용권 구매", href: "/branch/siheung/shop" },
+        { name: "이용권 구매", href: "/branch/siheung/booking" },
         { name: "예약하기", href: "/branch/siheung/reservation" },
       ],
     },
