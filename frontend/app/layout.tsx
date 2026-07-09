@@ -51,7 +51,7 @@ export const metadata: Metadata = {
   // 5. 네이버 서치어드바이저 사이트 소유권 확인 키 (건드리지 마세요!)
   verification: {
     other: {
-      "naver-site-verification": "ae097be7b20202252666741b4564a783c1506cc0",
+      "naver-site-verification": "043c6d332d798b713e9475152413b73d89e20e67",
     },
   },
 
