@@ -63,49 +63,47 @@ export default function IPassCarePage() {
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-600/10 border border-blue-600/20 text-blue-500 mb-8">
               <ShieldCheck size={16} />
               <span className="text-xs font-black tracking-widest uppercase">
-                Next Gen Sports Admin
+                그라운드코퍼레이션 | IPASSCARE
               </span>
             </div>
-            <h1 className="text-5xl md:text-7xl font-black leading-[1.1] tracking-tighter mb-8 italic uppercase text-white relative z-10">
-              SMART CARE
-              <br />
-              FOR YOUR{" "}
-              <span className="text-blue-600 underline underline-offset-8">
-                CHILDREN
+            <h1 className="text-4xl md:text-6xl font-black leading-[1.15] tracking-tighter mb-8 italic uppercase text-white relative z-10 break-keep">
+              아이패스케어 <span className="text-blue-500 font-extrabold not-italic text-3xl md:text-5xl block mt-2">(IPASSCARE)</span>
+              <span className="text-blue-600 underline underline-offset-8 block mt-2 text-2xl md:text-4xl font-bold">
+                스포츠 학원 안심 등하원 어플
               </span>
             </h1>
-            <p className="text-gray-400 text-lg md:text-xl font-medium leading-relaxed mb-10 max-w-lg relative z-10">
-              IPASSCARE는 스포츠 시설 운영의 모든 과정을 디지털로 전환합니다.
-              지금 바로 앱을 다운로드하고 스마트한 관리를 시작하세요.
+            <p className="text-gray-300 text-lg md:text-xl font-medium leading-relaxed mb-10 max-w-lg relative z-10 break-keep">
+              그라운드코퍼레이션의 <strong>아이패스케어(IPASSCARE)</strong>는 스포츠 시설 및 학원 운영의 모든 과정을 디지털로 전환합니다. 실시간 안심 등하원 알림과 셔틀버스 라이브 위치 관제 어플을 지금 구글 플레이스토어와 앱스토어에서 다운로드하세요.
             </p>
 
             <div className="flex flex-wrap gap-4 mb-12 relative z-10">
-
-<Link
+              <Link
                 href="https://play.google.com/store/apps/details?id=com.goundcorp.ipasscare&pcampaignid=web_share"
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="아이패스케어 구글 플레이스토어 어플 다운로드"
                 className="hover:opacity-80 transition-opacity"
               >
                 <img
                   src="/resource/image/google_play_btn.png"
-                  alt="Google Play"
+                  alt="아이패스케어 구글 플레이스토어(Google Play) 앱 다운로드"
                   className="h-[52px]"
                 />
               </Link>
 
-
-              <Link href="https://apps.apple.com/kr/app/아이패스케어-ipasscare/id6785789500"
-             target="_blank"
+              <Link
+                href="https://apps.apple.com/kr/app/아이패스케어-ipasscare/id6785789500"
+                target="_blank"
                 rel="noopener noreferrer"
-                className="hover:opacity-80 transition-opacity">
-    <img
-      src="/resource/image/app_store_btn.png"
-      alt="App Store"
-      className="h-[52px]"
-    />
-  </Link>
-              
+                aria-label="아이패스케어 애플 앱스토어 어플 다운로드"
+                className="hover:opacity-80 transition-opacity"
+              >
+                <img
+                  src="/resource/image/app_store_btn.png"
+                  alt="아이패스케어 애플 앱스토어(App Store) 앱 다운로드"
+                  className="h-[52px]"
+                />
+              </Link>
             </div>
 
             <div className="flex items-center gap-6 p-6 rounded-3xl bg-white/5 border border-white/10 w-fit relative z-10">
