@@ -13,7 +13,8 @@ const MAX_SLOTS = 20;
 type Tab = "payments" | "attendance" | "schedule";
 type Profile = { id: string; name: string | null; role: "admin" | "coach"; branch_id: string | null };
 type Branch = { id: string; name: string };
-type Payment = { id: string; created_at: string; total_amount: number | null; final_amount: number | null; payment_method: string | null; status: string | null; pg_tid: string | null; users: { name: string | null; email: string | null } | null };
+type PaymentProduct = { package_name: string | null; price: number | null; total_count: number | null };
+type Payment = { id: string; created_at: string; total_amount: number | null; final_amount: number | null; payment_method: string | null; status: string | null; pg_tid: string | null; users: { name: string | null; email: string | null } | null; products: PaymentProduct[] };
 type AttendanceRow = { id: string; childName: string; parentName: string; packageName: string; weekly: number | null; total: number; used: number; remaining: number; dates: string[] };
 type ClassSchedule = { id: string; branch_id: string | null; target_class: string; day_of_week: string; start_time: string; end_time: string; max_people: number | null; branches: { name: string } | null };
 type ScheduleReservation = { id: string; schedule_id: string; class_date: string; status: string | null; attendance_status: string | null; child_id: string | null; user_id: string | null; children: { child_name: string | null } | null; users: { name: string | null; phone: string | null } | null };
@@ -27,6 +28,13 @@ const moveMonth = (month: string, amount: number) => { const date = new Date(+mo
 const mondayOf = (date: Date) => { const result = new Date(date); const day = result.getDay(); result.setHours(0, 0, 0, 0); result.setDate(result.getDate() - (day === 0 ? 6 : day - 1)); return result; };
 const localDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const statusText = (status: string | null) => ({ paid: "결제 완료", success: "결제 완료", pending_payment: "입금 대기", failed: "결제 실패", cancelled: "취소", canceled: "취소", refunded: "환불" }[status ?? ""] ?? status ?? "미확인");
+const paymentDetail = (method: string | null, pgTid: string | null) => {
+  if (method === "VBANK") { const [bank, account] = (pgTid ?? "").split(":"); return account ? `${bank || "가상계좌"} · ${account}` : "가상계좌"; }
+  if (method === "BANK") return "계좌이체";
+  if (method === "POINT") return "포인트 결제";
+  if (method === "CARD") return "신용·체크카드";
+  return method ?? "결제수단 미확인";
+};
 
 export default function MyPage() {
   const router = useRouter();
@@ -85,7 +93,12 @@ export default function MyPage() {
       if (selectedBranch) query = query.eq("branch_id", selectedBranch);
       const { data, error: queryError } = await query;
       if (queryError) throw queryError;
-      setPayments((data ?? []).map((row: any) => ({ ...row, users: firstJoined(row.users) })) as Payment[]);
+      const paymentIds = (data ?? []).map((row: any) => row.id);
+      const productResult = paymentIds.length ? await supabase.from("user_packages").select("payment_id,package_name,price,total_count").in("payment_id", paymentIds) : { data: [], error: null };
+      if (productResult.error) throw productResult.error;
+      const productsByPayment = new Map<string, PaymentProduct[]>();
+      (productResult.data ?? []).forEach((product: any) => productsByPayment.set(product.payment_id, [...(productsByPayment.get(product.payment_id) ?? []), product]));
+      setPayments((data ?? []).map((row: any) => ({ ...row, users: firstJoined(row.users), products: productsByPayment.get(row.id) ?? [] })) as Payment[]);
     } catch (reason: any) { setError(reason?.message ?? "결제 내역을 불러오지 못했습니다."); }
     finally { setLoading(false); }
   }, [branchFilter, profile]);
@@ -189,7 +202,7 @@ export default function MyPage() {
   }, [loadAttendance, loadPayments, loadSchedules, profile, tab]);
 
   const shownPayments = useMemo(() => payments.filter((item) => {
-    const target = `${item.users?.name ?? ""} ${item.users?.email ?? ""} ${item.pg_tid ?? ""} ${item.id}`.toLowerCase();
+    const target = `${item.users?.name ?? ""} ${item.users?.email ?? ""} ${item.pg_tid ?? ""} ${item.id} ${item.products.map((product) => product.package_name).join(" ")}`.toLowerCase();
     return (statusFilter === "all" || item.status === statusFilter) && target.includes(search.trim().toLowerCase());
   }), [payments, search, statusFilter]);
   const shownAttendance = useMemo(() => attendance.filter((item) => `${item.childName} ${item.parentName} ${item.packageName}`.toLowerCase().includes(search.trim().toLowerCase())), [attendance, search]);
@@ -209,8 +222,9 @@ export default function MyPage() {
         { header: "결제일", key: "createdAt", width: 22 },
         { header: "회원", key: "name", width: 16 },
         { header: "이메일", key: "email", width: 30 },
+        { header: "결제 상품", key: "products", width: 38 },
         { header: "결제 금액", key: "amount", width: 15 },
-        { header: "결제 수단", key: "method", width: 14 },
+        { header: "결제 수단", key: "method", width: 24 },
         { header: "상태", key: "status", width: 14 },
         { header: "거래번호", key: "transaction", width: 34 },
       ];
@@ -218,8 +232,9 @@ export default function MyPage() {
         createdAt: new Date(item.created_at),
         name: item.users?.name ?? "회원 정보 없음",
         email: item.users?.email ?? "",
+        products: item.products.length ? item.products.map((product) => product.package_name ?? "상품명 없음").join(", ") : "연결 상품 없음",
         amount: item.final_amount ?? item.total_amount ?? 0,
-        method: item.payment_method ?? "",
+        method: paymentDetail(item.payment_method, item.pg_tid),
         status: statusText(item.status),
         transaction: item.pg_tid ?? item.id,
       }));
@@ -279,7 +294,7 @@ export default function MyPage() {
     {tab === "payments" ? <>
       <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat label="결제 매출" value={`${won.format(stats.revenue)}원`} icon={<CreditCard />} color="blue" /><Stat label="결제 완료" value={`${stats.paid}건`} icon={<Check />} color="green" /><Stat label="입금 대기" value={`${stats.pending}건`} icon={<CreditCard />} color="amber" /><Stat label="실패·취소" value={`${stats.failed}건`} icon={<ShieldAlert />} color="rose" /></section>
       <Toolbar search={search} setSearch={setSearch} placeholder="회원명, 이메일, 거래번호 검색"><BranchFilter profile={profile} branches={branches} value={branchFilter} onChange={setBranchFilter} /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold"><option value="all">전체 상태</option><option value="paid">결제 완료</option><option value="pending_payment">입금 대기</option><option value="failed">결제 실패</option><option value="refunded">환불</option></select><button onClick={() => void downloadWorkbook("payments")} className="flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white"><Download size={17} /> Excel</button></Toolbar>
-      <TableShell empty={!loading && !shownPayments.length} emptyText="조건에 맞는 결제 내역이 없습니다."><table className="min-w-full text-left text-sm"><thead className="bg-slate-100 text-xs font-black text-slate-500"><tr><Th>결제일</Th><Th>회원</Th><Th>결제 금액</Th><Th>수단</Th><Th>상태</Th><Th>거래번호</Th></tr></thead><tbody className="divide-y divide-slate-100">{shownPayments.map((item) => <tr key={item.id} className="hover:bg-blue-50/40"><Td>{new Date(item.created_at).toLocaleString("ko-KR")}</Td><Td><b>{item.users?.name ?? "회원 정보 없음"}</b><p className="mt-1 text-xs text-slate-400">{item.users?.email ?? "-"}</p></Td><Td><b>{won.format(item.final_amount ?? item.total_amount ?? 0)}원</b></Td><Td>{item.payment_method ?? "-"}</Td><Td><Badge status={item.status} /></Td><Td><span title={item.pg_tid ?? item.id} className="block max-w-[220px] truncate font-mono text-xs text-slate-500">{item.pg_tid ?? item.id}</span></Td></tr>)}</tbody></table></TableShell>
+      <TableShell empty={!loading && !shownPayments.length} emptyText="조건에 맞는 결제 내역이 없습니다."><table className="min-w-[1250px] text-left text-sm"><thead className="bg-slate-100 text-xs font-black text-slate-500"><tr><Th>결제일</Th><Th>회원</Th><Th>결제 상품</Th><Th>결제 금액</Th><Th>결제 수단</Th><Th>상태</Th><Th>거래번호</Th></tr></thead><tbody className="divide-y divide-slate-100">{shownPayments.map((item) => <tr key={item.id} className="hover:bg-blue-50/40"><Td>{new Date(item.created_at).toLocaleString("ko-KR")}</Td><Td><b>{item.users?.name ?? "회원 정보 없음"}</b><p className="mt-1 text-xs text-slate-400">{item.users?.email ?? "-"}</p></Td><Td><div className="max-w-[300px] space-y-1">{item.products.length ? item.products.map((product, index) => <div key={`${product.package_name}-${index}`} className="rounded-lg bg-slate-100 px-2.5 py-1.5"><b className="block truncate">{product.package_name ?? "상품명 없음"}</b><span className="text-xs text-slate-500">{product.total_count ? `${product.total_count}회` : "횟수 미지정"}{product.price != null ? ` · ${won.format(product.price)}원` : ""}</span></div>) : <span className="text-slate-400">연결 상품 없음</span>}</div></Td><Td><b>{won.format(item.final_amount ?? item.total_amount ?? 0)}원</b></Td><Td><b>{paymentDetail(item.payment_method, item.pg_tid)}</b>{item.payment_method === "CARD" && <p className="mt-1 text-xs text-amber-600">카드사 정보 미저장</p>}</Td><Td><Badge status={item.status} /></Td><Td><span title={item.pg_tid ?? item.id} className="block max-w-[220px] truncate font-mono text-xs text-slate-500">{item.pg_tid ?? item.id}</span></Td></tr>)}</tbody></table></TableShell>
     </> : tab === "attendance" ? <>
       <section className="mb-5 grid gap-3 sm:grid-cols-3"><Stat label="표시 자녀" value={`${new Set(shownAttendance.map((row) => row.childName)).size}명`} icon={<UsersRound />} color="blue" /><Stat label="이번 달 이용" value={`${shownAttendance.reduce((sum, row) => sum + row.dates.length, 0)}회`} icon={<CalendarCheck />} color="green" /><Stat label="남은 이용권" value={`${shownAttendance.reduce((sum, row) => sum + row.remaining, 0)}회`} icon={<TicketCheck />} color="amber" /></section>
       <Toolbar search={search} setSearch={setSearch} placeholder="자녀, 보호자, 이용권 검색"><BranchFilter profile={profile} branches={branches} value={branchFilter} onChange={setBranchFilter} /><div className="flex items-center rounded-xl border border-slate-200"><button aria-label="이전 달" onClick={() => setMonth(moveMonth(month, -1))} className="p-3"><ChevronLeft size={18} /></button><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="w-[132px] py-3 text-center text-sm font-black outline-none" /><button aria-label="다음 달" onClick={() => setMonth(moveMonth(month, 1))} className="p-3"><ChevronRight size={18} /></button></div><button onClick={() => void downloadWorkbook("attendance")} className="flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white"><Download size={17} /> Excel</button></Toolbar>

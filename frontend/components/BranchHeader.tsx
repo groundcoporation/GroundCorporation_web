@@ -25,7 +25,6 @@ export default function BranchHeader({ branchId, branchName, onLogout }: BranchH
   const menus = [
     { title: "소개", items: [{ name: "지점 소개", href: `${base}/intro/branch` }, { name: "코치 소개", href: `${base}/intro/coaches` }] },
     { title: "시간표", items: [{ name: "전체 시간표", href: `${base}/schedule` }] },
-    { title: "예약", items: [{ name: "이용권 구매", href: `${base}/shop` }, { name: "예약하기", href: `${base}/reservation` }] },
   ];
 
   return <>
