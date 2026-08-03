@@ -52,9 +52,9 @@ export default function HomePage() {
     {
       id: "vogsports",
       category: "Sports Wear",
-      title: "쇼핑몰",
+      title: "보그스포츠 (V.O.G SPORTS)",
       description:
-        "퍼포먼스 향상을 위한 자체 설계 프리미엄 스포츠 브랜드 'V.O.G SPORTS' 전개 및 용품 유통",
+        "퍼포먼스 향상을 위한 자체 설계 프리미엄 스포츠 브랜드 '보그스포츠(V.O.G SPORTS)' 전개 및 용품 유통",
       image: "/resource/image/vogsports_image.png",
       link: "http://vog-sports.com/",
       icon: <ShoppingBag size={28} />,
@@ -84,9 +84,9 @@ export default function HomePage() {
     {
       id: "ipasscare",
       category: "IT Solution",
-      title: "스포츠 콘텐츠 & 솔루션",
+      title: "아이패스케어 (IPASSCARE)",
       description:
-        "스포츠 시설 전용 통합 관리 플랫폼 'IPASSCARE' 솔루션 및 데이터 기반 교육 콘텐츠 제공",
+        "스포츠 시설 전용 통합 관리 플랫폼 '아이패스케어(IPASSCARE)' 솔루션 및 데이터 기반 교육 콘텐츠 제공",
       image:
         "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1600",
       link: "/business/ipasscare/",

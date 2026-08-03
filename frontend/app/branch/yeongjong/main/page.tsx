@@ -62,7 +62,7 @@ export default function YeongjongBranch() {
     {
       title: "예약",
       submenu: [
-        { name: "이용권 구매", href: "/branch/yeongjong/shop" },
+        { name: "이용권 구매", href: "/branch/yeongjong/booking" },
         { name: "예약하기", href: "/branch/yeongjong/reservation" },
       ],
     },
