@@ -61,11 +61,11 @@ export default function LoginPage() {
       }
 
       // [🚨 보안 필터 추가] 코치/관리자 권한(role) 및 소속 지점(branch_id) 검증
-      const { data: userProfile, error: profileError } = await supabase
+      const { data: userProfile, error: profileError } = (await supabase
         .from("users")
         .select("role, branch_id") // 🚀 지점 분리를 위해 branch_id 컬럼도 함께 조회!
         .eq("id", authData.user.id)
-        .maybeSingle();
+        .maybeSingle()) as any;
 
       if (profileError || !userProfile || !(userProfile.role === "coach" || userProfile.role === "admin")) {
         // 권한이 없으면 즉시 로그아웃하여 세션을 파괴하고 에러 반환!
