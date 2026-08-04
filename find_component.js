@@ -2,10 +2,10 @@ const fs = require('fs');
 const path = require('path');
 
 const searchDirs = [
-  'c:\\groundcorporation\\GroundCorporation_web\\frontend\\app',
-  'c:\\groundcorporation\\GroundCorporation_web\\frontend\\components'
+  'C:\\Users\\USER\\Desktop\\GroundCorporation_web\\frontend\\app',
+  'C:\\Users\\USER\\Desktop\\GroundCorporation_web\\frontend\\components'
 ];
-const queries = ['관련', 'V.O.G', '테크니컬', 'Related', 'technical'];
+const queries = ['거래번호', '결제 상품', '결제일', 'payments'];
 
 function scanDir(dir) {
   if (!fs.existsSync(dir)) return;

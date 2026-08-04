@@ -55,6 +55,76 @@ export default function MyPage() {
   const [scheduleReservations, setScheduleReservations] = useState<ScheduleReservation[]>([]);
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
 
+  // 🚀 카드 결제 취소/환불 관련 상태 정의 및 헬퍼 함수
+  const [cancelTarget, setCancelTarget] = useState<any | null>(null);
+  const [cancelAmountStr, setCancelAmountStr] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelLoading, setCancelLoading] = useState(false);
+
+  // 결제건의 누적 환불금 및 남은 취소 가능 잔액 계산 헬퍼 함수
+  const getRefundInfo = (item: any) => {
+    if (!item || !item.pg_tid) return { refunded: 0, remaining: item ? (item.final_amount ?? item.total_amount ?? 0) : 0 };
+    
+    // payments 상태 배열에서 해당 거래번호의 환불용 마이너스 결제행 필터링
+    const refundRows = payments.filter(
+      (p) => p.pg_tid === `${item.pg_tid}_REFUND` || p.pg_tid === `${item.pg_tid}-REFUND`
+    );
+    
+    const refunded = refundRows.reduce((sum, p) => sum + Math.abs(p.final_amount ?? p.total_amount ?? 0), 0);
+    const originalAmount = item.final_amount ?? item.total_amount ?? 0;
+    const remaining = Math.max(0, originalAmount - refunded);
+    
+    return { refunded, remaining };
+  };
+
+  const handleCancelPayment = async () => {
+    if (!cancelTarget) return;
+    const { remaining } = getRefundInfo(cancelTarget);
+    const amt = cancelAmountStr.trim() ? Number(cancelAmountStr) : remaining;
+    if (isNaN(amt) || amt <= 0 || amt > remaining) {
+      alert(`올바른 취소 금액을 입력해 주세요. (최대 ${remaining.toLocaleString()}원)`);
+      return;
+    }
+
+    if (!confirm(`정말 이 결제 건을 취소하시겠습니까?\n취소 금액: ${amt.toLocaleString()}원`)) {
+      return;
+    }
+
+    setCancelLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      const res = await fetch("https://wsdyrercgbvwlssntwvy.supabase.co/functions/v1/kspay-cancel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          payment_id: cancelTarget.id,
+          cancel_amount: amt,
+          cancel_reason: cancelReason || "관리자 페이지 취소"
+        })
+      });
+
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error || "취소 요청 중 오류가 발생했습니다.");
+      }
+
+      alert("결제 취소가 완료되었습니다.");
+      setCancelTarget(null);
+      setCancelAmountStr("");
+      setCancelReason("");
+      void loadPayments();
+    } catch (err: any) {
+      alert(err.message || "취소 처리에 실패했습니다.");
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     (async () => {
@@ -294,7 +364,13 @@ export default function MyPage() {
     {tab === "payments" ? <>
       <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat label="결제 매출" value={`${won.format(stats.revenue)}원`} icon={<CreditCard />} color="blue" /><Stat label="결제 완료" value={`${stats.paid}건`} icon={<Check />} color="green" /><Stat label="입금 대기" value={`${stats.pending}건`} icon={<CreditCard />} color="amber" /><Stat label="실패·취소" value={`${stats.failed}건`} icon={<ShieldAlert />} color="rose" /></section>
       <Toolbar search={search} setSearch={setSearch} placeholder="회원명, 이메일, 거래번호 검색"><BranchFilter profile={profile} branches={branches} value={branchFilter} onChange={setBranchFilter} /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold"><option value="all">전체 상태</option><option value="paid">결제 완료</option><option value="pending_payment">입금 대기</option><option value="failed">결제 실패</option><option value="refunded">환불</option></select><button onClick={() => void downloadWorkbook("payments")} className="flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white"><Download size={17} /> Excel</button></Toolbar>
-      <TableShell empty={!loading && !shownPayments.length} emptyText="조건에 맞는 결제 내역이 없습니다."><table className="min-w-[1250px] text-left text-sm"><thead className="bg-slate-100 text-xs font-black text-slate-500"><tr><Th>결제일</Th><Th>회원</Th><Th>결제 상품</Th><Th>결제 금액</Th><Th>결제 수단</Th><Th>상태</Th><Th>거래번호</Th></tr></thead><tbody className="divide-y divide-slate-100">{shownPayments.map((item) => <tr key={item.id} className="hover:bg-blue-50/40"><Td>{new Date(item.created_at).toLocaleString("ko-KR")}</Td><Td><b>{item.users?.name ?? "회원 정보 없음"}</b><p className="mt-1 text-xs text-slate-400">{item.users?.email ?? "-"}</p></Td><Td><div className="max-w-[300px] space-y-1">{item.products.length ? item.products.map((product, index) => <div key={`${product.package_name}-${index}`} className="rounded-lg bg-slate-100 px-2.5 py-1.5"><b className="block truncate">{product.package_name ?? "상품명 없음"}</b><span className="text-xs text-slate-500">{product.total_count ? `${product.total_count}회` : "횟수 미지정"}{product.price != null ? ` · ${won.format(product.price)}원` : ""}</span></div>) : <span className="text-slate-400">연결 상품 없음</span>}</div></Td><Td><b>{won.format(item.final_amount ?? item.total_amount ?? 0)}원</b></Td><Td><b>{paymentDetail(item.payment_method, item.pg_tid)}</b>{item.payment_method === "CARD" && <p className="mt-1 text-xs text-amber-600">카드사 정보 미저장</p>}</Td><Td><Badge status={item.status} /></Td><Td><span title={item.pg_tid ?? item.id} className="block max-w-[220px] truncate font-mono text-xs text-slate-500">{item.pg_tid ?? item.id}</span></Td></tr>)}</tbody></table></TableShell>
+      <TableShell empty={!loading && !shownPayments.length} emptyText="조건에 맞는 결제 내역이 없습니다."><table className="min-w-[1250px] text-left text-sm"><thead className="bg-slate-100 text-xs font-black text-slate-500"><tr><Th>결제일</Th><Th>회원</Th><Th>결제 상품</Th><Th>결제 금액</Th><Th>결제 수단</Th><Th>상태</Th><Th>거래번호</Th><Th>관리</Th></tr></thead><tbody className="divide-y divide-slate-100">{shownPayments.map((item) => {
+        const { refunded, remaining } = getRefundInfo(item);
+        const originalAmount = item.final_amount ?? item.total_amount ?? 0;
+        const isRefundRow = originalAmount < 0 || (item.pg_tid && item.pg_tid.endsWith("_REFUND"));
+        
+        return <tr key={item.id} className="hover:bg-blue-50/40"><Td>{new Date(item.created_at).toLocaleString("ko-KR")}</Td><Td><b>{item.users?.name ?? "회원 정보 없음"}</b><p className="mt-1 text-xs text-slate-400">{item.users?.email ?? "-"}</p></Td><Td><div className="max-w-[300px] space-y-1">{item.products.length ? item.products.map((product, index) => <div key={`${product.package_name}-${index}`} className="rounded-lg bg-slate-100 px-2.5 py-1.5"><b className="block truncate">{product.package_name ?? "상품명 없음"}</b><span className="text-xs text-slate-500">{product.total_count ? `${product.total_count}회` : "횟수 미지정"}{product.price != null ? ` · ${won.format(product.price)}원` : ""}</span></div>) : <span className="text-slate-400">연결 상품 없음</span>}</div></Td><Td><b>{won.format(originalAmount)}원</b>{refunded > 0 && (<div className="mt-1 text-[11px] space-y-0.5"><p className="font-bold text-rose-600">환불 완료: {won.format(refunded)}원</p><p className="font-bold text-slate-500">남은 잔액: {won.format(remaining)}원</p></div>)}</Td><Td><b>{paymentDetail(item.payment_method, item.pg_tid)}</b>{item.payment_method === "CARD" && <p className="mt-1 text-xs text-amber-600">카드사 정보 미저장</p>}</Td><Td><Badge status={item.status} /></Td><Td><span title={item.pg_tid ?? item.id} className="block max-w-[220px] truncate font-mono text-xs text-slate-500">{item.pg_tid ?? item.id}</span></Td><Td>{["paid", "success"].includes(item.status ?? "") && item.payment_method === "CARD" && !isRefundRow ? (remaining > 0 ? (<button onClick={() => setCancelTarget(item)} className="rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-100">결제 취소</button>) : (<span className="text-xs font-bold text-slate-400">취소 완료</span>)) : ["cancelled", "canceled", "refunded"].includes(item.status ?? "") || isRefundRow ? (<span className="text-xs font-bold text-slate-400">취소 완료</span>) : ("-")}</Td></tr>;
+      })}</tbody></table></TableShell>
     </> : tab === "attendance" ? <>
       <section className="mb-5 grid gap-3 sm:grid-cols-3"><Stat label="표시 자녀" value={`${new Set(shownAttendance.map((row) => row.childName)).size}명`} icon={<UsersRound />} color="blue" /><Stat label="이번 달 이용" value={`${shownAttendance.reduce((sum, row) => sum + row.dates.length, 0)}회`} icon={<CalendarCheck />} color="green" /><Stat label="남은 이용권" value={`${shownAttendance.reduce((sum, row) => sum + row.remaining, 0)}회`} icon={<TicketCheck />} color="amber" /></section>
       <Toolbar search={search} setSearch={setSearch} placeholder="자녀, 보호자, 이용권 검색"><BranchFilter profile={profile} branches={branches} value={branchFilter} onChange={setBranchFilter} /><div className="flex items-center rounded-xl border border-slate-200"><button aria-label="이전 달" onClick={() => setMonth(moveMonth(month, -1))} className="p-3"><ChevronLeft size={18} /></button><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="w-[132px] py-3 text-center text-sm font-black outline-none" /><button aria-label="다음 달" onClick={() => setMonth(moveMonth(month, 1))} className="p-3"><ChevronRight size={18} /></button></div><button onClick={() => void downloadWorkbook("attendance")} className="flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white"><Download size={17} /> Excel</button></Toolbar>
@@ -305,6 +381,76 @@ export default function MyPage() {
       <WeeklySchedule schedules={schedules.filter((item) => `${item.target_class} ${item.branches?.name ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()))} reservations={scheduleReservations} weekStart={weekStart} showBranch={profile?.role === "admin" && branchFilter === "all"} />
     </>}
     {loading && <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/65 backdrop-blur-sm"><Loader2 className="animate-spin text-blue-600" size={38} /></div>}
+    {cancelTarget && (
+      <div className="fixed inset-0 z-[3000] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-6" onClick={() => setCancelTarget(null)}>
+        <div className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-black tracking-widest text-rose-600">결제 취소 / 환불</p>
+              <h3 className="mt-1 text-xl font-black">{cancelTarget.users?.name ?? "회원"}님의 결제건</h3>
+              <p className="mt-1 text-sm text-slate-500">거래번호: {cancelTarget.pg_tid ?? cancelTarget.id}</p>
+            </div>
+            <button onClick={() => setCancelTarget(null)} className="rounded-full bg-slate-100 px-3 py-2 text-sm font-black">닫기</button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-slate-50 p-4 space-y-1.5 text-sm">
+              <div className="flex justify-between"><span className="text-slate-500">결제 상품</span><span className="font-bold truncate max-w-[200px]">{cancelTarget.products?.[0]?.package_name ?? "이용권"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">원 결제 금액</span><span className="font-bold text-slate-950">{won.format(cancelTarget.final_amount ?? cancelTarget.total_amount ?? 0)}원</span></div>
+              {(() => {
+                const { refunded, remaining } = getRefundInfo(cancelTarget);
+                if (refunded > 0) {
+                  return (
+                    <>
+                      <div className="flex justify-between text-rose-600"><span className="text-slate-500 font-medium">이미 환불된 금액</span><span className="font-bold">-{won.format(refunded)}원</span></div>
+                      <div className="flex justify-between text-blue-600"><span className="text-slate-500 font-medium">남은 취소 가능 잔액</span><span className="font-bold">{won.format(remaining)}원</span></div>
+                    </>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+
+            <div>
+              {(() => {
+                const { remaining } = getRefundInfo(cancelTarget);
+                return (
+                  <>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">취소 금액 (미입력 시 남은 잔액 전체 취소)</label>
+                    <input
+                      type="number"
+                      placeholder={`최대 ${remaining.toLocaleString()}원`}
+                      value={cancelAmountStr}
+                      onChange={(e) => setCancelAmountStr(e.target.value)}
+                      className="w-full rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </>
+                );
+              })()}
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">취소 사유</label>
+              <input
+                type="text"
+                placeholder="사유를 입력해 주세요 (예: 보호자 변심)"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <button
+              onClick={handleCancelPayment}
+              disabled={cancelLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 text-sm font-black text-white hover:bg-rose-700 disabled:bg-rose-300"
+            >
+              {cancelLoading ? "취소 요청 처리 중..." : "결제 취소 승인하기"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </div></main></>;
 }
 
