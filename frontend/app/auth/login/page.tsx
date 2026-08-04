@@ -49,18 +49,35 @@ export default function LoginPage() {
       }
 
       // [Sub-Logic] Supabase 최종 인증
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: loginEmail,
         password: password,
       });
 
-      if (authError) {
+      if (authError || !authData?.user) {
         setErrorMsg("아이디 또는 비밀번호가 일치하지 않습니다.");
         setLoading(false);
         return;
       }
 
-      router.push("/branch/siheung/main");
+      // [🚨 보안 필터 추가] 코치/관리자 권한(role) 및 소속 지점(branch_id) 검증
+      const { data: userProfile, error: profileError } = await supabase
+        .from("users")
+        .select("role, branch_id") // 🚀 지점 분리를 위해 branch_id 컬럼도 함께 조회!
+        .eq("id", authData.user.id)
+        .maybeSingle();
+
+      if (profileError || !userProfile || !(userProfile.role === "coach" || userProfile.role === "admin")) {
+        // 권한이 없으면 즉시 로그아웃하여 세션을 파괴하고 에러 반환!
+        await supabase.auth.signOut();
+        setErrorMsg("관리자 페이지 접근 권한이 없습니다.");
+        setLoading(false);
+        return;
+      }
+
+      // [🚨 지점 통합 관리] 로그인한 유저의 세션 검증이 끝나면 통합 마이페이지(/mypage)로 이동
+      // 웹 내에서 시흥점, 영종점 필터가 유동적으로 선택되는 기획 구조에 맞춤!
+      router.push("/mypage");
     } catch (error: any) {
       setErrorMsg("로그인 중 오류가 발생했습니다.");
     } finally {
