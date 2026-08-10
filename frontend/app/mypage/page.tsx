@@ -15,7 +15,7 @@ type Profile = { id: string; name: string | null; role: "admin" | "coach"; branc
 type Branch = { id: string; name: string };
 type PaymentProduct = { package_name: string | null; price: number | null; total_count: number | null };
 type Payment = { id: string; created_at: string; total_amount: number | null; final_amount: number | null; payment_method: string | null; status: string | null; pg_tid: string | null; users: { name: string | null; email: string | null } | null; products: PaymentProduct[] };
-type AttendanceRow = { id: string; childName: string; parentName: string; packageName: string; weekly: number | null; total: number; used: number; remaining: number; dates: string[] };
+type AttendanceRow = { id: string; childId: string; childName: string; parentName: string; packageName: string; weekly: number | null; total: number; used: number; remaining: number; dates: string[] };
 type ClassSchedule = { id: string; branch_id: string | null; target_class: string; day_of_week: string; start_time: string; end_time: string; max_people: number | null; branches: { name: string } | null };
 type ScheduleReservation = { id: string; schedule_id: string; class_date: string; status: string | null; attendance_status: string | null; child_id: string | null; user_id: string | null; children: { child_name: string | null } | null; users: { name: string | null; phone: string | null } | null };
 
@@ -125,6 +125,154 @@ export default function MyPage() {
     }
   };
 
+  // 🚀 [출결표 단순 수동 출석 관리용 상태 및 API 구현]
+  const [attendanceModal, setAttendanceModal] = useState<{ childId: string; childName: string } | null>(null);
+  const [attendanceDate, setAttendanceDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const handleManualAttendance = async () => {
+    if (!attendanceModal || !profile) return;
+    setActionLoading(true);
+    const { childId } = attendanceModal;
+    const dateStr = attendanceDate;
+    const branchId = profile.role === "coach" ? profile.branch_id : branchFilter === "all" ? null : branchFilter;
+
+    try {
+      // 1. 해당 지점 정보 특정 (코치 지점 -> 필터링 지점 -> 기본 지점 순)
+      const targetBranch = branchId || profile.branch_id || "branch_1";
+
+      // 2. 등원 로그 등록 (attendance_logs) - 중복 삽입 방지
+      const { data: existingLog } = await (supabase as any)
+        .from("attendance_logs")
+        .select("id")
+        .eq("child_id", childId)
+        .eq("date", dateStr)
+        .maybeSingle();
+
+      if (!existingLog) {
+        const { error: logError } = await (supabase as any)
+          .from("attendance_logs")
+          .insert({
+            child_id: childId,
+            date: dateStr,
+            branch_id: targetBranch,
+            status: "출석",
+            check_in: new Date().toISOString()
+          });
+        if (logError) throw logError;
+      }
+
+      // 3. 수강권 잔여 횟수가 있다면 횟수 차감 및 사용로그 연동 생성
+      const { data: activePackages, error: pkgError } = await (supabase as any)
+        .from("user_packages")
+        .select("id, remaining_count")
+        .eq("child_id", childId)
+        .eq("status", "active")
+        .gt("remaining_count", 0)
+        .order("created_at", { ascending: true });
+
+      if (pkgError) throw pkgError;
+
+      if (activePackages && activePackages.length > 0) {
+        const pkg = activePackages[0] as any;
+        
+        // 3-1. 사용 대장(package_usage_logs) 기록 추가
+        const { error: usageError } = await (supabase as any)
+          .from("package_usage_logs")
+          .insert({
+            user_package_id: pkg.id,
+            child_id: childId,
+            quantity: 1,
+            consumed_at: new Date(dateStr + "T12:00:00Z").toISOString(),
+            status: "consumed",
+            branch_id: targetBranch
+          });
+        if (usageError) throw usageError;
+
+        // 3-2. 남은 횟수 1 차감 업데이트
+        const { error: updateError } = await (supabase as any)
+          .from("user_packages")
+          .update({ remaining_count: Math.max(0, pkg.remaining_count - 1) })
+          .eq("id", pkg.id);
+        if (updateError) throw updateError;
+      }
+
+      alert("출석 처리가 완료되었습니다.");
+      setAttendanceModal(null);
+      void loadAttendance();
+    } catch (err: any) {
+      alert(err.message || "출석 처리에 실패했습니다.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancelAttendance = async (childId: string, dateStr: string) => {
+    if (!profile) return;
+    if (!confirm(`${dateStr} 날짜의 출석을 취소하시겠습니까?\n이미 차감된 수강권이 있다면 자동으로 +1회 복구됩니다.`)) return;
+
+    setLoading(true);
+    try {
+      // 1. 단순 등원 로그(attendance_logs) 삭제
+      const { error: logError } = await (supabase as any)
+        .from("attendance_logs")
+        .delete()
+        .eq("child_id", childId)
+        .eq("date", dateStr);
+      if (logError) throw logError;
+
+      // 2. 해당 날짜에 소비된 package_usage_logs 조회 및 취소 복구
+      const startOfDay = `${dateStr}T00:00:00.000Z`;
+      const endOfDay = `${dateStr}T23:59:59.999Z`;
+      const { data: usages, error: usageError } = await (supabase as any)
+        .from("package_usage_logs")
+        .select("id, user_package_id, quantity")
+        .eq("child_id", childId)
+        .eq("status", "consumed")
+        .gte("consumed_at", startOfDay)
+        .lte("consumed_at", endOfDay);
+
+      if (usageError) throw usageError;
+
+      if (usages && usages.length > 0) {
+        for (const usage of usages) {
+          // 2-1. 사용 대장 기록 삭제
+          const { error: delError } = await (supabase as any)
+            .from("package_usage_logs")
+            .delete()
+            .eq("id", usage.id);
+          if (delError) throw delError;
+
+          // 2-2. 수강권 복구 (+1)
+          const { data: pkg, error: pkgError } = await (supabase as any)
+            .from("user_packages")
+            .select("id, remaining_count, total_count")
+            .eq("id", usage.user_package_id)
+            .maybeSingle();
+
+          if (pkgError) throw pkgError;
+
+          if (pkg) {
+            const typedPkg = pkg as any;
+            const nextCount = Math.min(typedPkg.total_count || 100, (typedPkg.remaining_count || 0) + (usage.quantity || 1));
+            const { error: updateError } = await (supabase as any)
+              .from("user_packages")
+              .update({ remaining_count: nextCount })
+              .eq("id", typedPkg.id);
+            if (updateError) throw updateError;
+          }
+        }
+      }
+
+      alert("출석 취소와 수강권 복구가 안전하게 완료되었습니다.");
+      void loadAttendance();
+    } catch (err: any) {
+      alert(err.message || "출석 취소 처리에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     (async () => {
@@ -219,13 +367,13 @@ export default function MyPage() {
       const rows: AttendanceRow[] = [];
       children.forEach((child: any) => {
         const items = packageMap.get(child.id) ?? [];
-        if (!items.length) rows.push({ id: `child-${child.id}`, childName: child.child_name ?? "이름 없음", parentName: parents.get(child.parent_id) ?? "-", packageName: "이용권 없음", weekly: null, total: 0, used: 0, remaining: 0, dates: [] });
+        if (!items.length) rows.push({ id: `child-${child.id}`, childId: child.id, childName: child.child_name ?? "이름 없음", parentName: parents.get(child.parent_id) ?? "-", packageName: "이용권 없음", weekly: null, total: 0, used: 0, remaining: 0, dates: [] });
         items.forEach((item: any) => {
           let dates = [...(usage.get(item.id) ?? [])].sort();
           if (!dates.length && items.length === 1) dates = [...(legacy.get(child.id) ?? [])].sort();
           const total = Math.min(MAX_SLOTS, item.total_count ?? 0);
           const used = Math.min(MAX_SLOTS, Math.max((item.total_count ?? 0) - (item.remaining_count ?? 0), dates.length));
-          rows.push({ id: item.id, childName: child.child_name ?? item.child_name ?? "이름 없음", parentName: parents.get(child.parent_id) ?? "-", packageName: item.package_name ?? "수업권", weekly: weeklyCount(item.package_name), total, used, remaining: Math.max(0, item.remaining_count ?? total - used), dates: dates.slice(0, MAX_SLOTS) });
+          rows.push({ id: item.id, childId: child.id, childName: child.child_name ?? item.child_name ?? "이름 없음", parentName: parents.get(child.parent_id) ?? "-", packageName: item.package_name ?? "수업권", weekly: weeklyCount(item.package_name), total, used, remaining: Math.max(0, item.remaining_count ?? total - used), dates: dates.slice(0, MAX_SLOTS) });
         });
       });
       setAttendance(rows);
@@ -375,7 +523,7 @@ export default function MyPage() {
       <section className="mb-5 grid gap-3 sm:grid-cols-3"><Stat label="표시 자녀" value={`${new Set(shownAttendance.map((row) => row.childName)).size}명`} icon={<UsersRound />} color="blue" /><Stat label="이번 달 이용" value={`${shownAttendance.reduce((sum, row) => sum + row.dates.length, 0)}회`} icon={<CalendarCheck />} color="green" /><Stat label="남은 이용권" value={`${shownAttendance.reduce((sum, row) => sum + row.remaining, 0)}회`} icon={<TicketCheck />} color="amber" /></section>
       <Toolbar search={search} setSearch={setSearch} placeholder="자녀, 보호자, 이용권 검색"><BranchFilter profile={profile} branches={branches} value={branchFilter} onChange={setBranchFilter} /><div className="flex items-center rounded-xl border border-slate-200"><button aria-label="이전 달" onClick={() => setMonth(moveMonth(month, -1))} className="p-3"><ChevronLeft size={18} /></button><input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="w-[132px] py-3 text-center text-sm font-black outline-none" /><button aria-label="다음 달" onClick={() => setMonth(moveMonth(month, 1))} className="p-3"><ChevronRight size={18} /></button></div><button onClick={() => void downloadWorkbook("attendance")} className="flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white"><Download size={17} /> Excel</button></Toolbar>
       <div className="mb-3 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-800 ring-1 ring-blue-100">등원 처리되어 이용권이 실제 차감된 날짜만 체크됩니다. 결석·보강은 포함하지 않으며 최대 20회까지 표시합니다.</div>
-      <TableShell empty={!loading && !shownAttendance.length} emptyText="조건에 맞는 출결 정보가 없습니다."><table className="min-w-[1500px] text-left text-sm"><thead className="bg-slate-100 text-xs font-black text-slate-500"><tr><Th sticky>자녀 / 보호자</Th><Th>이용권</Th><Th>주 횟수</Th><Th>사용</Th>{Array.from({ length: MAX_SLOTS }, (_, i) => <Th key={i}>{i + 1}</Th>)}<Th>출석일</Th></tr></thead><tbody className="divide-y divide-slate-100">{shownAttendance.map((row) => <tr key={row.id} className="hover:bg-blue-50/30"><Td sticky><b className="text-base">{row.childName}</b><p className="mt-1 text-xs text-slate-400">보호자 {row.parentName}</p></Td><Td><b>{row.packageName}</b><p className="mt-1 text-xs text-slate-400">{row.total}회권 · 잔여 {row.remaining}회</p></Td><Td>{row.weekly ? <b>주 {row.weekly}회</b> : "-"}</Td><Td><b className="text-blue-700">{row.used}</b> / {row.total}</Td>{Array.from({ length: MAX_SLOTS }, (_, i) => { const date = row.dates[i]; return <td key={i} className="px-2 py-4 text-center"><span title={date} className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full text-xs font-black ${date ? "bg-blue-600 text-white" : i < row.total ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-200"}`}>{date ? <Check size={15} /> : i + 1}</span></td>; })}<Td><div className="flex max-w-[260px] flex-wrap gap-1.5">{row.dates.length ? row.dates.map((date, i) => <span key={`${date}-${i}`} className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">{date.slice(5).replace("-", ".")}</span>) : <span className="text-slate-400">출석 없음</span>}</div></Td></tr>)}</tbody></table></TableShell>
+      <TableShell empty={!loading && !shownAttendance.length} emptyText="조건에 맞는 출결 정보가 없습니다."><table className="min-w-[1000px] w-full text-left text-xs sm:text-[13px]"><thead className="bg-slate-100 text-[11px] font-black text-slate-500"><tr><Th sticky>자녀 / 보호자</Th><Th>이용권</Th><Th>주 횟수</Th><Th>사용</Th>{Array.from({ length: MAX_SLOTS }, (_, i) => <Th key={i}>{i + 1}</Th>)}<Th>출석일</Th></tr></thead><tbody className="divide-y divide-slate-100">{shownAttendance.map((row) => <tr key={row.id} className="hover:bg-blue-50/30"><Td sticky><div className="flex items-center gap-2"><b className="text-sm">{row.childName}</b></div><p className="mt-1 text-[11px] text-slate-400">보호자 {row.parentName}</p></Td><Td><b className="text-[12px]">{row.packageName}</b><p className="mt-1 text-[11px] text-slate-400">{row.total}회권 · 잔여 {row.remaining}회</p></Td><Td>{row.weekly ? <b>주 {row.weekly}회</b> : "-"}</Td><Td><b className="text-blue-700">{row.used}</b> / {row.total}</Td>{Array.from({ length: MAX_SLOTS }, (_, i) => { const date = row.dates[i]; const isClickable = i < row.total; return <td key={i} className="px-0.5 py-2 text-center">{date ? (<button type="button" onClick={() => void handleCancelAttendance(row.childId, date)} className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white text-[9px] font-black hover:bg-rose-600 hover:scale-105 transition shadow-sm" title={`${date} 출석 취소 (클릭)`}>{date.slice(5).replace("-", ".")}</button>) : (<button type="button" onClick={() => { setAttendanceModal({ childId: row.childId, childName: row.childName }); setAttendanceDate(new Date().toISOString().slice(0, 10)); }} disabled={!isClickable} className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs font-black transition hover:scale-105 ${isClickable ? "bg-slate-100 text-slate-500 hover:bg-blue-100 hover:text-blue-600" : "bg-slate-50 text-slate-200 cursor-not-allowed"}`} title={`${i + 1}회차 출석 등록 (클릭)`}>{i + 1}</button>)}</td>; })}<Td><div className="flex max-w-[180px] flex-wrap gap-1">{row.dates.length ? row.dates.map((date, i) => <button key={`${date}-${i}`} onClick={() => void handleCancelAttendance(row.childId, date)} className="rounded-lg bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition" title="출석 취소 (클릭)">{date.slice(5).replace("-", ".")}</button>) : <span className="text-slate-400">출석 없음</span>}</div></Td></tr>)}</tbody></table></TableShell>
     </> : <>
       <Toolbar search={search} setSearch={setSearch} placeholder="수업명 또는 지점 검색"><BranchFilter profile={profile} branches={branches} value={branchFilter} onChange={setBranchFilter} /><div className="flex items-center rounded-xl border border-slate-200"><button aria-label="이전 주" onClick={() => setWeekStart((current) => new Date(current.getFullYear(), current.getMonth(), current.getDate() - 7))} className="p-3"><ChevronLeft size={18} /></button><span className="min-w-[170px] px-2 text-center text-sm font-black">{localDate(weekStart).slice(5).replace("-", ".")} ~ {localDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6)).slice(5).replace("-", ".")}</span><button aria-label="다음 주" onClick={() => setWeekStart((current) => new Date(current.getFullYear(), current.getMonth(), current.getDate() + 7))} className="p-3"><ChevronRight size={18} /></button></div></Toolbar>
       <WeeklySchedule schedules={schedules.filter((item) => `${item.target_class} ${item.branches?.name ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()))} reservations={scheduleReservations} weekStart={weekStart} showBranch={profile?.role === "admin" && branchFilter === "all"} />
@@ -446,6 +594,42 @@ export default function MyPage() {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3.5 text-sm font-black text-white hover:bg-rose-700 disabled:bg-rose-300"
             >
               {cancelLoading ? "취소 요청 처리 중..." : "결제 취소 승인하기"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    
+    {/* 🚀 수동 출석 등록 모달 렌더링 */}
+    {attendanceModal && (
+      <div className="fixed inset-0 z-[3000] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-6" onClick={() => setAttendanceModal(null)}>
+        <div className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-black tracking-widest text-blue-600">출결 수동 관리</p>
+              <h3 className="mt-1 text-xl font-black">{attendanceModal.childName} 학생 출석 등록</h3>
+              <p className="mt-1 text-xs text-slate-500">수강권 차감 및 학부모 알림 발송 없이 장부에만 기록합니다.</p>
+            </div>
+            <button onClick={() => setAttendanceModal(null)} className="rounded-full bg-slate-100 px-3 py-2 text-sm font-black">닫기</button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">출석 처리할 날짜 선택</label>
+              <input
+                type="date"
+                value={attendanceDate}
+                onChange={(e) => setAttendanceDate(e.target.value)}
+                className="w-full rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <button
+              onClick={handleManualAttendance}
+              disabled={actionLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white hover:bg-blue-700 disabled:bg-blue-300"
+            >
+              {actionLoading ? "출석 처리 중..." : "출석 완료 체크하기"}
             </button>
           </div>
         </div>
